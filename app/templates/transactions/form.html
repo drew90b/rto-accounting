@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Transaction' if txn else 'Log Transaction' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if txn %}Edit Transaction — {{ txn.transaction_id }}{% else %}Log Transaction{% endif %}</h1>
+  <a href="/transactions/" class="btn btn-secondary">← Back</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if txn %}/transactions/{{ txn.id }}/edit{% else %}/transactions/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-section">Core Info</div>
+
+      <div class="form-group">
+        <label>Transaction Date *</label>
+        <input type="date" name="transaction_date" value="{{ txn.transaction_date | string if txn and txn.transaction_date else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Transaction Type *</label>
+        <select name="transaction_type" required>
+          {% for t in transaction_types %}
+          <option value="{{ t }}" {% if txn and txn.transaction_type.value == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Business Line *</label>
+        <select name="business_line" required>
+          {% for b in business_lines %}
+          <option value="{{ b }}" {% if txn and txn.business_line.value == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Revenue Stream</label>
+        <select name="revenue_stream">
+          <option value="">— None / Not applicable —</option>
+          {% for r in revenue_streams %}
+          <option value="{{ r }}" {% if txn and txn.revenue_stream and txn.revenue_stream.value == r %}selected{% endif %}>{{ r | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" step="0.01" name="amount" value="{{ txn.amount or '' if txn else '' }}" required placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Category</label>
+        <input type="text" name="category" value="{{ txn.category or '' if txn else '' }}" placeholder="parts, labor, overhead...">
+      </div>
+
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select name="payment_method">
+          <option value="">— None —</option>
+          {% for m in payment_methods %}
+          <option value="{{ m }}" {% if txn and txn.payment_method and txn.payment_method.value == m %}selected{% endif %}>{{ m | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Entered By</label>
+        <input type="text" name="entered_by" value="{{ txn.entered_by or '' if txn else '' }}">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Description</label>
+        <textarea name="description">{{ txn.description or '' if txn else '' }}</textarea>
+      </div>
+
+      <div class="form-section">Link to Record (choose as applicable)</div>
+
+      <div class="form-group">
+        <label>Vendor</label>
+        <select name="vendor_id">
+          <option value="">— None —</option>
+          {% for v in vendors %}
+          <option value="{{ v.id }}" {% if txn and txn.vendor_id == v.id %}selected{% endif %}>{{ v.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Customer</label>
+        <select name="customer_id">
+          <option value="">— None —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if txn and txn.customer_id == c.id %}selected{% endif %}>{{ c.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Unit</label>
+        <select name="unit_id">
+          <option value="">— None —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}" {% if txn and txn.unit_id == u.id %}selected{% endif %}>{{ u.unit_id }} — {{ u.year or '' }} {{ u.make or '' }} {{ u.model or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Repair Job</label>
+        <select name="repair_job_id">
+          <option value="">— None —</option>
+          {% for j in repair_jobs %}
+          <option value="{{ j.id }}" {% if txn and txn.repair_job_id == j.id %}selected{% endif %}>{{ j.job_id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Sale</label>
+        <select name="sale_id">
+          <option value="">— None —</option>
+          {% for s in sales %}
+          <option value="{{ s.id }}" {% if txn and txn.sale_id == s.id %}selected{% endif %}>{{ s.sale_id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Lease / RTO Account</label>
+        <select name="lease_account_id">
+          <option value="">— None —</option>
+          {% for la in leases %}
+          <option value="{{ la.id }}" {% if txn and txn.lease_account_id == la.id %}selected{% endif %}>{{ la.lease_id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-section">Status</div>
+
+      <div class="form-group">
+        <label>Review Status</label>
+        <select name="review_status">
+          {% for r in review_statuses %}
+          <option value="{{ r }}" {% if txn and txn.review_status.value == r %}selected{% elif not txn and r == 'pending' %}selected{% endif %}>{{ r | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="justify-content:flex-end; flex-direction:row; align-items:center; gap:20px; padding-top:22px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;">
+          <input type="checkbox" name="receipt_attached" value="1" {% if txn and txn.receipt_attached %}checked{% endif %}> Receipt Attached
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; cursor:pointer;">
+          <input type="checkbox" name="coding_complete" value="1" {% if txn and txn.coding_complete %}checked{% endif %}> Coding Complete
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Transaction</button>
+        <a href="/transactions/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

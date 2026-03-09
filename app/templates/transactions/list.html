@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Transactions</h1>
+  <div class="page-header-actions">
+    <a href="/transactions/export{% if date_from or date_to %}?date_from={{ date_from }}&date_to={{ date_to }}{% endif %}" class="btn btn-secondary">Export Excel</a>
+    <a href="/transactions/new" class="btn btn-primary">+ Log Transaction</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="transaction_type">
+    <option value="">All Types</option>
+    {% for t in transaction_types %}
+    <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="business_line">
+    <option value="">All Lines</option>
+    {% for b in business_lines %}
+    <option value="{{ b }}" {% if business_line_filter == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="revenue_stream">
+    <option value="">All Revenue Streams</option>
+    {% for r in revenue_streams %}
+    <option value="{{ r }}" {% if revenue_stream_filter == r %}selected{% endif %}>{{ r | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="review_status">
+    <option value="">All Review Status</option>
+    {% for r in review_statuses %}
+    <option value="{{ r }}" {% if review_status_filter == r %}selected{% endif %}>{{ r | title }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="date_from" value="{{ date_from }}" title="From date">
+  <input type="date" name="date_to" value="{{ date_to }}" title="To date">
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/transactions/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Date</th>
+        <th>Type</th>
+        <th>Line</th>
+        <th>Revenue Stream</th>
+        <th>Amount</th>
+        <th>Description</th>
+        <th>Unit</th>
+        <th>Receipt</th>
+        <th>Review</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in transactions %}
+      <tr>
+        <td><a href="/transactions/{{ t.id }}/edit">{{ t.transaction_id }}</a></td>
+        <td>{{ t.transaction_date }}</td>
+        <td><span class="badge badge-gray" style="font-size:10px;">{{ t.transaction_type.value | replace('_', ' ') | title if t.transaction_type else '' }}</span></td>
+        <td>{{ t.business_line.value | replace('_', ' ') | title if t.business_line else '' }}</td>
+        <td style="font-size:12px;">{{ t.revenue_stream.value | replace('_', ' ') | title if t.revenue_stream else '—' }}</td>
+        <td><strong>${{ "%.2f" | format(t.amount | float) if t.amount else '0.00' }}</strong></td>
+        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.description or '' }}</td>
+        <td>{{ t.unit.unit_id if t.unit else '—' }}</td>
+        <td>{% if t.receipt_attached %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-red">No</span>{% endif %}</td>
+        <td>
+          {% set r = t.review_status.value if t.review_status else '' %}
+          {% if r == 'approved' %}<span class="badge badge-green">Approved</span>
+          {% elif r == 'reviewed' %}<span class="badge badge-blue">Reviewed</span>
+          {% else %}<span class="badge badge-yellow">Pending</span>{% endif %}
+        </td>
+        <td><a href="/transactions/{{ t.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="empty-cell">No transactions found. <a href="/transactions/new">Log one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

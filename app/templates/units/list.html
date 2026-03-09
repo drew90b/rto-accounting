@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Units{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Units</h1>
+  <div class="page-header-actions">
+    <a href="/units/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/units/new" class="btn btn-primary">+ Add Unit</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <input type="text" name="search" placeholder="Search make, model, VIN, ID..." value="{{ search }}">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="business_line">
+    <option value="">All Lines</option>
+    {% for b in business_lines %}
+    <option value="{{ b }}" {% if business_line_filter == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/units/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Unit ID</th>
+        <th>Line</th>
+        <th>Year</th>
+        <th>Make</th>
+        <th>Model</th>
+        <th>VIN / Serial</th>
+        <th>Status</th>
+        <th>Acq. Cost</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in units %}
+      <tr>
+        <td><a href="/units/{{ u.id }}/edit">{{ u.unit_id }}</a></td>
+        <td>{{ u.business_line.value | replace('_', ' ') | title }}</td>
+        <td>{{ u.year or '' }}</td>
+        <td>{{ u.make or '' }}</td>
+        <td>{{ u.model or '' }}</td>
+        <td style="font-size:12px; color:#666;">{{ u.vin_serial or '' }}</td>
+        <td>
+          {% set s = u.status.value if u.status else '' %}
+          {% if s == 'frontline_ready' %}<span class="badge badge-green">Frontline Ready</span>
+          {% elif s == 'sold' %}<span class="badge badge-gray">Sold</span>
+          {% elif s == 'closed' %}<span class="badge badge-gray">Closed</span>
+          {% elif s == 'leased_rto_active' %}<span class="badge badge-blue">Lease/RTO</span>
+          {% elif s in ['in_repair', 'in_inspection'] %}<span class="badge badge-yellow">{{ s | replace('_', ' ') | title }}</span>
+          {% elif s == 'waiting_parts' %}<span class="badge badge-orange">Waiting Parts</span>
+          {% elif s == 'returned_special_review' %}<span class="badge badge-red">Special Review</span>
+          {% else %}<span class="badge badge-gray">{{ s | replace('_', ' ') | title }}</span>
+          {% endif %}
+        </td>
+        <td>{% if u.acquisition_cost %}${{ "%.2f" | format(u.acquisition_cost | float) }}{% endif %}</td>
+        <td><a href="/units/{{ u.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No units found. <a href="/units/new">Add one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

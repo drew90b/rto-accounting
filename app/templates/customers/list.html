@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Customers</h1>
+  <div class="page-header-actions">
+    <a href="/customers/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/customers/new" class="btn btn-primary">+ Add Customer</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <input type="text" name="search" placeholder="Search name, phone, email..." value="{{ search }}">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/customers/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Customer ID</th>
+        <th>Name</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in customers %}
+      <tr>
+        <td><a href="/customers/{{ c.id }}/edit">{{ c.customer_id }}</a></td>
+        <td><a href="/customers/{{ c.id }}/edit">{{ c.full_name }}</a></td>
+        <td>{{ c.phone or '' }}</td>
+        <td>{{ c.email or '' }}</td>
+        <td>
+          {% if c.status.value == 'active' %}<span class="badge badge-green">Active</span>
+          {% else %}<span class="badge badge-gray">Inactive</span>{% endif %}
+        </td>
+        <td><a href="/customers/{{ c.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-cell">No customers found. <a href="/customers/new">Add one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

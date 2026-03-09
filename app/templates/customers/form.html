@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Customer' if customer else 'Add Customer' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if customer %}Edit Customer — {{ customer.customer_id }}{% else %}Add Customer{% endif %}</h1>
+  <a href="/customers/" class="btn btn-secondary">← Back to Customers</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if customer %}/customers/{{ customer.id }}/edit{% else %}/customers/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Full Name *</label>
+        <input type="text" name="full_name" value="{{ customer.full_name if customer else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if customer and customer.status.value == s %}selected{% elif not customer and s == 'active' %}selected{% endif %}>{{ s | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="text" name="phone" value="{{ customer.phone or '' if customer else '' }}" placeholder="(555) 000-0000">
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" value="{{ customer.email or '' if customer else '' }}">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Address</label>
+        <textarea name="address">{{ customer.address or '' if customer else '' }}</textarea>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ customer.notes or '' if customer else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Customer</button>
+        <a href="/customers/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

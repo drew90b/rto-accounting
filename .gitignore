@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# receipts storage
+storage/receipts/
+
+# pytest
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/

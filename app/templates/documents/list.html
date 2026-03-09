@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Documents{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Documents</h1>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-title">Upload Document</div>
+  <form method="post" action="/documents/upload" enctype="multipart/form-data">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Linked Record Type *</label>
+        <select name="linked_record_type" required>
+          {% for r in record_types %}
+          <option value="{{ r }}" {% if record_type_filter == r %}selected{% endif %}>{{ r | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Linked Record ID *</label>
+        <input type="number" name="linked_record_id" required placeholder="e.g. 5">
+      </div>
+      <div class="form-group">
+        <label>Uploaded By</label>
+        <input type="text" name="uploaded_by" placeholder="Your name">
+      </div>
+      <div class="form-group">
+        <label>File *</label>
+        <input type="file" name="file" required>
+      </div>
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <input type="text" name="notes" placeholder="Optional note about this document">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="record_type">
+    <option value="">All Record Types</option>
+    {% for r in record_types %}
+    <option value="{{ r }}" {% if record_type_filter == r %}selected{% endif %}>{{ r | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/documents/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Doc ID</th>
+        <th>Record Type</th>
+        <th>Record ID</th>
+        <th>Filename</th>
+        <th>Type</th>
+        <th>Uploaded</th>
+        <th>By</th>
+        <th>Notes</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in documents %}
+      <tr>
+        <td>{{ d.document_id }}</td>
+        <td>{{ d.linked_record_type.value | replace('_', ' ') | title if d.linked_record_type else '' }}</td>
+        <td>{{ d.linked_record_id }}</td>
+        <td>{{ d.original_filename }}</td>
+        <td><span class="badge badge-gray">{{ d.file_type or '—' }}</span></td>
+        <td style="font-size:12px;">{{ d.upload_timestamp.strftime('%Y-%m-%d %H:%M') if d.upload_timestamp else '' }}</td>
+        <td>{{ d.uploaded_by or '—' }}</td>
+        <td style="font-size:12px;">{{ d.notes or '' }}</td>
+        <td><a href="/documents/{{ d.id }}/download" class="btn btn-sm btn-secondary">Download</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No documents uploaded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Repair Jobs{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Repair Jobs</h1>
+  <div class="page-header-actions">
+    <a href="/repair-jobs/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/repair-jobs/new" class="btn btn-primary">+ New Job</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="business_line">
+    <option value="">All Lines</option>
+    {% for b in business_lines %}
+    <option value="{{ b }}" {% if business_line_filter == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="job_type">
+    <option value="">All Types</option>
+    {% for t in job_types %}
+    <option value="{{ t }}" {% if job_type_filter == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/repair-jobs/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Job ID</th>
+        <th>Line</th>
+        <th>Type</th>
+        <th>Unit</th>
+        <th>Customer</th>
+        <th>Opened</th>
+        <th>Status</th>
+        <th>Total Billed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td><a href="/repair-jobs/{{ j.id }}/edit">{{ j.job_id }}</a></td>
+        <td>{{ j.business_line.value | replace('_', ' ') | title }}</td>
+        <td>{{ j.job_type.value | replace('_', ' ') | title }}</td>
+        <td>{{ j.unit.unit_id if j.unit else '—' }}</td>
+        <td>{{ j.customer.full_name if j.customer else '—' }}</td>
+        <td>{{ j.open_date }}</td>
+        <td>
+          {% set s = j.status.value if j.status else '' %}
+          {% if s == 'complete' %}<span class="badge badge-green">Complete</span>
+          {% elif s == 'open' %}<span class="badge badge-blue">Open</span>
+          {% elif s == 'in_progress' %}<span class="badge badge-yellow">In Progress</span>
+          {% elif s == 'waiting_parts' %}<span class="badge badge-orange">Waiting Parts</span>
+          {% elif s == 'cancelled' %}<span class="badge badge-gray">Cancelled</span>
+          {% else %}<span class="badge badge-gray">{{ s }}</span>{% endif %}
+        </td>
+        <td>{% if j.total_billed_amount %}${{ "%.2f" | format(j.total_billed_amount | float) }}{% else %}—{% endif %}</td>
+        <td><a href="/repair-jobs/{{ j.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No repair jobs found. <a href="/repair-jobs/new">Open one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

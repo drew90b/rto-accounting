@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Units</div>
+    <div class="stat-value">{{ counts.units }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Customers</div>
+    <div class="stat-value">{{ counts.customers }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Transactions</div>
+    <div class="stat-value">{{ counts.transactions }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Open Exceptions</div>
+    <div class="stat-value {% if counts.open_exceptions > 0 %}danger{% endif %}">{{ counts.open_exceptions }}</div>
+  </div>
+</div>
+
+<div class="dash-grid">
+  <div class="card">
+    <div class="card-title">Open Exceptions</div>
+    {% if open_exceptions %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Type</th>
+          <th>Opened</th>
+          <th>Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in open_exceptions %}
+        <tr>
+          <td><a href="/exceptions/{{ e.id }}/edit">{{ e.exception_id }}</a></td>
+          <td>{{ e.exception_type.value | replace('_', ' ') | title }}</td>
+          <td>{{ e.opened_date }}</td>
+          <td>{{ e.owner or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9aa4b0; font-size:13px;">No open exceptions.</p>
+    {% endif %}
+    <div style="margin-top:10px;">
+      <a href="/exceptions/" class="btn btn-secondary btn-sm">View all</a>
+      <a href="/exceptions/new" class="btn btn-sm btn-primary" style="margin-left:4px;">+ Log exception</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Delinquent Lease Accounts</div>
+    {% if delinquent_leases %}
+    <table>
+      <thead>
+        <tr>
+          <th>Lease</th>
+          <th>Customer</th>
+          <th>Balance</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for la in delinquent_leases %}
+        <tr>
+          <td><a href="/lease-accounts/{{ la.id }}/edit">{{ la.lease_id }}</a></td>
+          <td>{{ la.customer.full_name if la.customer else '—' }}</td>
+          <td>${{ "%.2f" | format(delinquent_balances[la.id] | float) if delinquent_balances[la.id] is defined else '—' }}</td>
+          <td>
+            {% set ds = la.delinquency_status.value if la.delinquency_status else '' %}
+            {% if ds == 'default' %}<span class="badge badge-red">Default</span>
+            {% elif ds == 'delinquent' %}<span class="badge badge-orange">Delinquent</span>
+            {% else %}<span class="badge badge-yellow">Late</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9aa4b0; font-size:13px;">No delinquent accounts.</p>
+    {% endif %}
+    <div style="margin-top:10px;">
+      <a href="/lease-accounts/" class="btn btn-secondary btn-sm">View all</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Quick Actions</div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <a href="/units/new" class="btn btn-secondary">+ Add Unit</a>
+    <a href="/customers/new" class="btn btn-secondary">+ Add Customer</a>
+    <a href="/transactions/new" class="btn btn-secondary">+ Log Transaction</a>
+    <a href="/payments/new" class="btn btn-secondary">+ Record Payment</a>
+    <a href="/repair-jobs/new" class="btn btn-secondary">+ Open Repair Job</a>
+    <a href="/sales/new" class="btn btn-secondary">+ Record Sale</a>
+    <a href="/lease-accounts/new" class="btn btn-secondary">+ Setup Lease / RTO</a>
+  </div>
+</div>
+
+{% endblock %}

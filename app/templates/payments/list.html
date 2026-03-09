@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Payments{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Payments</h1>
+  <div class="page-header-actions">
+    <a href="/payments/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/payments/new" class="btn btn-primary">+ Record Payment</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="customer_id">
+    <option value="">All Customers</option>
+    {% for c in customers %}
+    <option value="{{ c.id }}" {% if customer_filter == c.id | string %}selected{% endif %}>{{ c.full_name }}</option>
+    {% endfor %}
+  </select>
+  <select name="method">
+    <option value="">All Methods</option>
+    {% for m in methods %}
+    <option value="{{ m }}" {% if method_filter == m %}selected{% endif %}>{{ m | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/payments/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Payment ID</th>
+        <th>Customer</th>
+        <th>Date</th>
+        <th>Amount</th>
+        <th>Method</th>
+        <th>Applied To</th>
+        <th>Entered By</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payments %}
+      <tr>
+        <td><a href="/payments/{{ p.id }}/edit">{{ p.payment_id }}</a></td>
+        <td>{{ p.customer.full_name if p.customer else '—' }}</td>
+        <td>{{ p.payment_date }}</td>
+        <td><strong>${{ "%.2f" | format(p.amount | float) if p.amount else '0.00' }}</strong></td>
+        <td><span class="badge badge-gray">{{ p.payment_method.value | title if p.payment_method else '—' }}</span></td>
+        <td style="font-size:12px;">
+          {% if p.sale %}Sale {{ p.sale.sale_id }}
+          {% elif p.lease_account %}Lease {{ p.lease_account.lease_id }}
+          {% elif p.repair_job %}Job {{ p.repair_job.job_id }}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ p.entered_by or '—' }}</td>
+        <td><a href="/payments/{{ p.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty-cell">No payments found. <a href="/payments/new">Record one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

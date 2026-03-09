@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}RTO Accounting{% endblock %} — RTO Accounting</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      RTO Accounting
+      <span class="sidebar-sub">Finance Operations</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+
+      <div class="sidebar-section">Inventory</div>
+      <a href="/units/" class="{% if '/units' in request.url.path %}active{% endif %}">Units</a>
+
+      <div class="sidebar-section">People</div>
+      <a href="/customers/" class="{% if '/customers' in request.url.path %}active{% endif %}">Customers</a>
+
+      <div class="sidebar-section">Operations</div>
+      <a href="/repair-jobs/" class="{% if '/repair-jobs' in request.url.path %}active{% endif %}">Repair Jobs</a>
+      <a href="/sales/" class="{% if '/sales' in request.url.path %}active{% endif %}">Sales</a>
+      <a href="/lease-accounts/" class="{% if '/lease-accounts' in request.url.path %}active{% endif %}">Lease / RTO</a>
+      <a href="/payments/" class="{% if '/payments' in request.url.path %}active{% endif %}">Payments</a>
+
+      <div class="sidebar-section">Finance</div>
+      <a href="/transactions/" class="{% if '/transactions' in request.url.path %}active{% endif %}">Transactions</a>
+      <a href="/documents/" class="{% if '/documents' in request.url.path %}active{% endif %}">Documents</a>
+      <a href="/exceptions/" class="{% if '/exceptions' in request.url.path %}active{% endif %}">Exceptions</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    {% set msg = request.query_params.get('msg') %}
+    {% if msg %}
+    <div class="alert alert-success">{{ msg | replace('+', ' ') }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

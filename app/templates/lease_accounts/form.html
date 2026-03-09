@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Lease Account' if lease else 'Setup Lease / RTO' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if lease %}Edit Lease — {{ lease.lease_id }}{% else %}Setup Lease / RTO Account{% endif %}</h1>
+  <div class="page-header-actions">
+    {% if lease %}
+    <a href="/lease-accounts/{{ lease.id }}/record-payment" class="btn btn-primary">+ Record Payment</a>
+    {% endif %}
+    <a href="/lease-accounts/" class="btn btn-secondary">← Back to Leases</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if lease %}/lease-accounts/{{ lease.id }}/edit{% else %}/lease-accounts/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Customer *</label>
+        <select name="customer_id" required>
+          <option value="">— Select —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if lease and lease.customer_id == c.id %}selected{% endif %}>{{ c.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Unit *</label>
+        <select name="unit_id" required>
+          <option value="">— Select —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}" {% if lease and lease.unit_id == u.id %}selected{% endif %}>{{ u.unit_id }} — {{ u.year or '' }} {{ u.make or '' }} {{ u.model or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Deal Date *</label>
+        <input type="date" name="deal_date" value="{{ lease.deal_date | string if lease and lease.deal_date else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Payment Frequency</label>
+        <select name="payment_frequency">
+          {% for f in frequencies %}
+          <option value="{{ f }}" {% if lease and lease.payment_frequency.value == f %}selected{% endif %}>{{ f | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-section">Deal Amounts</div>
+
+      <div class="form-group">
+        <label>Original Agreed Amount ($)</label>
+        <input type="number" step="0.01" name="original_agreed_amount" value="{{ lease.original_agreed_amount or '' if lease else '' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Down Payment ($)</label>
+        <input type="number" step="0.01" name="down_payment" value="{{ lease.down_payment or '0' if lease else '0' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Financed Balance ($)</label>
+        <input type="number" step="0.01" name="financed_balance" value="{{ lease.financed_balance or '' if lease else '' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Scheduled Payment Amount ($)</label>
+        <input type="number" step="0.01" name="scheduled_payment_amount" value="{{ lease.scheduled_payment_amount or '' if lease else '' }}" placeholder="0.00">
+      </div>
+
+      {% if lease %}
+      <div class="form-group">
+        <label>Financed Balance</label>
+        <div class="form-static">${{ "%.2f" | format(lease.financed_balance | float) if lease.financed_balance else '—' }}</div>
+      </div>
+
+      <div class="form-group">
+        <label>Total Paid</label>
+        <div class="form-static" style="color:#16a34a;">${{ "%.2f" | format(total_paid | float) }}</div>
+      </div>
+
+      <div class="form-group">
+        <label>Remaining Balance</label>
+        <div class="form-static" style="font-weight:700;">${{ "%.2f" | format(remaining_balance | float) }}</div>
+        <span class="form-hint">Calculated from payments. Use the Record Payment button to post a new payment.</span>
+      </div>
+      {% endif %}
+
+      <div class="form-section">Account Status</div>
+
+      <div class="form-group">
+        <label>Account Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if lease and lease.status.value == s %}selected{% elif not lease and s == 'active' %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Delinquency Status</label>
+        <select name="delinquency_status">
+          {% for s in delinquency_statuses %}
+          <option value="{{ s }}" {% if lease and lease.delinquency_status.value == s %}selected{% elif not lease and s == 'current' %}selected{% endif %}>{{ s | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ lease.notes or '' if lease else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Account</button>
+        <a href="/lease-accounts/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% if lease and lease.payments %}
+<div class="card">
+  <div class="card-title">Payment History</div>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Payment ID</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Method</th>
+          <th>Entered By</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in lease.payments | sort(attribute='payment_date', reverse=True) %}
+        <tr>
+          <td><a href="/payments/{{ p.id }}/edit">{{ p.payment_id }}</a></td>
+          <td>{{ p.payment_date }}</td>
+          <td>${{ "%.2f" | format(p.amount | float) }}</td>
+          <td>{{ p.payment_method.value | title }}</td>
+          <td>{{ p.entered_by or '—' }}</td>
+          <td>{{ p.notes or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% elif lease %}
+<div class="card">
+  <div class="card-title">Payment History</div>
+  <p style="color:#9aa4b0; font-size:13px;">No payments recorded yet. <a href="/lease-accounts/{{ lease.id }}/record-payment">Record the first payment.</a></p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Payment' if payment else 'Record Payment' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if payment %}Edit Payment — {{ payment.payment_id }}{% else %}Record Payment{% endif %}</h1>
+  <a href="/payments/" class="btn btn-secondary">← Back to Payments</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if payment %}/payments/{{ payment.id }}/edit{% else %}/payments/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Customer *</label>
+        <select name="customer_id" required>
+          <option value="">— Select —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if payment and payment.customer_id == c.id %}selected{% endif %}>{{ c.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Payment Date *</label>
+        <input type="date" name="payment_date" value="{{ payment.payment_date | string if payment and payment.payment_date else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" step="0.01" name="amount" value="{{ payment.amount or '' if payment else '' }}" required placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Payment Method *</label>
+        <select name="payment_method" required>
+          {% for m in methods %}
+          <option value="{{ m }}" {% if payment and payment.payment_method.value == m %}selected{% endif %}>{{ m | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Entered By</label>
+        <input type="text" name="entered_by" value="{{ payment.entered_by or '' if payment else '' }}" placeholder="Your name">
+      </div>
+
+      <div class="form-section">Apply to (choose one)</div>
+
+      <div class="form-group">
+        <label>Sale</label>
+        <select name="sale_id">
+          <option value="">— None —</option>
+          {% for s in sales %}
+          <option value="{{ s.id }}" {% if payment and payment.sale_id == s.id %}selected{% endif %}>{{ s.sale_id }} — {{ s.customer.full_name if s.customer else '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Lease / RTO Account</label>
+        <select name="lease_account_id">
+          <option value="">— None —</option>
+          {% for la in leases %}
+          <option value="{{ la.id }}" {% if payment and payment.lease_account_id == la.id %}selected{% endif %}>{{ la.lease_id }} — {{ la.customer.full_name if la.customer else '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Repair Job</label>
+        <select name="repair_job_id">
+          <option value="">— None —</option>
+          {% for j in repair_jobs %}
+          <option value="{{ j.id }}" {% if payment and payment.repair_job_id == j.id %}selected{% endif %}>{{ j.job_id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ payment.notes or '' if payment else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Payment</button>
+        <a href="/payments/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

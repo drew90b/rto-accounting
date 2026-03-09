@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Repair Job' if job else 'New Repair Job' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if job %}Edit Job — {{ job.job_id }}{% else %}New Repair Job{% endif %}</h1>
+  <a href="/repair-jobs/" class="btn btn-secondary">← Back to Jobs</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if job %}/repair-jobs/{{ job.id }}/edit{% else %}/repair-jobs/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Business Line *</label>
+        <select name="business_line" required>
+          {% for b in business_lines %}
+          <option value="{{ b }}" {% if job and job.business_line.value == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Job Type *</label>
+        <select name="job_type" required>
+          {% for t in job_types %}
+          <option value="{{ t }}" {% if job and job.job_type.value == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Open Date *</label>
+        <input type="date" name="open_date" value="{{ job.open_date | string if job and job.open_date else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Close Date</label>
+        <input type="date" name="close_date" value="{{ job.close_date | string if job and job.close_date else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Unit (if internal recon)</label>
+        <select name="unit_id">
+          <option value="">— None —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}" {% if job and job.unit_id == u.id %}selected{% endif %}>{{ u.unit_id }} — {{ u.year or '' }} {{ u.make or '' }} {{ u.model or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Customer (if customer repair)</label>
+        <select name="customer_id">
+          <option value="">— None —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if job and job.customer_id == c.id %}selected{% endif %}>{{ c.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if job and job.status.value == s %}selected{% elif not job and s == 'open' %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-section">Amounts</div>
+
+      <div class="form-group">
+        <label>Labor Amount ($)</label>
+        <input type="number" step="0.01" name="labor_amount" value="{{ job.labor_amount or '0' if job else '0' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Materials Amount ($)</label>
+        <input type="number" step="0.01" name="materials_amount" value="{{ job.materials_amount or '0' if job else '0' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Total Billed Amount ($)</label>
+        <input type="number" step="0.01" name="total_billed_amount" value="{{ job.total_billed_amount or '0' if job else '0' }}" placeholder="0.00">
+        <span class="form-hint">For customer repairs only — leave 0 for internal recon.</span>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ job.notes or '' if job else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Job</button>
+        <a href="/repair-jobs/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

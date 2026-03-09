@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Exceptions{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Exception Queue</h1>
+  <div class="page-header-actions">
+    <a href="/exceptions/new" class="btn btn-primary">+ Log Exception</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="exception_type">
+    <option value="">All Types</option>
+    {% for t in exception_types %}
+    <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/exceptions/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Linked Record</th>
+        <th>Opened</th>
+        <th>Target Date</th>
+        <th>Owner</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in exceptions %}
+      <tr>
+        <td><a href="/exceptions/{{ e.id }}/edit">{{ e.exception_id }}</a></td>
+        <td>{{ e.exception_type.value | replace('_', ' ') | title }}</td>
+        <td style="font-size:12px; color:#666;">
+          {% if e.linked_record_type %}{{ e.linked_record_type.value | replace('_', ' ') | title }} #{{ e.linked_record_id }}{% else %}—{% endif %}
+        </td>
+        <td>{{ e.opened_date }}</td>
+        <td>{{ e.target_resolution_date or '—' }}</td>
+        <td>{{ e.owner or '—' }}</td>
+        <td>
+          {% set s = e.status.value if e.status else '' %}
+          {% if s == 'open' %}<span class="badge badge-red">Open</span>
+          {% elif s == 'in_review' %}<span class="badge badge-yellow">In Review</span>
+          {% elif s == 'resolved' %}<span class="badge badge-green">Resolved</span>
+          {% elif s == 'dismissed' %}<span class="badge badge-gray">Dismissed</span>
+          {% else %}<span class="badge badge-gray">{{ s }}</span>{% endif %}
+        </td>
+        <td><a href="/exceptions/{{ e.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty-cell">No exceptions found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

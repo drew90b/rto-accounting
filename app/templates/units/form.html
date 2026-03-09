@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Unit' if unit else 'Add Unit' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if unit %}Edit Unit — {{ unit.unit_id }}{% else %}Add Unit{% endif %}</h1>
+  <a href="/units/" class="btn btn-secondary">← Back to Units</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if unit %}/units/{{ unit.id }}/edit{% else %}/units/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Unit Type *</label>
+        <select name="unit_type" required>
+          {% for t in unit_types %}
+          <option value="{{ t }}" {% if unit and unit.unit_type.value == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Business Line *</label>
+        <select name="business_line" required>
+          {% for b in business_lines %}
+          <option value="{{ b }}" {% if unit and unit.business_line.value == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Year</label>
+        <input type="number" name="year" value="{{ unit.year or '' if unit else '' }}" placeholder="2019" min="1990" max="2030">
+      </div>
+
+      <div class="form-group">
+        <label>Make</label>
+        <input type="text" name="make" value="{{ unit.make or '' if unit else '' }}" placeholder="Toyota">
+      </div>
+
+      <div class="form-group">
+        <label>Model</label>
+        <input type="text" name="model" value="{{ unit.model or '' if unit else '' }}" placeholder="Camry">
+      </div>
+
+      <div class="form-group">
+        <label>VIN / Serial Number</label>
+        <input type="text" name="vin_serial" value="{{ unit.vin_serial or '' if unit else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Purchase Date</label>
+        <input type="date" name="purchase_date" value="{{ unit.purchase_date | string if unit and unit.purchase_date else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Purchase Source</label>
+        <input type="text" name="purchase_source" value="{{ unit.purchase_source or '' if unit else '' }}" placeholder="Auction, dealer, private...">
+      </div>
+
+      <div class="form-group">
+        <label>Acquisition Cost ($)</label>
+        <input type="number" step="0.01" name="acquisition_cost" value="{{ unit.acquisition_cost or '' if unit else '' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if unit and unit.status.value == s %}selected{% elif not unit and s == 'acquired' %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ unit.notes or '' if unit else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Unit</button>
+        <a href="/units/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

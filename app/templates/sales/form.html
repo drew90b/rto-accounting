@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Sale' if sale else 'Record Sale' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if sale %}Edit Sale — {{ sale.sale_id }}{% else %}Record Sale{% endif %}</h1>
+  <a href="/sales/" class="btn btn-secondary">← Back to Sales</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if sale %}/sales/{{ sale.id }}/edit{% else %}/sales/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Customer *</label>
+        <select name="customer_id" required>
+          <option value="">— Select —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if sale and sale.customer_id == c.id %}selected{% endif %}>{{ c.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Unit *</label>
+        <select name="unit_id" required>
+          <option value="">— Select —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}" {% if sale and sale.unit_id == u.id %}selected{% endif %}>{{ u.unit_id }} — {{ u.year or '' }} {{ u.make or '' }} {{ u.model or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Sale Date *</label>
+        <input type="date" name="sale_date" value="{{ sale.sale_date | string if sale and sale.sale_date else '' }}" required>
+      </div>
+
+      <div class="form-group">
+        <label>Business Line *</label>
+        <select name="business_line" required>
+          {% for b in business_lines %}
+          <option value="{{ b }}" {% if sale and sale.business_line.value == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if sale and sale.status.value == s %}selected{% elif not sale and s == 'pending' %}selected{% endif %}>{{ s | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-section">Amounts</div>
+
+      <div class="form-group">
+        <label>Sale Amount ($) *</label>
+        <input type="number" step="0.01" name="sale_amount" value="{{ sale.sale_amount or '' if sale else '' }}" required placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Down Payment ($)</label>
+        <input type="number" step="0.01" name="down_payment" value="{{ sale.down_payment or '0' if sale else '0' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Fees ($)</label>
+        <input type="number" step="0.01" name="fees" value="{{ sale.fees or '0' if sale else '0' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group">
+        <label>Total Contract Amount ($)</label>
+        <input type="number" step="0.01" name="total_contract_amount" value="{{ sale.total_contract_amount or '' if sale else '' }}" placeholder="0.00">
+        <span class="form-hint">Leave blank to auto-calculate or enter manually.</span>
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes">{{ sale.notes or '' if sale else '' }}</textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Sale</button>
+        <a href="/sales/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

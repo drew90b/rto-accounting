@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Record RTO Payment — {{ lease.lease_id }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Record RTO Payment</h1>
+  <a href="/lease-accounts/{{ lease.id }}/edit" class="btn btn-secondary">← Back to Account</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+
+  <div style="background:#f7f8fa; border:1px solid #e2e6ea; border-radius:6px; padding:14px 16px; margin-bottom:20px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px;">
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Account</div>
+        <div style="margin-top:2px;">{{ lease.lease_id }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Customer</div>
+        <div style="margin-top:2px;">{{ lease.customer.full_name if lease.customer else '—' }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Unit</div>
+        <div style="margin-top:2px;">{{ lease.unit.unit_id if lease.unit else '—' }} — {{ lease.unit.year or '' }} {{ lease.unit.make or '' }} {{ lease.unit.model or '' }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Remaining Balance</div>
+        <div style="margin-top:2px; font-weight:700; font-size:15px; color:#1a2332;">${{ "%.2f" | format(remaining_balance | float) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="/lease-accounts/{{ lease.id }}/record-payment">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Payment Date *</label>
+        <input type="date" name="payment_date" required
+               value="{{ today if today else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" step="0.01" name="amount" required placeholder="0.00"
+               value="{{ lease.scheduled_payment_amount or '' }}">
+        {% if lease.scheduled_payment_amount %}
+        <span class="form-hint">Scheduled: ${{ "%.2f" | format(lease.scheduled_payment_amount | float) }}</span>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        <label>Payment Method *</label>
+        <select name="payment_method" required>
+          {% for m in methods %}
+          <option value="{{ m }}">{{ m | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Received By</label>
+        <input type="text" name="entered_by" placeholder="Your name">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes" placeholder="Optional — e.g. 'catch-up payment for Feb'"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Record Payment</button>
+        <a href="/lease-accounts/{{ lease.id }}/edit" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-title">What this does</div>
+  <ul style="font-size:13px; color:#4b5563; line-height:1.8; padding-left:18px;">
+    <li>Records the payment in the payments ledger</li>
+    <li>Logs a collection transaction (type: Collection / Car RTO Lease)</li>
+    <li>Updates the remaining balance automatically</li>
+  </ul>
+</div>
+
+{% endblock %}

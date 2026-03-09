@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Sales{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Sales</h1>
+  <div class="page-header-actions">
+    <a href="/sales/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/sales/new" class="btn btn-primary">+ Record Sale</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="business_line">
+    <option value="">All Lines</option>
+    {% for b in business_lines %}
+    <option value="{{ b }}" {% if business_line_filter == b %}selected{% endif %}>{{ b | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/sales/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Sale ID</th>
+        <th>Line</th>
+        <th>Customer</th>
+        <th>Unit</th>
+        <th>Sale Date</th>
+        <th>Sale Amount</th>
+        <th>Down Payment</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td><a href="/sales/{{ s.id }}/edit">{{ s.sale_id }}</a></td>
+        <td>{{ s.business_line.value | replace('_', ' ') | title }}</td>
+        <td>{{ s.customer.full_name if s.customer else '—' }}</td>
+        <td>{{ s.unit.unit_id if s.unit else '—' }}</td>
+        <td>{{ s.sale_date }}</td>
+        <td>${{ "%.2f" | format(s.sale_amount | float) if s.sale_amount else '—' }}</td>
+        <td>${{ "%.2f" | format(s.down_payment | float) if s.down_payment else '—' }}</td>
+        <td>
+          {% if s.status.value == 'complete' %}<span class="badge badge-green">Complete</span>
+          {% elif s.status.value == 'pending' %}<span class="badge badge-yellow">Pending</span>
+          {% else %}<span class="badge badge-gray">Cancelled</span>{% endif %}
+        </td>
+        <td><a href="/sales/{{ s.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No sales found. <a href="/sales/new">Record one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

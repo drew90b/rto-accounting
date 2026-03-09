@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Lease / RTO Accounts{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Lease / RTO Accounts</h1>
+  <div class="page-header-actions">
+    <a href="/lease-accounts/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/lease-accounts/new" class="btn btn-primary">+ Setup Account</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="delinquency">
+    <option value="">All Delinquency</option>
+    {% for s in delinquency_statuses %}
+    <option value="{{ s }}" {% if delinquency_filter == s %}selected{% endif %}>{{ s | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/lease-accounts/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Lease ID</th>
+        <th>Customer</th>
+        <th>Unit</th>
+        <th>Deal Date</th>
+        <th>Payment Amt</th>
+        <th>Balance</th>
+        <th>Status</th>
+        <th>Delinquency</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for la in leases %}
+      <tr>
+        <td><a href="/lease-accounts/{{ la.id }}/edit">{{ la.lease_id }}</a></td>
+        <td>{{ la.customer.full_name if la.customer else '—' }}</td>
+        <td>{{ la.unit.unit_id if la.unit else '—' }}</td>
+        <td>{{ la.deal_date }}</td>
+        <td>${{ "%.2f" | format(la.scheduled_payment_amount | float) if la.scheduled_payment_amount else '—' }}</td>
+        <td>${{ "%.2f" | format(balances[la.id] | float) if balances[la.id] is defined else '—' }}</td>
+        <td>
+          {% set s = la.status.value if la.status else '' %}
+          {% if s == 'active' %}<span class="badge badge-blue">Active</span>
+          {% elif s == 'paid_off' %}<span class="badge badge-green">Paid Off</span>
+          {% elif s == 'defaulted' %}<span class="badge badge-red">Defaulted</span>
+          {% else %}<span class="badge badge-gray">{{ s | title }}</span>{% endif %}
+        </td>
+        <td>
+          {% set d = la.delinquency_status.value if la.delinquency_status else '' %}
+          {% if d == 'current' %}<span class="badge badge-green">Current</span>
+          {% elif d == 'late' %}<span class="badge badge-yellow">Late</span>
+          {% elif d == 'delinquent' %}<span class="badge badge-orange">Delinquent</span>
+          {% elif d == 'default' %}<span class="badge badge-red">Default</span>
+          {% else %}—{% endif %}
+        </td>
+        <td><a href="/lease-accounts/{{ la.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No lease accounts found. <a href="/lease-accounts/new">Set one up.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
