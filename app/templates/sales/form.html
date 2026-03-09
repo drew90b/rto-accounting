@@ -4,10 +4,53 @@
 
 <div class="page-header">
   <h1 class="page-title">{% if sale %}Edit Sale — {{ sale.sale_id }}{% else %}Record Sale{% endif %}</h1>
-  <a href="/sales/" class="btn btn-secondary">← Back to Sales</a>
+  <div style="display:flex;gap:8px;align-items:center;">
+    {% if sale %}
+    <a href="/sales/{{ sale.id }}/receipt" class="btn btn-secondary" target="_blank">Print Receipt</a>
+    {% endif %}
+    <a href="/sales/" class="btn btn-secondary">← Back to Sales</a>
+  </div>
 </div>
 
-<div class="card">
+{% if sale and sale.status.value == 'pending' and sale.business_line.value == 'car' %}
+<div class="card" style="max-width:680px; border-left:4px solid #f59e0b; padding:14px 18px; margin-bottom:16px; background:#fffbeb;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-weight:600; margin-bottom:2px;">Sale is Pending</div>
+      <div style="font-size:13px; color:#6b7280;">
+        Balance remaining: <strong>${{ "%.2f" | format(remaining_balance | float) }}</strong>
+        &nbsp;·&nbsp; Payments received: ${{ "%.2f" | format(total_paid | float) }}
+      </div>
+    </div>
+    <form method="post" action="/sales/{{ sale.id }}/complete" style="margin:0;">
+      <button type="submit" class="btn btn-primary">Mark Complete</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if sale and payments %}
+<div class="card" style="max-width:680px; margin-bottom:16px;">
+  <div class="card-title">Payments on File</div>
+  <table class="table" style="margin-top:8px;">
+    <thead><tr>
+      <th>Payment ID</th><th>Date</th><th>Amount</th><th>Method</th>
+    </tr></thead>
+    <tbody>
+    {% for p in payments %}
+    <tr>
+      <td>{{ p.payment_id }}</td>
+      <td>{{ p.payment_date }}</td>
+      <td>${{ "%.2f" | format(p.amount | float) }}</td>
+      <td>{{ p.payment_method.value if p.payment_method else '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:680px;">
   <form method="post" action="{% if sale %}/sales/{{ sale.id }}/edit{% else %}/sales/new{% endif %}">
     <div class="form-grid">
 
@@ -45,14 +88,26 @@
         </select>
       </div>
 
+      {% if not sale %}
       <div class="form-group">
         <label>Status</label>
         <select name="status">
           {% for s in statuses %}
-          <option value="{{ s }}" {% if sale and sale.status.value == s %}selected{% elif not sale and s == 'pending' %}selected{% endif %}>{{ s | title }}</option>
+          <option value="{{ s }}" {% if s == 'pending' %}selected{% endif %}>{{ s | title }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">Golf cart sales are automatically set to Complete.</span>
+      </div>
+      {% else %}
+      <div class="form-group">
+        <label>Status</label>
+        <select name="status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if sale.status.value == s %}selected{% endif %}>{{ s | title }}</option>
           {% endfor %}
         </select>
       </div>
+      {% endif %}
 
       <div class="form-section">Amounts</div>
 
@@ -61,10 +116,18 @@
         <input type="number" step="0.01" name="sale_amount" value="{{ sale.sale_amount or '' if sale else '' }}" required placeholder="0.00">
       </div>
 
+      {% if not sale %}
       <div class="form-group">
         <label>Down Payment ($)</label>
-        <input type="number" step="0.01" name="down_payment" value="{{ sale.down_payment or '0' if sale else '0' }}" placeholder="0.00">
+        <input type="number" step="0.01" name="down_payment" value="0" placeholder="0.00">
+        <span class="form-hint">For car sales only. Golf cart: full amount collected.</span>
       </div>
+      {% else %}
+      <div class="form-group">
+        <label>Down Payment ($)</label>
+        <input type="number" step="0.01" name="down_payment" value="{{ sale.down_payment or '0' }}" placeholder="0.00">
+      </div>
+      {% endif %}
 
       <div class="form-group">
         <label>Fees ($)</label>
@@ -74,8 +137,22 @@
       <div class="form-group">
         <label>Total Contract Amount ($)</label>
         <input type="number" step="0.01" name="total_contract_amount" value="{{ sale.total_contract_amount or '' if sale else '' }}" placeholder="0.00">
-        <span class="form-hint">Leave blank to auto-calculate or enter manually.</span>
+        <span class="form-hint">Leave blank to auto-calculate (sale + fees).</span>
       </div>
+
+      {% if not sale %}
+      <div class="form-section">Payment Collected</div>
+
+      <div class="form-group">
+        <label>Payment Method *</label>
+        <select name="payment_method" required>
+          {% for m in payment_methods %}
+          <option value="{{ m }}">{{ m | title }}</option>
+          {% endfor %}
+        </select>
+        <span class="form-hint">How payment was received today.</span>
+      </div>
+      {% endif %}
 
       <div class="form-group form-full">
         <label>Notes</label>
@@ -83,7 +160,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Save Sale</button>
+        <button type="submit" class="btn btn-primary">{{ 'Save Sale' if not sale else 'Update Sale' }}</button>
         <a href="/sales/" class="btn btn-secondary">Cancel</a>
       </div>
 

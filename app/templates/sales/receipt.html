@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt — {{ sale.sale_id }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 32px; max-width: 680px; margin: 0 auto; }
+    .header { border-bottom: 2px solid #1a2332; padding-bottom: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #1a2332; }
+    .header .sub { font-size: 12px; color: #6b7280; margin-top: 3px; }
+    .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #7a8799; margin-bottom: 6px; margin-top: 20px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+    .info-item .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; }
+    .info-item .value { font-size: 13px; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding: 6px 0; }
+    td { padding: 7px 0; border-bottom: 1px solid #f3f4f6; }
+    td.right, th.right { text-align: right; }
+    .totals { margin-top: 16px; border-top: 2px solid #1a2332; padding-top: 12px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+    .totals-row.total { font-weight: 700; font-size: 15px; color: #1a2332; border-top: 1px solid #e5e7eb; margin-top: 6px; padding-top: 8px; }
+    .totals-row.balance { font-weight: 700; color: {% if remaining_balance > 0 %}#dc2626{% else %}#16a34a{% endif %}; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; }
+    .print-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+    .print-bar a, .print-bar button { font-size: 13px; padding: 7px 16px; border-radius: 5px; border: 1px solid #d1d5db; background: #f9fafb; cursor: pointer; color: #374151; text-decoration: none; }
+    .print-bar button:hover, .print-bar a:hover { background: #f3f4f6; }
+    @media print { .print-bar { display: none; } body { padding: 16px; } }
+  </style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save PDF</button>
+  <a href="/sales/{{ sale.id }}/edit">← Back to Sale</a>
+</div>
+
+<div class="header">
+  <h1>RTO Accounting — Sale Receipt</h1>
+  <div class="sub">{{ sale.sale_id }} &nbsp;·&nbsp; Issued {{ sale.sale_date }}</div>
+</div>
+
+<div class="section-label">Customer</div>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Name</div>
+    <div class="value">{{ sale.customer.full_name if sale.customer else '—' }}</div>
+  </div>
+  {% if sale.customer and sale.customer.phone %}
+  <div class="info-item">
+    <div class="label">Phone</div>
+    <div class="value">{{ sale.customer.phone }}</div>
+  </div>
+  {% endif %}
+  {% if sale.customer and sale.customer.address %}
+  <div class="info-item" style="grid-column:1/-1;">
+    <div class="label">Address</div>
+    <div class="value">{{ sale.customer.address }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="section-label">Unit Sold</div>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Unit ID</div>
+    <div class="value">{{ sale.unit.unit_id if sale.unit else '—' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Description</div>
+    <div class="value">
+      {% if sale.unit %}
+        {{ sale.unit.year or '' }} {{ sale.unit.make or '' }} {{ sale.unit.model or '' }}
+      {% else %}—{% endif %}
+    </div>
+  </div>
+  {% if sale.unit and sale.unit.vin_serial %}
+  <div class="info-item">
+    <div class="label">VIN / Serial</div>
+    <div class="value">{{ sale.unit.vin_serial }}</div>
+  </div>
+  {% endif %}
+  <div class="info-item">
+    <div class="label">Business Line</div>
+    <div class="value">{{ sale.business_line.value | replace('_', ' ') | title if sale.business_line else '—' }}</div>
+  </div>
+</div>
+
+<div class="section-label">Transaction Summary</div>
+<div class="totals">
+  <div class="totals-row">
+    <span>Sale Amount</span>
+    <span>${{ "%.2f" | format(sale.sale_amount | float) }}</span>
+  </div>
+  {% if sale.fees and sale.fees | float > 0 %}
+  <div class="totals-row">
+    <span>Fees</span>
+    <span>${{ "%.2f" | format(sale.fees | float) }}</span>
+  </div>
+  {% endif %}
+  <div class="totals-row total">
+    <span>Total</span>
+    <span>${{ "%.2f" | format(total_contract | float) }}</span>
+  </div>
+</div>
+
+{% if payments %}
+<div class="section-label">Payments Received</div>
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Method</th>
+      <th class="right">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in payments %}
+  <tr>
+    <td>{{ p.payment_date }}</td>
+    <td>{{ p.payment_method.value | title if p.payment_method else '—' }}</td>
+    <td class="right">${{ "%.2f" | format(p.amount | float) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="totals" style="margin-top:12px;">
+  <div class="totals-row">
+    <span>Total Paid</span>
+    <span>${{ "%.2f" | format(total_paid | float) }}</span>
+  </div>
+  <div class="totals-row balance">
+    <span>Balance Due</span>
+    <span>${{ "%.2f" | format(remaining_balance | float) }}</span>
+  </div>
+</div>
+
+{% if sale.notes %}
+<div class="section-label">Notes</div>
+<div style="font-size:13px; color:#374151;">{{ sale.notes }}</div>
+{% endif %}
+
+<div class="footer">
+  Sale ID {{ sale.sale_id }} &nbsp;·&nbsp; Status: {{ sale.status.value | title if sale.status else '—' }}<br>
+  This receipt was generated by RTO Accounting. Retain for your records.
+</div>
+
+</body>
+</html>

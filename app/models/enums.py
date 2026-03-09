@@ -31,6 +31,7 @@ class CustomerStatus(str, enum.Enum):
 class RepairJobType(str, enum.Enum):
     internal_recon = "internal_recon"
     customer_repair = "customer_repair"
+    customer_support_repair = "customer_support_repair"
 
 
 class RepairJobStatus(str, enum.Enum):

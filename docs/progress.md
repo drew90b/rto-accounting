@@ -8,13 +8,54 @@ Update this file as work is completed.
 ## Current State
 
 **Phase:** 1 — Core Data Entry (MVP)
-**As of:** 2026-03-08
+**As of:** 2026-03-09
 **Server:** Not yet deployed. Local development only.
 **Database:** Not yet connected. Awaiting first `alembic upgrade head` run.
 
 ---
 
 ## Completed Work
+
+### 2026-03-09 — Revenue Capture: Auto-Records, Receipts, and Close-Job Workflow
+
+**Goal:** Make the system the source of truth for all completed revenue events without becoming a POS system.
+
+#### Services
+- [x] `app/services/sale_service.py` — `finalize_new_sale()`: atomically creates sale transaction + payment on new sale save; auto-sets golf cart sales to complete with full-amount payment; updates unit status.
+- [x] `app/services/repair_service.py` — `close_repair_job()`: closes job and auto-creates repair_revenue transaction for customer_repair jobs. `record_repair_payment()`: records payment event for a closed repair job.
+
+#### Routes
+- [x] `app/routes/sales.py` — calls `finalize_new_sale()` on create; adds `GET /sales/{id}/receipt`; adds `POST /sales/{id}/complete` with payment-or-lease enforcement; passes payment summary to edit view.
+- [x] `app/routes/repair_jobs.py` — adds `GET/POST /repair-jobs/{id}/close`; adds `GET/POST /repair-jobs/{id}/record-payment`; adds `GET /repair-jobs/{id}/invoice`; passes payment summary to edit view.
+
+#### Templates (modified)
+- [x] `app/templates/sales/form.html` — adds "Payment Method" field on new sale; shows payment history and "Mark Complete" button on edit; shows "Print Receipt" link.
+- [x] `app/templates/repair_jobs/form.html` — shows "Close Job", "Record Payment", and "Print Invoice" action buttons based on job status.
+
+#### Templates (new)
+- [x] `app/templates/sales/receipt.html` — printable sale receipt (no sidebar); customer, unit, amounts, payments, balance.
+- [x] `app/templates/repair_jobs/invoice.html` — printable repair invoice; charges, payments, balance due; "Record Payment" button.
+- [x] `app/templates/repair_jobs/close_job.html` — focused close-job form; confirms billing amounts before closing.
+- [x] `app/templates/repair_jobs/record_payment.html` — 4-field payment form for repair jobs (mirrors lease record_payment).
+
+#### Enums
+- [x] `app/models/enums.py` — added `customer_support_repair` to `RepairJobType` (no migration needed; column is String in DB).
+
+#### Docs
+- [x] `docs/business_rules.md` — updated Sale Rules (auto-creation, golf cart full-payment, completion enforcement); updated Repair Job Rules (auto-revenue-transaction on close).
+- [x] `docs/system_workflows.md` — updated workflows 3, 4, 7, 9 to reflect auto-creation and new shortcut paths.
+- [x] `docs/progress.md` — this entry.
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| Golf cart sales always complete + full payment at save time | Business rule: always paid in full at counter |
+| Revenue transaction created at close time, not at billing entry | Prevents phantom revenue; close is the commit point |
+| Repair payment recorded separately from close (no auto-payment on close) | Cash may be collected later; don't assume it |
+| Receipts are printable HTML, no PDF library | Browser print-to-PDF covers the use case; no new dependencies |
+| Parts sales handled via customer_repair job type | No SKU catalog needed; job notes serve as description |
+
+---
 
 ### 2026-03-08 — Lease Balance Refactor
 
@@ -122,10 +163,10 @@ Update this file as work is completed.
 | Item | Notes |
 |---|---|
 | Vendor UI | Model and DB table exist. No list/add/edit screens yet. |
-| `customer_support_repair` job type in DB | `job_type` enum in the model needs `customer_support_repair` added and a migration generated. |
 | Dashboard cash warning | Basic dashboard exists. Cash warning panel not yet built. |
 | Form validation feedback | Forms silently fail on missing required fields in some cases. No inline error messages yet. |
 | Pagination | List views load all records. No pagination for large datasets. |
+| Duplicate transaction guard on sale edit | If a user edits sale_amount after save, the auto-created transaction will be stale. No warning is shown. |
 
 ### Phase 2 — Not started
 | Item | Notes |

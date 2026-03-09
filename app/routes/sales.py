@@ -11,7 +11,10 @@ from app.database import get_db
 from app.models.sale import Sale
 from app.models.unit import Unit
 from app.models.customer import Customer
-from app.models.enums import BusinessLine, SaleStatus
+from app.models.payment import Payment
+from app.models.lease_account import LeaseAccount
+from app.models.enums import BusinessLine, SaleStatus, PaymentMethod
+from app.services.sale_service import finalize_new_sale
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -99,6 +102,7 @@ def new_sale_form(request: Request, db: Session = Depends(get_db)):
         "customers": customers,
         "statuses": [s.value for s in SaleStatus],
         "business_lines": [b.value for b in BusinessLine],
+        "payment_methods": [m.value for m in PaymentMethod],
     })
 
 
@@ -114,6 +118,7 @@ def create_sale(
     fees: str = Form("0"),
     total_contract_amount: str = Form(""),
     status: str = Form("pending"),
+    payment_method: str = Form("cash"),
     notes: str = Form(""),
 ):
     from datetime import date
@@ -132,8 +137,63 @@ def create_sale(
     db.add(sale)
     db.flush()
     sale.sale_id = f"S-{sale.id:04d}"
+
+    finalize_new_sale(sale, payment_method, db)
     db.commit()
+
+    # Golf cart sales go straight to receipt; car sales go to edit
+    if business_line == "golf_cart":
+        return RedirectResponse(url=f"/sales/{sale.id}/receipt", status_code=303)
     return RedirectResponse(url=f"/sales/{sale.id}/edit?msg=Sale+saved", status_code=303)
+
+
+@router.get("/{sale_id}/receipt", response_class=HTMLResponse)
+def sale_receipt(sale_id: int, request: Request, db: Session = Depends(get_db)):
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if not sale:
+        return RedirectResponse(url="/sales/")
+    payments = db.query(Payment).filter(Payment.sale_id == sale_id).all()
+    total_paid = sum((p.amount or Decimal("0")) for p in payments)
+    total_contract = (
+        Decimal(str(sale.total_contract_amount))
+        if sale.total_contract_amount
+        else (Decimal(str(sale.sale_amount or "0")) + Decimal(str(sale.fees or "0")))
+    )
+    remaining = total_contract - total_paid
+    return templates.TemplateResponse("sales/receipt.html", {
+        "request": request,
+        "sale": sale,
+        "payments": payments,
+        "total_paid": total_paid,
+        "total_contract": total_contract,
+        "remaining_balance": remaining,
+    })
+
+
+@router.post("/{sale_id}/complete")
+def complete_sale(sale_id: int, db: Session = Depends(get_db)):
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if not sale:
+        return RedirectResponse(url="/sales/", status_code=303)
+
+    has_payment = db.query(Payment).filter(Payment.sale_id == sale_id).first()
+    has_lease = (
+        db.query(LeaseAccount).filter(LeaseAccount.unit_id == sale.unit_id).first()
+        if sale.unit_id else None
+    )
+    if not has_payment and not has_lease:
+        return RedirectResponse(
+            url=f"/sales/{sale_id}/edit?msg=Cannot+complete+sale+—+no+payment+or+lease+on+file",
+            status_code=303,
+        )
+
+    sale.status = "complete"
+    unit = db.query(Unit).filter(Unit.id == sale.unit_id).first()
+    if unit:
+        unit.status = "sold"
+        unit.linked_customer_id = sale.customer_id
+    db.commit()
+    return RedirectResponse(url=f"/sales/{sale_id}/edit?msg=Sale+marked+complete", status_code=303)
 
 
 @router.get("/{sale_id}/edit", response_class=HTMLResponse)
@@ -143,6 +203,14 @@ def edit_sale_form(sale_id: int, request: Request, db: Session = Depends(get_db)
         return RedirectResponse(url="/sales/")
     units = db.query(Unit).order_by(Unit.unit_id).all()
     customers = db.query(Customer).order_by(Customer.full_name).all()
+    payments = db.query(Payment).filter(Payment.sale_id == sale_id).all()
+    total_paid = sum((p.amount or Decimal("0")) for p in payments)
+    total_contract = (
+        Decimal(str(sale.total_contract_amount))
+        if sale.total_contract_amount
+        else (Decimal(str(sale.sale_amount or "0")) + Decimal(str(sale.fees or "0")))
+    )
+    remaining = total_contract - total_paid
     return templates.TemplateResponse("sales/form.html", {
         "request": request,
         "sale": sale,
@@ -150,6 +218,11 @@ def edit_sale_form(sale_id: int, request: Request, db: Session = Depends(get_db)
         "customers": customers,
         "statuses": [s.value for s in SaleStatus],
         "business_lines": [b.value for b in BusinessLine],
+        "payment_methods": [m.value for m in PaymentMethod],
+        "payments": payments,
+        "total_paid": total_paid,
+        "total_contract": total_contract,
+        "remaining_balance": remaining,
     })
 
 

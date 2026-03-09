@@ -137,9 +137,9 @@ A purchase transaction with no `unit_id`, no `repair_job_id`, and `transaction_t
 - For `customer_support_repair`: `total_billed_amount` may be 0, at cost, or below cost. These jobs represent goodwill repairs, warranty-style fixes, or retention repairs intended to keep a lease customer active.
 - A job cannot be closed (`status = complete`) without a `close_date`.
 - Costs charged to a repair job must be recorded as transactions with `repair_job_id` set.
-- Revenue from a paying customer repair must be recorded as a separate transaction with `transaction_type = repair_revenue` and the matching `repair_job_id`.
+- **Revenue transaction is auto-created at close time**: When a `customer_repair` job is closed via the Close Job workflow, `repair_service.close_repair_job()` automatically creates the `repair_revenue` transaction. Staff do not need to manually log it.
 - Revenue may or may not exist for `customer_support_repair` jobs depending on whether the repair was partially billed.
-- Payments received for a repair job must be recorded in the `payments` table with `repair_job_id` set.
+- Payments received for a repair job must be recorded in the `payments` table with `repair_job_id` set. Use the "Record Payment" action on the invoice page.
 - If a repair job is marked `customer_support_repair` and `total_billed_amount = 0`, the system should treat the job as a cost of maintaining the lease portfolio, not as revenue.
 - An `internal_recon` job on a unit that is already `sold` or `closed` triggers a `review_needed` exception.
 
@@ -151,10 +151,12 @@ A purchase transaction with no `unit_id`, no `repair_job_id`, and `transaction_t
 - Every sale requires a `customer_id` and a `unit_id`.
 - `sale_amount` must be greater than 0.
 - `total_contract_amount` = `sale_amount` + `fees` (if not entered manually, calculate before close).
-- When a sale is recorded, the linked unit's status should be updated to `sold` and `linked_customer_id` set.
-- A sale event must have a corresponding `transaction` record with `transaction_type = sale` and the matching `sale_id`.
+- **Transaction and payment are auto-created on save**: `sale_service.finalize_new_sale()` is called automatically when a new sale is recorded. Staff do not manually log the sale transaction.
+- **Golf cart sales are always paid in full at the counter.** The system auto-creates a payment for the full `total_contract_amount` and sets `status = complete`.
+- **Car sales** may carry a down payment. If `down_payment > 0`, a payment is auto-created for that amount. Status remains `pending` until the sale is completed.
+- When a sale is saved, the linked unit's status is automatically updated to `sold` and `linked_customer_id` is set.
+- **A sale cannot be marked `complete` unless** at least one payment exists for that sale OR a lease account exists for the unit. Enforced by `POST /sales/{id}/complete`.
 - Down payments must be recorded as a `payment` with `sale_id` set, not embedded in the sale record's `sale_amount`.
-- A sale may not be marked `complete` if the unit still has an open `internal_recon` repair job.
 - A unit that already has a `complete` sale should not have a second active sale created.
 
 ---

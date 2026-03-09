@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Record Payment — {{ job.job_id }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Record Payment — {{ job.job_id }}</h1>
+  <a href="/repair-jobs/{{ job.id }}/invoice" class="btn btn-secondary">← Back to Invoice</a>
+</div>
+
+<div class="card" style="max-width:560px;">
+
+  <div style="background:#f7f8fa; border:1px solid #e2e6ea; border-radius:6px; padding:14px 16px; margin-bottom:20px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px;">
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Job</div>
+        <div style="margin-top:2px;">{{ job.job_id }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Customer</div>
+        <div style="margin-top:2px;">{{ job.customer.full_name if job.customer else '—' }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Total Billed</div>
+        <div style="margin-top:2px;">${{ "%.2f" | format(job.total_billed_amount | float) }}</div>
+      </div>
+      <div>
+        <div style="font-weight:600; color:#7a8799; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;">Balance Due</div>
+        <div style="margin-top:2px; font-weight:700; font-size:15px; color:#1a2332;">${{ "%.2f" | format(remaining_balance | float) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="/repair-jobs/{{ job.id }}/record-payment">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Payment Date *</label>
+        <input type="date" name="payment_date" required value="{{ today if today else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" step="0.01" name="amount" required placeholder="0.00"
+               value="{{ "%.2f" | format(remaining_balance | float) }}">
+      </div>
+
+      <div class="form-group">
+        <label>Payment Method *</label>
+        <select name="payment_method" required>
+          {% for m in methods %}
+          <option value="{{ m }}">{{ m | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Received By</label>
+        <input type="text" name="entered_by" placeholder="Your name">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes</label>
+        <textarea name="notes" placeholder="Optional"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Record Payment</button>
+        <a href="/repair-jobs/{{ job.id }}/invoice" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

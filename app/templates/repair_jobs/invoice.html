@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice — {{ job.job_id }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 32px; max-width: 680px; margin: 0 auto; }
+    .header { border-bottom: 2px solid #1a2332; padding-bottom: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #1a2332; }
+    .header .sub { font-size: 12px; color: #6b7280; margin-top: 3px; }
+    .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #7a8799; margin-bottom: 6px; margin-top: 20px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+    .info-item .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; }
+    .info-item .value { font-size: 13px; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding: 6px 0; }
+    td { padding: 7px 0; border-bottom: 1px solid #f3f4f6; }
+    td.right, th.right { text-align: right; }
+    .totals { margin-top: 16px; border-top: 2px solid #1a2332; padding-top: 12px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+    .totals-row.total { font-weight: 700; font-size: 15px; color: #1a2332; border-top: 1px solid #e5e7eb; margin-top: 6px; padding-top: 8px; }
+    .totals-row.balance { font-weight: 700; color: {% if remaining_balance > 0 %}#dc2626{% else %}#16a34a{% endif %}; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; }
+    .print-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+    .print-bar a, .print-bar button { font-size: 13px; padding: 7px 16px; border-radius: 5px; border: 1px solid #d1d5db; background: #f9fafb; cursor: pointer; color: #374151; text-decoration: none; }
+    .print-bar button:hover, .print-bar a:hover { background: #f3f4f6; }
+    .record-payment-btn { font-size: 13px; padding: 7px 16px; border-radius: 5px; border: none; background: #1a2332; cursor: pointer; color: #fff; text-decoration: none; }
+    @media print { .print-bar { display: none; } body { padding: 16px; } }
+  </style>
+</head>
+<body>
+
+{% set msg = request.query_params.get('msg') %}
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save PDF</button>
+  {% if remaining_balance > 0 %}
+  <a href="/repair-jobs/{{ job.id }}/record-payment" class="record-payment-btn">Record Payment</a>
+  {% endif %}
+  <a href="/repair-jobs/{{ job.id }}/edit">← Back to Job</a>
+  {% if msg %}
+  <span style="align-self:center; color:#16a34a; font-weight:600;">{{ msg | replace('+', ' ') }}</span>
+  {% endif %}
+</div>
+
+<div class="header">
+  <h1>RTO Accounting — Repair Invoice</h1>
+  <div class="sub">{{ job.job_id }} &nbsp;·&nbsp; Closed {{ job.close_date }}</div>
+</div>
+
+<div class="section-label">Customer</div>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Name</div>
+    <div class="value">{{ job.customer.full_name if job.customer else '—' }}</div>
+  </div>
+  {% if job.customer and job.customer.phone %}
+  <div class="info-item">
+    <div class="label">Phone</div>
+    <div class="value">{{ job.customer.phone }}</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if job.unit %}
+<div class="section-label">Unit</div>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Unit ID</div>
+    <div class="value">{{ job.unit.unit_id }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Description</div>
+    <div class="value">{{ job.unit.year or '' }} {{ job.unit.make or '' }} {{ job.unit.model or '' }}</div>
+  </div>
+  {% if job.unit.vin_serial %}
+  <div class="info-item">
+    <div class="label">VIN / Serial</div>
+    <div class="value">{{ job.unit.vin_serial }}</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="section-label">Job Details</div>
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Job ID</div>
+    <div class="value">{{ job.job_id }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Type</div>
+    <div class="value">{{ job.job_type.value | replace('_', ' ') | title if job.job_type else '—' }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Opened</div>
+    <div class="value">{{ job.open_date }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Closed</div>
+    <div class="value">{{ job.close_date }}</div>
+  </div>
+</div>
+
+{% if job.notes %}
+<div class="section-label">Work Description</div>
+<div style="font-size:13px; color:#374151; line-height:1.6;">{{ job.notes }}</div>
+{% endif %}
+
+<div class="section-label">Charges</div>
+<div class="totals">
+  {% if job.labor_amount and job.labor_amount | float > 0 %}
+  <div class="totals-row">
+    <span>Labor</span>
+    <span>${{ "%.2f" | format(job.labor_amount | float) }}</span>
+  </div>
+  {% endif %}
+  {% if job.materials_amount and job.materials_amount | float > 0 %}
+  <div class="totals-row">
+    <span>Parts / Materials</span>
+    <span>${{ "%.2f" | format(job.materials_amount | float) }}</span>
+  </div>
+  {% endif %}
+  <div class="totals-row total">
+    <span>Total Due</span>
+    <span>${{ "%.2f" | format(total_billed | float) }}</span>
+  </div>
+</div>
+
+{% if payments %}
+<div class="section-label">Payments Received</div>
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Method</th>
+      <th class="right">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in payments %}
+  <tr>
+    <td>{{ p.payment_date }}</td>
+    <td>{{ p.payment_method.value | title if p.payment_method else '—' }}</td>
+    <td class="right">${{ "%.2f" | format(p.amount | float) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="totals" style="margin-top:12px;">
+  <div class="totals-row">
+    <span>Total Paid</span>
+    <span>${{ "%.2f" | format(total_paid | float) }}</span>
+  </div>
+  <div class="totals-row balance">
+    <span>Balance Due</span>
+    <span>${{ "%.2f" | format(remaining_balance | float) }}</span>
+  </div>
+</div>
+
+<div class="footer">
+  Job {{ job.job_id }} &nbsp;·&nbsp; {{ job.business_line.value | replace('_', ' ') | title if job.business_line else '' }}<br>
+  This invoice was generated by RTO Accounting. Retain for your records.
+</div>
+
+</body>
+</html>

@@ -96,7 +96,7 @@ what to enter, in what order, and what records get created.
 
 ## 3. Record a Golf Cart Sale
 
-**Trigger:** A golf cart is sold outright to a customer.
+**Trigger:** A golf cart is sold outright to a customer. Golf cart sales are always paid in full at the time of the transaction.
 
 ### Steps
 
@@ -112,50 +112,52 @@ what to enter, in what order, and what records get created.
    - `unit_id` = golf cart being sold
    - `sale_date` = date of sale
    - `sale_amount` = agreed sale price
-   - `down_payment` = amount paid today (if partial)
-   - `fees` = any doc or other fees
-   - `total_contract_amount` = sale_amount + fees
-   - `status = complete` (if paid in full) or `pending` (if balance remains)
+   - `fees` = any doc or other fees (optional)
+   - `total_contract_amount` = sale_amount + fees (or leave blank to auto-calculate)
+   - `payment_method` = how payment was received (cash / check / card)
+   - Click **Save Sale**
 
-4. **Record the payment** → Payments → Record Payment
-   - `customer_id` = buyer
-   - `payment_date` = today
-   - `amount` = amount received
-   - `payment_method` = cash / check / card
-   - `sale_id` = this sale
+4. **System automatically creates:**
+   - A sale transaction (`transaction_type = sale`, `revenue_stream = golf_cart_sale`)
+   - A payment for the full `total_contract_amount`
+   - Unit status updated to `sold`; `linked_customer_id` set
+   - Sale `status` set to `complete`
 
-5. **Log the sale transaction** → Transactions → Log Transaction
-   - `transaction_type = sale`
-   - `business_line = golf_cart`
-   - `revenue_stream = golf_cart_sale`
-   - `customer_id` = buyer
-   - `unit_id` = golf cart
-   - `sale_id` = this sale
-   - `amount` = sale_amount
-   - `receipt_attached = true` (attach bill of sale)
-   - `coding_complete = true`
+5. **System redirects to the printable receipt** — hand it to the customer or save to PDF.
 
-6. **Update the unit** → Units → Edit
-   - `status = sold`
-   - `linked_customer_id` = buyer
+> **Shortcut:** Sales → New Sale → fill in 6 fields → Save → Print Receipt
 
-**Records created:** 1 sale, 1 payment, 1 transaction. Unit status updated.
+**Records created:** 1 sale, 1 payment, 1 transaction. Unit status updated. No manual transaction or payment entry required.
 
 ---
 
 ## 4. Record a Car Outright Sale
 
-**Trigger:** A car is sold outright (not on RTO). Same flow as golf cart with car-specific fields.
+**Trigger:** A car is sold outright (not on RTO).
 
 ### Steps
 
-Follow the same steps as Workflow 3 with these differences:
+1. **Create the sale record** → Sales → New Sale
+   - `business_line = car`
+   - `customer_id`, `unit_id`, `sale_date`, `sale_amount`, `fees`
+   - `down_payment` = amount collected today (may be 0 if nothing collected yet)
+   - `payment_method` = how the down payment was received
+   - Confirm there is no open `lease_account` for this unit
+   - Click **Save Sale**
 
-- `business_line = car`
-- `revenue_stream = car_sale`
-- Confirm there is no open `lease_account` for this unit before creating a sale
+2. **System automatically creates:**
+   - A sale transaction (`transaction_type = sale`, `revenue_stream = car_sale`)
+   - A payment for the down payment amount (if `down_payment > 0`)
+   - Unit status updated to `sold`; `linked_customer_id` set
+   - Sale `status` remains `pending`
 
-**Records created:** 1 sale, 1 payment, 1 transaction. Unit status updated.
+3. **When the balance is collected** → Sales → find the sale → **Mark Complete**
+   - System verifies a payment exists before marking complete
+   - Use Payments → New Payment to record additional payments if needed
+
+4. **Print receipt** at any time via the "Print Receipt" button on the sale edit page.
+
+**Records created:** 1 sale, 1 transaction, 1 payment (if down payment > 0). Unit status updated.
 
 ---
 
@@ -259,33 +261,23 @@ Follow the same steps as Workflow 3 with these differences:
 3. **Log costs as work is done** → Transactions → Log Transaction
    - `transaction_type = materials_cost` or `labor_cost`
    - `repair_job_id` = this job
-   - `customer_id` = customer
-   - One transaction per vendor/cost event
-   - Attach receipts
+   - One transaction per vendor/cost event; attach receipts
 
-4. **When job is complete, update totals on the repair job** → Repair Jobs → Edit
-   - Enter final `labor_amount`, `materials_amount`
+4. **When job is complete** → Repair Jobs → find the job → **Close Job**
+   - Confirm or enter final `labor_amount`, `materials_amount`
    - Enter `total_billed_amount` = what the customer owes
-   - Set `close_date` = today
-   - Set `status = complete`
+   - Click **Close Job and Generate Invoice**
+   - System sets `status = complete`, `close_date = today`
+   - System **automatically creates** the repair revenue transaction
+   - System redirects to the printable invoice — hand it to the customer
 
-5. **Log the repair revenue transaction** → Transactions → Log Transaction
-   - `transaction_type = repair_revenue`
-   - `business_line` = match the job
-   - `revenue_stream = car_repair` or `golf_cart_repair`
-   - `customer_id` = customer
-   - `repair_job_id` = this job
-   - `amount` = total_billed_amount
-   - `receipt_attached = true` (attach invoice)
+5. **When payment is collected** → from the invoice page, click **Record Payment**
+   - 4-field form: date, amount (pre-filled with balance due), method, notes
+   - System creates the payment record
 
-6. **Record payment when collected** → Payments → Record Payment
-   - `customer_id` = customer
-   - `payment_date` = date collected
-   - `amount` = amount paid
-   - `payment_method` = cash / card / etc.
-   - `repair_job_id` = this job
+> **Shortcut:** Repair Jobs → find job → Close Job → fill amounts → Generate Invoice → Record Payment
 
-**Records created:** 1 repair job, N cost transactions, 1 revenue transaction, 1 payment.
+**Records created:** 1 repair job, N cost transactions, 1 revenue transaction (auto), 1 payment. No manual transaction entry required for the revenue event.
 
 ---
 
@@ -331,30 +323,30 @@ Follow the same steps as Workflow 3 with these differences:
 
 ## 9. Record a Parts Sale
 
-**Trigger:** Golf cart parts are sold directly to a customer (no repair job involved).
+**Trigger:** Parts are sold at the counter (not as part of an installed repair job).
 
 ### Steps
 
-1. **Log the transaction** → Transactions → Log Transaction
-   - `transaction_type = parts_revenue`
-   - `business_line = golf_cart`
-   - `revenue_stream = golf_cart_parts_sale`
-   - `customer_id` = buyer (add customer if needed)
-   - `amount` = sale price
-   - `description` = parts sold
-   - `payment_method` = cash / card / etc.
-   - `receipt_attached = true`
-   - `coding_complete = true`
+1. **Open a repair job** → Repair Jobs → New Job
+   - `business_line = golf_cart` (or car)
+   - `job_type = customer_repair`
+   - `customer_id` = buyer (add if needed)
+   - `open_date` = today
+   - `status = open`
+   - Notes: "Counter parts sale — [description of parts]"
 
-2. **Record payment** → Payments → Record Payment
-   - `customer_id` = buyer
-   - `payment_date` = today
-   - `amount` = amount collected
-   - `payment_method` = match transaction
+2. **Immediately click Close Job**
+   - Enter `total_billed_amount` = sale price of the parts
+   - Labor and materials may be left at 0
+   - Click **Close Job and Generate Invoice**
+   - System creates the revenue transaction automatically
 
-> Parts sales do not require a repair job record unless the parts are being installed as part of a job.
+3. **Collect payment** → from the invoice, click **Record Payment**
 
-**Records created:** 1 transaction, 1 payment.
+> This keeps parts sales in the repair job system without requiring a SKU catalog.
+> The job notes serve as the line-item description.
+
+**Records created:** 1 repair job, 1 revenue transaction (auto), 1 payment.
 
 ---
 
