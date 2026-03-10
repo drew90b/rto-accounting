@@ -32,6 +32,19 @@ The foundational records and entry screens. Everything the business needs to cap
 
 ---
 
+
+## Phase 1.5 — Workflow Hardening
+inline form validation
+
+confirmation messages
+
+pagination
+
+better search filters
+
+better error handling
+
+
 ## Phase 2 — Reporting and Exports
 
 Accountant-friendly views and month-end export packs. Enables external review without relying on the live app.
@@ -120,6 +133,19 @@ Exception auto-detection and system-enforced data quality rules.
 6. **Authentication** — login and basic role protection before any shared use
 
 ---
+
+Phase 7 — Mobile usability
+
+Features:
+
+Responsive layouts
+Camera receipt upload
+Quick payment entry screen
+Large buttons for phone
+PWA install support
+
+---
+
 
 ## Out of Scope (MVP and Near-Term)
 
