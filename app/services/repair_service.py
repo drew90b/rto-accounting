@@ -61,6 +61,11 @@ def close_repair_job(job, db: Session):
     db.add(t)
     db.flush()
     t.transaction_id = f"T-{t.id:05d}"
+
+    # Auto-create invoice for billed customer repairs
+    from app.services.invoice_service import create_invoice_from_repair
+    create_invoice_from_repair(job, db)
+
     return t
 
 

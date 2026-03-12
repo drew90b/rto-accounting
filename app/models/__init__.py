@@ -8,8 +8,10 @@ from app.models.payment import Payment
 from app.models.transaction import Transaction
 from app.models.document import Document
 from app.models.exception_record import ExceptionRecord
+from app.models.invoice import Invoice, InvoiceItem
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
     "LeaseAccount", "Payment", "Transaction", "Document", "ExceptionRecord",
+    "Invoice", "InvoiceItem",
 ]

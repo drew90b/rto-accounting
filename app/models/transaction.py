@@ -12,7 +12,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    transaction_id = Column(String(20), unique=True, nullable=False)
+    transaction_id = Column(String(20), unique=True, nullable=True)
     transaction_date = Column(Date, nullable=False)
     entry_date = Column(Date, default=datetime.utcnow)
     transaction_type = Column(SAEnum(TransactionType), nullable=False)

@@ -9,7 +9,7 @@ class LeaseAccount(Base):
     __tablename__ = "lease_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
-    lease_id = Column(String(20), unique=True, nullable=False)
+    lease_id = Column(String(20), unique=True, nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     deal_date = Column(Date, nullable=False)
@@ -30,3 +30,4 @@ class LeaseAccount(Base):
     unit = relationship("Unit", back_populates="lease_accounts")
     payments = relationship("Payment", back_populates="lease_account")
     transactions = relationship("Transaction", back_populates="lease_account")
+    invoices = relationship("Invoice", back_populates="lease_account")

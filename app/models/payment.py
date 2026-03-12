@@ -9,7 +9,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    payment_id = Column(String(20), unique=True, nullable=False)
+    payment_id = Column(String(20), unique=True, nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     payment_date = Column(Date, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
@@ -25,3 +25,4 @@ class Payment(Base):
     sale = relationship("Sale", back_populates="payments")
     lease_account = relationship("LeaseAccount", back_populates="payments")
     repair_job = relationship("RepairJob", back_populates="payments")
+    invoice = relationship("Invoice", back_populates="payment", foreign_keys="Invoice.payment_id")

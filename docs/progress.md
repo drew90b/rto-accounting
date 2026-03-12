@@ -16,6 +16,104 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-03-12 — Invoice / Receipt Generator
+
+**Goal:** Auto-generate a persistent Invoice record for every revenue event, with a printable HTML document and a browsable invoice list.
+
+#### New files
+- [x] `app/models/enums.py` — `InvoiceType` (sale, repair, rto_payment) and `InvoiceStatus` (open, paid) added
+- [x] `app/models/invoice.py` — `Invoice` and `InvoiceItem` ORM models; `invoice_number` set post-flush (`INV-00001`); relationships to customer, sale, repair_job, lease_account, payment, items
+- [x] `app/models/__init__.py` — Invoice, InvoiceItem imports added
+- [x] `alembic/versions/004_add_invoices.py` — Migration 004: creates `invoices` and `invoice_items` tables with all FKs, indexes, and server_defaults
+- [x] `app/services/invoice_service.py` — Five public functions: `create_invoice_from_sale()`, `create_invoice_from_repair()`, `create_invoice_from_rto_payment()`, `create_simple_receipt()`, `generate_invoice_document()`; private helpers: `_build_invoice()`, `_add_item()`, `_unit_description()`, `_compute_remaining_balance()`, `_load_invoice_context()`; `load_invoice_for_display()` utility for route handlers
+- [x] `app/routes/invoices.py` — `GET /invoices/` (list with type/status filter); `GET /invoices/{id}/print` (display invoice)
+- [x] `app/templates/invoices/list.html` — filterable list view extending base.html
+- [x] `app/templates/invoices/invoice.html` — standalone printable invoice; shows line items, payment history, and balance; adapts heading/label text to invoice type
+
+#### Modified files
+- [x] `app/models/customer.py`, `sale.py`, `repair_job.py`, `lease_account.py`, `payment.py` — `invoices`/`invoice` relationship added (one line each)
+- [x] `app/services/sale_service.py` — `finalize_new_sale()` calls `create_invoice_from_sale()` after payment and unit update
+- [x] `app/services/repair_service.py` — `close_repair_job()` calls `create_invoice_from_repair()` after transaction flush
+- [x] `app/services/lease_service.py` — `record_rto_payment()` calls `create_invoice_from_rto_payment()` after transaction flush
+- [x] `app/main.py` — invoices router imported and registered at `/invoices`
+- [x] `app/templates/base.html` — "Invoices" link added to Finance section of sidebar
+- [x] `app/static/css/style.css` — `.badge-paid` and `.badge-open` aliases added
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| `_compute_remaining_balance()` inlined in invoice_service | Avoids circular import: `lease_service` imports `invoice_service`, so invoice_service cannot import lease_service |
+| Invoice total = payment amount for RTO receipts (not lease total) | Receipt model: each payment event gets its own receipt showing amount collected and remaining lease balance |
+| Existing `sales/receipt.html` and `repair_jobs/invoice.html` kept as-is | New invoice system is additive; standalone receipts still accessible from their respective views |
+| `storage/invoices/` for saved HTML files | Consistent with `storage/receipts/` pattern; `generate_invoice_document()` available for CLI or background use |
+
+**Result:** All 16 tests pass. Invoices auto-created on every sale, repair close, and RTO payment.
+
+---
+
+### 2026-03-12 — Transactional pytest Architecture
+
+**Goal:** Eliminate cross-test state contamination and hidden ordering dependencies in the pytest suite.
+
+#### What changed
+
+- [x] `tests/conftest.py` — Complete rewrite. New fixture hierarchy:
+  - `engine` (session-scoped) — single SQLite in-memory engine with `StaticPool`; schema created once via `Base.metadata.create_all()`; dropped at session end
+  - `db_connection` (per-test) — opens a connection, begins an outer `BEGIN` transaction; rolls back and closes after each test regardless of commits inside the test
+  - `db` (per-test) — `sessionmaker(bind=db_connection, join_transaction_mode="create_savepoint")`; sessions use SAVEPOINTs so that `db.commit()` inside services only releases the savepoint, not the outer transaction
+  - `client` (per-test) — `FastAPI TestClient` with `get_db` overridden to yield sessions from the same `db_connection`; both `client` and `db` share one connection so route-committed data is visible to test verification queries
+- [x] `tests/test_customer_create.py` — Removed local `http_db` and `client` fixtures; test now uses `client` and `db` from conftest; `StaticPool` isolation is no longer needed since the shared connection handles it
+- [x] `requirements-dev.txt` — Added `pytest-randomly`; forces random test order on every run to surface hidden state dependencies early
+
+#### Result
+
+- All 16 tests pass with randomized execution order
+- No SAWarning about deassociated transactions
+- No per-test schema creation overhead
+- `pytest-randomly` active (`Using --randomly-seed=...` shown in output)
+
+#### Key decisions
+
+| Decision | Reason |
+|---|---|
+| `join_transaction_mode="create_savepoint"` | Prevents route `db.commit()` from committing the outer test transaction; supported natively in SQLAlchemy 2.0 |
+| `StaticPool` on session-scoped engine | SQLite `:memory:` databases are per-connection; StaticPool ensures all `engine.connect()` calls return the same physical connection and therefore the same database |
+| `db_connection` as a separate fixture | Provides a clean rollback point that both `db` and `client` fixtures can depend on; pytest resolves function-scoped fixtures once per test, guaranteeing both share the same connection |
+| `pytest-randomly` | Randomizes ordering to catch tests that silently rely on preceding test state |
+
+---
+
+### 2026-03-12 — Nullable Human-Readable ID Alignment
+
+**Goal:** Bring ORM model definitions into alignment with migration 003 so that tests using SQLite (`create_all`) behave consistently with the PostgreSQL schema.
+
+- [x] `alembic/versions/003_nullable_human_readable_ids.py` — migration added; removes `NOT NULL` from all human-readable ID columns across 10 tables
+- [x] `app/models/unit.py` — `unit_id` changed to `nullable=True`
+- [x] `app/models/repair_job.py` — `job_id` changed to `nullable=True`
+- [x] `app/models/sale.py` — `sale_id` changed to `nullable=True`
+- [x] `app/models/lease_account.py` — `lease_id` changed to `nullable=True`
+- [x] `app/models/payment.py` — `payment_id` changed to `nullable=True`
+- [x] `app/models/transaction.py` — `transaction_id` changed to `nullable=True`
+- [x] `app/models/document.py` — `document_id` changed to `nullable=True`
+- [x] `app/models/exception_record.py` — `exception_id` changed to `nullable=True`
+- [x] `app/models/vendor.py` — `vendor_id` changed to `nullable=True`
+- [x] `app/services/lease_service.py` — `record_rto_payment()` updated to use enum members (`TransactionType.collection`, `BusinessLine.car`, `RevenueStream.car_rto_lease`) instead of plain strings; fixes test assertion on `.value`
+- [x] `tests/test_lease_balance.py` — `make_payment` helper updated to use flush-then-set-id pattern (consistent with service layer); eliminates duplicate `payment_id` collision when same amount is used multiple times on the same lease
+- [x] `docs/data_model.md` — added Design Note explaining nullable human-readable IDs and the flush-then-set lifecycle
+- [x] `docs/business_rules.md` — added Section 0 documenting the human-readable ID lifecycle rule
+- [x] `docs/progress.md` — this entry
+
+Root Cause:
+SQLite test schema was generated from ORM models using create_all,
+while production schema was managed by Alembic migrations.
+Human-readable ID columns were nullable in migration 003 but still
+non-nullable in ORM models, causing schema drift between environments.
+
+
+**Result:** All 16 pytest tests pass. ORM models and DB migrations are now consistent.
+
+---
+
 ### 2026-03-09 — Revenue Capture: Auto-Records, Receipts, and Close-Job Workflow
 
 **Goal:** Make the system the source of truth for all completed revenue events without becoming a POS system.

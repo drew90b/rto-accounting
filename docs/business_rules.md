@@ -21,6 +21,29 @@ status transitions, classification, and exception handling throughout the system
 
 ---
 
+## 0. Human-Readable ID Lifecycle
+
+Every entity table has a human-readable ID column (`customer_id`, `unit_id`, `job_id`, `sale_id`, `lease_id`, `payment_id`, `transaction_id`, `document_id`, `exception_id`, `vendor_id`). These columns follow a strict lifecycle:
+
+```
+1. INSERT row  (human-readable ID column is null)
+       ↓
+2. db.flush()  (database assigns auto-increment integer primary key)
+       ↓
+3. Application generates human-readable ID from the integer pk
+   e.g.  record.customer_id = f"C-{record.id:04d}"
+       ↓
+4. db.commit()  (record committed with human-readable ID populated)
+```
+
+**Rules:**
+- Human-readable IDs are always set before `db.commit()`. They are never null in a committed record.
+- Human-readable ID columns are `nullable=True` in ORM models and the database schema. This allows `db.flush()` to succeed before the ID is generated.
+- Do not pass a human-readable ID into a model constructor — always generate it post-flush.
+- The integer primary key (`id`) is the FK reference used in all relationships. Human-readable IDs are for display and staff reference only.
+
+---
+
 ## 1. Revenue Stream Rules
 
 Revenue streams must never be collapsed into a generic category. Every revenue transaction must have an explicit `revenue_stream` value.

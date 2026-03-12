@@ -9,7 +9,7 @@ class Unit(Base):
     __tablename__ = "units"
 
     id = Column(Integer, primary_key=True, index=True)
-    unit_id = Column(String(20), unique=True, nullable=False)
+    unit_id = Column(String(20), unique=True, nullable=True)
     unit_type = Column(SAEnum(UnitType), nullable=False)
     business_line = Column(SAEnum(BusinessLine), nullable=False)
     vin_serial = Column(String(50))

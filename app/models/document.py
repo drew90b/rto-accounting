@@ -8,7 +8,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(String(20), unique=True, nullable=False)
+    document_id = Column(String(20), unique=True, nullable=True)
     linked_record_type = Column(SAEnum(LinkedRecordType), nullable=False)
     linked_record_id = Column(Integer, nullable=False)
     file_path = Column(String(500), nullable=False)

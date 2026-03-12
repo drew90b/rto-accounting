@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db, Base, engine
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions
+from app.routes import units, customers, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +24,7 @@ app.include_router(payments.router, prefix="/payments", tags=["payments"])
 app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
+app.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 
 templates = Jinja2Templates(directory="app/templates")
 

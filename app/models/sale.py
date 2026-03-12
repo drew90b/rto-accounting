@@ -9,7 +9,7 @@ class Sale(Base):
     __tablename__ = "sales"
 
     id = Column(Integer, primary_key=True, index=True)
-    sale_id = Column(String(20), unique=True, nullable=False)
+    sale_id = Column(String(20), unique=True, nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     sale_date = Column(Date, nullable=False)
@@ -27,3 +27,4 @@ class Sale(Base):
     unit = relationship("Unit", back_populates="sales")
     payments = relationship("Payment", back_populates="sale")
     transactions = relationship("Transaction", back_populates="sale")
+    invoices = relationship("Invoice", back_populates="sale")

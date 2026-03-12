@@ -139,3 +139,14 @@ class ExceptionStatus(str, enum.Enum):
     in_review = "in_review"
     resolved = "resolved"
     dismissed = "dismissed"
+
+
+class InvoiceType(str, enum.Enum):
+    sale = "sale"
+    repair = "repair"
+    rto_payment = "rto_payment"
+
+
+class InvoiceStatus(str, enum.Enum):
+    open = "open"
+    paid = "paid"

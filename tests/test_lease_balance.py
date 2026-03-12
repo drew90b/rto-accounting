@@ -67,7 +67,6 @@ def make_lease(db, customer, unit, financed_balance):
 
 def make_payment(db, lease, amount):
     p = Payment(
-        payment_id=f"P-test-{lease.id}-{amount}",
         customer_id=lease.customer_id,
         payment_date=date(2026, 2, 1),
         amount=amount,
@@ -76,6 +75,7 @@ def make_payment(db, lease, amount):
     )
     db.add(p)
     db.flush()
+    p.payment_id = f"P-{p.id:04d}"
     return p
 
 

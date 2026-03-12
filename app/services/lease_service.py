@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.lease_account import LeaseAccount
 from app.models.payment import Payment
+from app.models.enums import TransactionType, BusinessLine, RevenueStream
 
 
 def calculate_remaining_balance(lease: LeaseAccount, db: Session) -> Decimal:
@@ -89,9 +90,9 @@ def record_rto_payment(
     t = Transaction(
         transaction_date=payment_date,
         entry_date=date.today(),
-        transaction_type="collection",
-        business_line="car",
-        revenue_stream="car_rto_lease",
+        transaction_type=TransactionType.collection,
+        business_line=BusinessLine.car,
+        revenue_stream=RevenueStream.car_rto_lease,
         customer_id=lease.customer_id,
         lease_account_id=lease.id,
         unit_id=lease.unit_id,
@@ -105,5 +106,9 @@ def record_rto_payment(
     db.add(t)
     db.flush()
     t.transaction_id = f"T-{t.id:05d}"
+
+    # Auto-create RTO payment receipt
+    from app.services.invoice_service import create_invoice_from_rto_payment
+    create_invoice_from_rto_payment(lease, p, db)
 
     return p, t

@@ -8,7 +8,7 @@ class Vendor(Base):
     __tablename__ = "vendors"
 
     id = Column(Integer, primary_key=True, index=True)
-    vendor_id = Column(String(20), unique=True, nullable=False)
+    vendor_id = Column(String(20), unique=True, nullable=True)
     name = Column(String(100), nullable=False)
     phone = Column(String(20))
     email = Column(String(100))

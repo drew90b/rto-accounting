@@ -8,7 +8,7 @@ class ExceptionRecord(Base):
     __tablename__ = "exceptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    exception_id = Column(String(20), unique=True, nullable=False)
+    exception_id = Column(String(20), unique=True, nullable=True)
     exception_type = Column(SAEnum(ExceptionType), nullable=False)
     linked_record_type = Column(SAEnum(LinkedRecordType), nullable=True)
     linked_record_id = Column(Integer, nullable=True)

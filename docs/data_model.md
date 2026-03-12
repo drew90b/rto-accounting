@@ -4,6 +4,19 @@ Generated from `app/models/`. All tables use PostgreSQL via SQLAlchemy + Alembic
 
 ---
 
+## Design Note: Human-Readable IDs
+
+All tables include a human-readable ID column (e.g., `customer_id = "C-0001"`, `unit_id = "U-0001"`). These columns are **nullable** in both the database schema and ORM models. This is intentional:
+
+1. A row is inserted without a human-readable ID (the column is null at insert time).
+2. `db.flush()` causes the database to assign the auto-increment integer primary key (`id`).
+3. Application code then generates the human-readable ID from that integer: e.g., `customer.customer_id = f"C-{customer.id:04d}"`.
+4. `db.commit()` persists the fully-populated record.
+
+Migration `003_nullable_human_readable_ids` removed the `NOT NULL` constraint from all human-readable ID columns to allow this flush-then-set pattern. The ORM models mirror this with `nullable=True`. In practice, every committed record will have a human-readable ID set — the column is never null after a successful commit.
+
+---
+
 ## Table of Contents
 
 1. [customers](#customers)

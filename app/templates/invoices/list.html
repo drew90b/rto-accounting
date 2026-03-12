@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Invoices{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Invoices</h1>
+</div>
+
+<form class="filter-bar" method="get">
+  <select name="invoice_type">
+    <option value="">All Types</option>
+    {% for t in invoice_types %}
+    <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | title }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/invoices/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice #</th>
+        <th>Date</th>
+        <th>Type</th>
+        <th>Customer</th>
+        <th class="right">Total</th>
+        <th class="right">Balance</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for inv in invoices %}
+    <tr>
+      <td>{{ inv.invoice_number or ('INV-' + inv.id | string) }}</td>
+      <td>{{ inv.invoice_date }}</td>
+      <td>{{ inv.invoice_type.value | replace('_', ' ') | title }}</td>
+      <td>{{ inv.customer.full_name if inv.customer else '—' }}</td>
+      <td class="right">${{ "%.2f" | format(inv.total | float) }}</td>
+      <td class="right">${{ "%.2f" | format(inv.balance | float) }}</td>
+      <td>
+        <span class="badge badge-{{ inv.status.value }}">{{ inv.status.value | title }}</span>
+      </td>
+      <td><a href="/invoices/{{ inv.id }}/print">View</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" style="color:#9ca3af; padding:16px 0;">No invoices found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -9,7 +9,7 @@ class RepairJob(Base):
     __tablename__ = "repair_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String(20), unique=True, nullable=False)
+    job_id = Column(String(20), unique=True, nullable=True)
     business_line = Column(SAEnum(BusinessLine), nullable=False)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
@@ -28,3 +28,4 @@ class RepairJob(Base):
     customer = relationship("Customer", back_populates="repair_jobs")
     transactions = relationship("Transaction", back_populates="repair_job")
     payments = relationship("Payment", back_populates="repair_job")
+    invoices = relationship("Invoice", back_populates="repair_job")

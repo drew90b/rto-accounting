@@ -82,6 +82,10 @@ def finalize_new_sale(sale, payment_method: str, db: Session) -> Transaction:
         unit.status = "sold"
         unit.linked_customer_id = sale.customer_id
 
+    # Auto-create invoice
+    from app.services.invoice_service import create_invoice_from_sale
+    create_invoice_from_sale(sale, db)
+
     return t
 
 
