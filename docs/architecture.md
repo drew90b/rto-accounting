@@ -9,7 +9,9 @@ Server-rendered Python web application used as the internal finance system of re
 - **Migrations:** Alembic
 - **Database:** PostgreSQL (production), SQLite in-memory (tests)
 - **Exports:** openpyxl for Excel workbooks
-- **File storage:** Local filesystem under `storage/receipts/`
+- **File storage:** Local filesystem under `storage/receipts/` (receipts) and `storage/invoices/` (saved invoice HTML)
+
+For an explanation of how Payments, Transactions, Invoices, and Lease Balances relate to each other, see [`docs/financial_record_architecture.md`](financial_record_architecture.md).
 
 ---
 
@@ -51,9 +53,10 @@ Route handler
 ```
 
 Key service files:
-- `app/services/lease_service.py` — `record_rto_payment()`, `calculate_remaining_balance()`
+- `app/services/lease_service.py` — `record_rto_payment()`, `calculate_remaining_balance()`, `build_balance_map()`
 - `app/services/sale_service.py` — `finalize_new_sale()`
 - `app/services/repair_service.py` — `close_repair_job()`, `record_repair_payment()`
+- `app/services/invoice_service.py` — `create_invoice_from_sale()`, `create_invoice_from_repair()`, `create_invoice_from_rto_payment()`, `load_invoice_for_display()`
 
 ---
 

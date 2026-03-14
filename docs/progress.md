@@ -7,14 +7,40 @@ Update this file as work is completed.
 
 ## Current State
 
-**Phase:** 1 — Core Data Entry (MVP)
-**As of:** 2026-03-09
-**Server:** Not yet deployed. Local development only.
-**Database:** Not yet connected. Awaiting first `alembic upgrade head` run.
+**Phase:** 1.5 — Workflow Hardening (in progress)
+**As of:** 2026-03-14
+**Server:** Deployed on Render.
+**Database:** Migrations 001–004 applied. Seed data tested.
 
 ---
 
 ## Completed Work
+
+### 2026-03-14 — Vendor UI
+
+**Goal:** Expose the existing vendors table and ORM model through a complete CRUD interface, consistent with the customers module pattern.
+
+#### New files
+- [x] `app/routes/vendors.py` — `GET /vendors/` (list + search), `GET/POST /vendors/new` (add), `GET/POST /vendors/{id}/edit` (edit), `GET /vendors/export` (Excel)
+- [x] `app/templates/vendors/list.html` — list view with name search, table, and export/add actions
+- [x] `app/templates/vendors/form.html` — add/edit form with name, phone, email, address, notes
+- [x] `tests/test_vendor_create.py` — 4 tests: create + persist, list 200, new form 200, missing edit redirects
+
+#### Modified files
+- [x] `app/main.py` — vendors router imported and registered at `/vendors`
+- [x] `app/templates/base.html` — Vendors link added under People section of sidebar
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| No status field | Vendor model has no status column; no enum or filter added |
+| Human-readable ID: `V-{id:04d}` | Consistent with all other entity ID patterns |
+| Placed under People in sidebar | Vendors and Customers are both contact/relationship records |
+| No service layer needed | No business logic beyond CRUD; routes call db directly, same as customers |
+
+**Result:** All 20 tests pass. Vendors can be listed, added, edited, and exported to Excel.
+
+---
 
 ### 2026-03-12 — Invoice / Receipt Generator
 
@@ -260,7 +286,7 @@ non-nullable in ORM models, causing schema drift between environments.
 ### Phase 1 — Still needed
 | Item | Notes |
 |---|---|
-| Vendor UI | Model and DB table exist. No list/add/edit screens yet. |
+| ~~Vendor UI~~ | ✅ Complete — 2026-03-14 |
 | Dashboard cash warning | Basic dashboard exists. Cash warning panel not yet built. |
 | Form validation feedback | Forms silently fail on missing required fields in some cases. No inline error messages yet. |
 | Pagination | List views load all records. No pagination for large datasets. |
