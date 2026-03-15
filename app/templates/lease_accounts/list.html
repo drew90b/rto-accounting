@@ -36,7 +36,8 @@
         <th>Unit</th>
         <th>Deal Date</th>
         <th>Payment Amt</th>
-        <th>Balance</th>
+        <th>Balance Due</th>
+        <th>Remaining</th>
         <th>Status</th>
         <th>Delinquency</th>
         <th></th>
@@ -50,7 +51,18 @@
         <td>{{ la.unit.unit_id if la.unit else '—' }}</td>
         <td>{{ la.deal_date }}</td>
         <td>${{ "%.2f" | format(la.scheduled_payment_amount | float) if la.scheduled_payment_amount else '—' }}</td>
-        <td>${{ "%.2f" | format(balances[la.id] | float) if balances[la.id] is defined else '—' }}</td>
+        <td>
+          {% if la.status.value == 'cancelled' %}—
+          {% elif balances[la.id] is defined %}${{ "%.2f" | format(balances[la.id] | float) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if la.status.value == 'cancelled' %}—
+          {% elif la.status.value == 'paid_off' %}<span style="color:#16a34a;">Complete</span>
+          {% elif months[la.id] is none %}—
+          {% elif months[la.id] == 0 %}<span style="color:#16a34a;">Complete</span>
+          {% else %}{{ months[la.id] }} mo{% endif %}
+        </td>
         <td>
           {% set s = la.status.value if la.status else '' %}
           {% if s == 'active' %}<span class="badge badge-blue">Active</span>
@@ -69,7 +81,7 @@
         <td><a href="/lease-accounts/{{ la.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="9" class="empty-cell">No lease accounts found. <a href="/lease-accounts/new">Set one up.</a></td></tr>
+      <tr><td colspan="10" class="empty-cell">No lease accounts found. <a href="/lease-accounts/new">Set one up.</a></td></tr>
       {% endfor %}
     </tbody>
   </table>

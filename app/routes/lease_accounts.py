@@ -13,7 +13,7 @@ from app.models.unit import Unit
 from app.models.customer import Customer
 from app.models.enums import LeaseStatus, DelinquencyStatus, PaymentFrequency
 from app.models.enums import PaymentMethod as PaymentMethodEnum
-from app.services.lease_service import build_balance_map, calculate_remaining_balance, record_rto_payment
+from app.services.lease_service import build_balance_map, build_months_map, calculate_remaining_balance, record_rto_payment
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -39,10 +39,12 @@ def list_leases(
     if delinquency:
         query = query.filter(LeaseAccount.delinquency_status == delinquency)
     leases = query.order_by(LeaseAccount.deal_date.desc()).all()
+    balance_map = build_balance_map(leases, db)
     return templates.TemplateResponse("lease_accounts/list.html", {
         "request": request,
         "leases": leases,
-        "balances": build_balance_map(leases, db),
+        "balances": balance_map,
+        "months": build_months_map(leases, balance_map),
         "status_filter": status or "",
         "delinquency_filter": delinquency or "",
         "statuses": [s.value for s in LeaseStatus],

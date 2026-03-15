@@ -16,6 +16,37 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-03-15 — Balance Due and Remaining Months on List Views
+
+**Goal:** Show outstanding balance and remaining payment months on the Sales and Lease list views so the owner can assess portfolio health without opening individual records.
+
+#### New files
+- [x] `tests/test_balance_and_months.py` — 15 tests: sale balance (no payments, partial, full, total_contract override, map), remaining months (monthly, bi-weekly, weekly, zero, None), build_months_map, route smoke tests, cancelled dash display
+
+#### Modified files
+- [x] `app/services/sale_service.py` — added `calculate_sale_balance()` and `build_sale_balance_map()`; added `from sqlalchemy import func` import
+- [x] `app/services/lease_service.py` — added `calculate_remaining_months()` and `build_months_map()`; added `import math`, `from typing import Optional`
+- [x] `app/routes/sales.py` — imports `build_sale_balance_map`; passes `balances` map to list template
+- [x] `app/routes/lease_accounts.py` — imports `build_months_map`; pre-computes `balance_map` then passes both `balances` and `months` to list template
+- [x] `app/templates/sales/list.html` — replaced "Down Payment" column with "Balance Due"; cancelled sales show dash
+- [x] `app/templates/lease_accounts/list.html` — renamed "Balance" → "Balance Due" + status check; added "Remaining" column; colspan fixed to 10
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| `calculate_remaining_months` uses `remaining / scheduled_payment_amount` | LeaseAccount has no `term_months` field. This is the only truthful derivation available. It is an approximation (assumes on-schedule payments). |
+| `build_months_map` accepts a pre-computed `balance_map` | Avoids a second round of DB queries; reuses the same balances already computed for the "Balance Due" column |
+| Cancelled records show "—" not "$0.00" | A cancelled record's balance is meaningless — showing $0.00 or the full financed amount would mislead the owner |
+| Sales list: replaced "Down Payment" with "Balance Due" | Down payment is already visible on the detail/edit form. Balance Due is more operationally useful on the list view. Column count stays at 9. |
+| `calculate_sale_balance()` mirrors inline logic in `edit_sale_form` | Consistent formula: `total_contract_amount ?? (sale_amount + fees)` minus `SUM(payments)` |
+| No changes to `calculate_remaining_balance()` or `invoice_service` | Not touching existing functions; no circular import risk |
+
+**Assumption on remaining months:** The `LeaseAccount` model has no `term_months` or `end_date` field. Remaining months is derived from `remaining_balance / scheduled_payment_amount`, adjusted for frequency. This will drift slightly for irregular payers. If the business wants calendar-accurate remaining months, adding a `term_months` column would enable it exactly.
+
+**Result:** 61 tests pass. Both list views now show live Balance Due. Lease list shows Remaining Months. Cancelled records display dashes. Dashboard delinquent balance metric is unaffected (uses `build_balance_map` directly).
+
+---
+
 ### 2026-03-15 — Duplicate Sale Guard
 
 **Goal:** Prevent a unit from being linked to more than one active sale. Exact scenario: U-0004 was already linked to both S-0001 and S-0002 in seed data — this guard prevents it from recurring.

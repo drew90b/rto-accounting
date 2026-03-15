@@ -4,8 +4,10 @@ Lease account business logic.
 outstanding_balance is NOT stored as mutable state.
 Remaining balance is always calculated at runtime from deal terms and payment history.
 """
+import math
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -50,6 +52,65 @@ def build_balance_map(leases: list[LeaseAccount], db: Session) -> dict[int, Deci
     Convenient for passing to templates.
     """
     return {la.id: calculate_remaining_balance(la, db) for la in leases}
+
+
+def calculate_remaining_months(
+    lease: LeaseAccount, remaining_balance: Decimal
+) -> Optional[int]:
+    """
+    Estimate the number of months of scheduled payments remaining on a lease.
+
+    Approach (option 3 — closest truthful derivation):
+        payments_remaining = ceil(remaining_balance / scheduled_payment_amount)
+        months = payments_remaining adjusted for payment_frequency
+
+    Frequency conversions:
+        monthly    → 1 payment  = 1 month
+        bi_weekly  → 2 payments ≈ 1 month  (ceil(n / 2))
+        weekly     → ~4.3 payments per month  (ceil(n * 7 / 30))
+
+    This is an approximation. It assumes on-schedule payments and does not
+    account for irregular payment history or missed periods. It answers:
+    "at the current scheduled pace, how many months are left?"
+
+    Returns:
+        0    if remaining_balance <= 0  (fully paid or overpaid)
+        None if calculation cannot be made (missing or zero scheduled_payment_amount)
+        int  estimated months remaining (>= 1)
+    """
+    if remaining_balance <= Decimal("0"):
+        return 0
+
+    if lease.scheduled_payment_amount is None:
+        return None
+    payment_amount = Decimal(str(lease.scheduled_payment_amount))
+    if payment_amount <= Decimal("0"):
+        return None
+
+    payments_remaining = math.ceil(float(remaining_balance) / float(payment_amount))
+
+    freq = lease.payment_frequency.value if lease.payment_frequency else "monthly"
+    if freq == "bi_weekly":
+        return max(1, math.ceil(payments_remaining / 2))
+    elif freq == "weekly":
+        return max(1, math.ceil(payments_remaining * 7 / 30))
+    else:
+        # monthly (and any unknown frequency — treat as monthly)
+        return payments_remaining
+
+
+def build_months_map(
+    leases: list[LeaseAccount], balance_map: dict[int, Decimal]
+) -> dict[int, Optional[int]]:
+    """
+    Return {lease.id: remaining_months_or_None} for a list of lease accounts.
+    Reuses a pre-computed balance_map to avoid redundant DB queries.
+    Pass the output of build_balance_map() as balance_map.
+    """
+    return {
+        la.id: calculate_remaining_months(la, balance_map[la.id])
+        for la in leases
+    }
 
 
 def record_rto_payment(

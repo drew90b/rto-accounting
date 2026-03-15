@@ -14,7 +14,7 @@ from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.lease_account import LeaseAccount
 from app.models.enums import BusinessLine, SaleStatus, PaymentMethod
-from app.services.sale_service import finalize_new_sale
+from app.services.sale_service import finalize_new_sale, build_sale_balance_map
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -56,6 +56,7 @@ def list_sales(
     return templates.TemplateResponse("sales/list.html", {
         "request": request,
         "sales": sales,
+        "balances": build_sale_balance_map(sales, db),
         "status_filter": status or "",
         "business_line_filter": business_line or "",
         "statuses": [s.value for s in SaleStatus],

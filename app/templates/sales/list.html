@@ -37,7 +37,7 @@
         <th>Unit</th>
         <th>Sale Date</th>
         <th>Sale Amount</th>
-        <th>Down Payment</th>
+        <th>Balance Due</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -51,7 +51,11 @@
         <td>{{ s.unit.unit_id if s.unit else '—' }}</td>
         <td>{{ s.sale_date }}</td>
         <td>${{ "%.2f" | format(s.sale_amount | float) if s.sale_amount else '—' }}</td>
-        <td>${{ "%.2f" | format(s.down_payment | float) if s.down_payment else '—' }}</td>
+        <td>
+          {% if s.status.value == 'cancelled' %}—
+          {% elif balances[s.id] is defined %}${{ "%.2f" | format(balances[s.id] | float) }}
+          {% else %}—{% endif %}
+        </td>
         <td>
           {% if s.status.value == 'complete' %}<span class="badge badge-green">Complete</span>
           {% elif s.status.value == 'pending' %}<span class="badge badge-yellow">Pending</span>
