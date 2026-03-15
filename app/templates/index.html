@@ -6,26 +6,42 @@
   <h1 class="page-title">Dashboard</h1>
 </div>
 
+{# ── Money and control metrics ── #}
 <div class="stats-grid">
+
   <div class="stat-card">
-    <div class="stat-label">Units</div>
-    <div class="stat-value">{{ counts.units }}</div>
+    <div class="stat-label">Cash Collected</div>
+    <div class="stat-value money">${{ "{:,.2f}".format(metrics.cash_this_month | float) }}</div>
+    <div class="stat-meta">Current calendar month</div>
   </div>
+
   <div class="stat-card">
-    <div class="stat-label">Customers</div>
-    <div class="stat-value">{{ counts.customers }}</div>
+    <div class="stat-label">Delinquent Balance</div>
+    <div class="stat-value money {% if metrics.delinquent_total > 0 %}warning{% endif %}">
+      ${{ "{:,.2f}".format(metrics.delinquent_total | float) }}
+    </div>
+    <div class="stat-meta">Active late / delinquent / default accounts</div>
   </div>
+
   <div class="stat-card">
-    <div class="stat-label">Transactions</div>
-    <div class="stat-value">{{ counts.transactions }}</div>
+    <div class="stat-label">Inventory Investment</div>
+    <div class="stat-value money">${{ "{:,.2f}".format(metrics.inventory_investment | float) }}</div>
+    <div class="stat-meta">Acquisition cost — unsold units</div>
   </div>
+
   <div class="stat-card">
-    <div class="stat-label">Open Exceptions</div>
-    <div class="stat-value {% if counts.open_exceptions > 0 %}danger{% endif %}">{{ counts.open_exceptions }}</div>
+    <div class="stat-label">Active Exceptions</div>
+    <div class="stat-value {% if metrics.active_exceptions > 0 %}danger{% endif %}">
+      {{ metrics.active_exceptions }}
+    </div>
+    <div class="stat-meta">Open + in review</div>
   </div>
+
 </div>
 
+{# ── Panels ── #}
 <div class="dash-grid">
+
   <div class="card">
     <div class="card-title">Open Exceptions</div>
     {% if open_exceptions %}
@@ -34,6 +50,7 @@
         <tr>
           <th>ID</th>
           <th>Type</th>
+          <th>Status</th>
           <th>Opened</th>
           <th>Owner</th>
         </tr>
@@ -43,6 +60,13 @@
         <tr>
           <td><a href="/exceptions/{{ e.id }}/edit">{{ e.exception_id }}</a></td>
           <td>{{ e.exception_type.value | replace('_', ' ') | title }}</td>
+          <td>
+            {% if e.status.value == 'in_review' %}
+              <span class="badge badge-blue">In Review</span>
+            {% else %}
+              <span class="badge badge-yellow">Open</span>
+            {% endif %}
+          </td>
           <td>{{ e.opened_date }}</td>
           <td>{{ e.owner or '—' }}</td>
         </tr>
@@ -94,8 +118,10 @@
       <a href="/lease-accounts/" class="btn btn-secondary btn-sm">View all</a>
     </div>
   </div>
+
 </div>
 
+{# ── Quick actions ── #}
 <div class="card">
   <div class="card-title">Quick Actions</div>
   <div style="display:flex; gap:8px; flex-wrap:wrap;">

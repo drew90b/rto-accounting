@@ -101,7 +101,10 @@ body {
 
 .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #7a8799; margin-bottom: 6px; letter-spacing: 0.5px; }
 .stat-value { font-size: 30px; font-weight: 700; color: #1a2332; }
-.stat-value.danger { color: #dc2626; }
+.stat-value.danger  { color: #dc2626; }
+.stat-value.warning { color: #b45309; }
+.stat-value.money   { font-size: 22px; }
+.stat-meta { font-size: 11px; color: #9aa4b0; margin-top: 4px; }
 
 /* Cards */
 .card {
