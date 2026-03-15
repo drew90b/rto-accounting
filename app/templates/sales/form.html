@@ -12,6 +12,11 @@
   </div>
 </div>
 
+{% set error_msg = request.query_params.get('error') %}
+{% if error_msg %}
+<div class="alert-error" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">{{ error_msg }}</div>
+{% endif %}
+
 {% if sale and sale.status.value == 'pending' and sale.business_line.value == 'car' %}
 <div class="card" style="max-width:680px; border-left:4px solid #f59e0b; padding:14px 18px; margin-bottom:16px; background:#fffbeb;">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">

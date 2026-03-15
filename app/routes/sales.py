@@ -19,12 +19,25 @@ from app.services.sale_service import finalize_new_sale
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+# Statuses that mean a sale is finished and the unit is available again.
+_TERMINAL_SALE_STATUSES = {SaleStatus.cancelled}
+
 
 def _d(val: str) -> Optional[Decimal]:
     try:
         return Decimal(val) if val else None
     except InvalidOperation:
         return None
+
+
+def _active_sale_for_unit(unit_id: int, db: Session) -> Optional[Sale]:
+    """Return the first non-terminal sale for a unit, or None if the unit is free."""
+    return (
+        db.query(Sale)
+        .filter(Sale.unit_id == unit_id)
+        .filter(Sale.status.notin_(_TERMINAL_SALE_STATUSES))
+        .first()
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -122,6 +135,14 @@ def create_sale(
     notes: str = Form(""),
 ):
     from datetime import date
+
+    conflict = _active_sale_for_unit(int(unit_id), db)
+    if conflict:
+        return RedirectResponse(
+            url=f"/sales/new?error=Unit+already+has+an+active+sale+({conflict.sale_id}).+Cancel+that+sale+before+creating+a+new+one.",
+            status_code=303,
+        )
+
     sale = Sale(
         customer_id=int(customer_id),
         unit_id=int(unit_id),
@@ -244,8 +265,16 @@ def update_sale(
     from datetime import date
     sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if sale:
+        new_unit_id = int(unit_id)
+        if new_unit_id != sale.unit_id:
+            conflict = _active_sale_for_unit(new_unit_id, db)
+            if conflict:
+                return RedirectResponse(
+                    url=f"/sales/{sale_id}/edit?error=Unit+already+has+an+active+sale+({conflict.sale_id}).+Cancel+that+sale+before+reassigning+the+unit.",
+                    status_code=303,
+                )
         sale.customer_id = int(customer_id)
-        sale.unit_id = int(unit_id)
+        sale.unit_id = new_unit_id
         sale.sale_date = date.fromisoformat(sale_date)
         sale.business_line = business_line
         sale.sale_amount = _d(sale_amount)

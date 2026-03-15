@@ -57,6 +57,7 @@ Key service files:
 - `app/services/sale_service.py` — `finalize_new_sale()`
 - `app/services/repair_service.py` — `close_repair_job()`, `record_repair_payment()`
 - `app/services/invoice_service.py` — `create_invoice_from_sale()`, `create_invoice_from_repair()`, `create_invoice_from_rto_payment()`, `load_invoice_for_display()`
+- `app/services/dashboard_service.py` — `cash_collected_this_month()`, `delinquent_balance_total()`, `inventory_investment()`
 
 ---
 

@@ -9,12 +9,58 @@ Update this file as work is completed.
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
 **As of:** 2026-03-14
-**Server:** Deployed on Render.
+**Server:** Deployed on Render (with github and locally).
 **Database:** Migrations 001–004 applied. Seed data tested.
 
 ---
 
 ## Completed Work
+
+### 2026-03-15 — Duplicate Sale Guard
+
+**Goal:** Prevent a unit from being linked to more than one active sale. Exact scenario: U-0004 was already linked to both S-0001 and S-0002 in seed data — this guard prevents it from recurring.
+
+#### New files
+- [x] `tests/test_sale_duplicate_guard.py` — 7 tests: blocked duplicate (pending), blocked duplicate (complete), allowed after cancel, allowed clean unit, edit blocked on unit switch, edit allowed keeping same unit, edit allowed switching to unit with only cancelled sale
+
+#### Modified files
+- [x] `app/routes/sales.py` — added `_TERMINAL_SALE_STATUSES` set and `_active_sale_for_unit()` helper; guard added to `create_sale` (before record created) and `update_sale` (before fields updated, only when unit is changing)
+- [x] `app/templates/sales/form.html` — added `?error=` banner (same pattern as lease form)
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| Terminal = `cancelled` only | `SaleStatus` has three values: `pending`, `complete`, `cancelled`. "returned" does not exist in this model — only `cancelled` is terminal |
+| Edit guard fires only on unit change | If the unit isn't changing, no new conflict can be introduced by the edit |
+| Error message includes conflicting sale ID | Owner needs the sale ID to investigate and resolve before proceeding |
+| No schema change | Existing `status` column on `sales` is sufficient for the guard |
+| Existing seed data not altered | U-0004 / S-0001 / S-0002 left as-is; guard only prevents future occurrences |
+
+**Result:** 46 tests pass. Units with only cancelled sales are freely available. Active (pending or complete) units are protected.
+
+---
+
+### 2026-03-14 — Lease Auto-Calculated Financed Balance
+
+**Goal:** Remove manual `financed_balance` entry from the lease create form. Derive it server-side as `original_agreed_amount − down_payment`. Add live JS display and input validation.
+
+#### New files
+- [x] `tests/test_lease_financed_balance.py` — 6 tests: derived value stored correctly, submitted value ignored, zero down payment, down > agreed error, missing agreed error, zero agreed error
+
+#### Modified files
+- [x] `app/routes/lease_accounts.py` — `POST /new`: removed `financed_balance` Form param; added validation (agreed > 0, down ≤ agreed); derives `financed = agreed - dp` server-side
+- [x] `app/templates/lease_accounts/form.html` — new form: replaced editable input with read-only calculated display; added live JS (inline, no dependencies); added `?error=` display at top; edit form: hidden input passes stored value through
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| Server derives financed_balance on create only | Edit route left unchanged — allows manual correction of existing records if needed |
+| JS updates display on input, shows red text if down > agreed | Gives immediate visual feedback before form submission |
+| Hidden input on edit form | `update_lease` route still accepts `financed_balance` Form param; hidden input passes stored value through without exposing an editable field |
+
+**Result:** New leases no longer require manual financed balance entry. Value is always `agreed − down`, validated before save.
+
+---
 
 ### 2026-03-14 — Dashboard Cash and Control Metrics
 
@@ -314,7 +360,7 @@ non-nullable in ORM models, causing schema drift between environments.
 | Item | Notes |
 |---|---|
 | ~~Vendor UI~~ | ✅ Complete — 2026-03-14 |
-| Dashboard cash warning | Basic dashboard exists. Cash warning panel not yet built. |
+| ~~Dashboard cash warning~~ | ✅ Complete — 2026-03-14 |
 | Form validation feedback | Forms silently fail on missing required fields in some cases. No inline error messages yet. |
 | Pagination | List views load all records. No pagination for large datasets. |
 | Duplicate transaction guard on sale edit | If a user edits sale_amount after save, the auto-created transaction will be stale. No warning is shown. |

@@ -20,7 +20,7 @@ The foundational records and entry screens. Everything the business needs to cap
 |---|---|---|---|
 | 1.1 | Units register | ✅ | List, add, edit, export. All statuses and business lines. |
 | 1.2 | Customer register | ✅ | List, add, edit, export. |
-| 1.3 | Vendor register | 🔧 | Model and DB table exist. No UI (list/add/edit) yet. |
+| 1.3 | Vendor register | ✅ | List, add, edit, Excel export. Registered at /vendors/. |
 | 1.4 | Repair job entry | ✅ | Internal recon, customer repair, customer support repair. Close-job and record-payment workflows. |
 | 1.5 | Sales entry | ✅ | Car and golf cart sales. Down payment, fees, status. Auto-creates transaction and payment on save. |
 | 1.6 | Lease / RTO account entry | ✅ | Deal setup, balance tracking, delinquency status. Record-payment workflow. |
@@ -28,7 +28,7 @@ The foundational records and entry screens. Everything the business needs to cap
 | 1.8 | Transaction log | ✅ | All types, business lines, revenue streams, coding fields, date-range filter, export. |
 | 1.9 | Receipt / document upload | ✅ | Upload and link to any record type. Download. |
 | 1.10 | Exception queue | ✅ | Log, assign, resolve, audit history. |
-| 1.11 | Dashboard | 🔧 | Basic counts and open exceptions. Delinquent leases panel. Needs cash warning and money metrics. |
+| 1.11 | Dashboard | ✅ | Money metric cards (cash, delinquent balance, inventory investment, active exceptions). Delinquent leases panel. Quick actions. |
 | 1.12 | Invoice system | ✅ | Auto-generated invoices on every revenue event (sale, repair, RTO payment). Printable HTML. Browsable list. |
 
 ---
@@ -44,7 +44,7 @@ Quality of life improvements that reduce friction for daily users.
 | 1.5.3 | Pagination | 🔲 | List views load all records. Add pagination for large datasets. |
 | 1.5.4 | Better search filters | 🔲 | Name search, date range, status filter across all list views. |
 | 1.5.5 | Vendor UI | ✅ | List, add, edit, and Excel export. Registered at /vendors/. |
-| 1.5.6 | Lease auto-calculated financed balance | 🔲 | When creating a lease, auto-calculate financed balance from agreed amount minus down payment. Currently requires manual entry. |
+| 1.5.6 | Lease auto-calculated financed balance | ✅ | Financed balance derived server-side on create as agreed amount − down payment. Live JS display on form. Validation added. |
 | 1.5.7 | Payment workflow — customer-first entry | 🔲 | Selecting a customer surfaces their active accounts, reducing lookup friction. |
 | 1.5.8 | VIN enforcement | 🔲 | Make VIN required and unique for car units. Serial number required for golf carts. Prevents duplicate unit records. |
 | 1.5.9 | Duplicate transaction guard on sale edit | 🔲 | Warn if sale amount is edited after the auto-created transaction is already on file. |
@@ -185,13 +185,11 @@ All of those remain in this system. Square feeds raw payment data; this system c
 
 ## Immediate Next Steps (Suggested Order)
 
-1. **Vendor UI** — list, add, and edit screens (model and DB table already exist)
-2. **Dashboard cash metrics** — cash collected, delinquent balance total, inventory investment
-3. **Month-end export pack** — single workbook with all required tabs for accountant review
-4. **Revenue by stream report** — summary view with period filter
-5. **Unit profitability view** — investment vs. collected, per unit
-6. **Lease auto-calculated financed balance** — compute from agreed amount minus down payment on form load
-7. **Authentication** — login and basic role protection before any shared deployment
+1. **Month-end export pack** — single workbook with all required tabs for accountant review
+2. **Revenue by stream report** — summary view with period filter
+3. **Unit profitability view** — investment vs. collected, per unit
+4. **Lease auto-calculated financed balance** — compute from agreed amount minus down payment on form load
+5. **Authentication** — login and basic role protection before any shared deployment
 
 ---
 

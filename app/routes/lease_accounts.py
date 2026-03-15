@@ -118,7 +118,6 @@ def create_lease(
     deal_date: str = Form(...),
     original_agreed_amount: str = Form(""),
     down_payment: str = Form("0"),
-    financed_balance: str = Form(""),
     scheduled_payment_amount: str = Form(""),
     payment_frequency: str = Form("monthly"),
     status: str = Form("active"),
@@ -126,13 +125,30 @@ def create_lease(
     notes: str = Form(""),
 ):
     from datetime import date
+
+    agreed = _d(original_agreed_amount)
+    dp = _d(down_payment) or Decimal("0")
+
+    if not agreed or agreed <= 0:
+        return RedirectResponse(
+            url="/lease-accounts/new?error=Original+agreed+amount+is+required",
+            status_code=303,
+        )
+    if dp > agreed:
+        return RedirectResponse(
+            url="/lease-accounts/new?error=Down+payment+cannot+exceed+the+original+agreed+amount",
+            status_code=303,
+        )
+
+    financed = agreed - dp
+
     la = LeaseAccount(
         customer_id=int(customer_id),
         unit_id=int(unit_id),
         deal_date=date.fromisoformat(deal_date),
-        original_agreed_amount=_d(original_agreed_amount),
-        down_payment=_d(down_payment) or Decimal("0"),
-        financed_balance=_d(financed_balance),
+        original_agreed_amount=agreed,
+        down_payment=dp,
+        financed_balance=financed,
         scheduled_payment_amount=_d(scheduled_payment_amount),
         payment_frequency=payment_frequency,
         status=status,

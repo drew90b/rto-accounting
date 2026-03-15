@@ -12,6 +12,11 @@
   </div>
 </div>
 
+{% set error_msg = request.query_params.get('error') %}
+{% if error_msg %}
+<div class="alert-error" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">{{ error_msg }}</div>
+{% endif %}
+
 <div class="card">
   <form method="post" action="{% if lease %}/lease-accounts/{{ lease.id }}/edit{% else %}/lease-accounts/new{% endif %}">
     <div class="form-grid">
@@ -64,7 +69,12 @@
 
       <div class="form-group">
         <label>Financed Balance ($)</label>
-        <input type="number" step="0.01" name="financed_balance" value="{{ lease.financed_balance or '' if lease else '' }}" placeholder="0.00">
+        {% if lease %}
+        <input type="hidden" name="financed_balance" value="{{ lease.financed_balance or '' }}">
+        {% else %}
+        <div class="form-static" id="financed_balance_display" style="color:#6b7280;">—</div>
+        <span class="form-hint">Calculated automatically from Agreed Amount minus Down Payment.</span>
+        {% endif %}
       </div>
 
       <div class="form-group">
@@ -159,6 +169,34 @@
   <div class="card-title">Payment History</div>
   <p style="color:#9aa4b0; font-size:13px;">No payments recorded yet. <a href="/lease-accounts/{{ lease.id }}/record-payment">Record the first payment.</a></p>
 </div>
+{% endif %}
+
+{% if not lease %}
+<script>
+(function () {
+  var agreedInput = document.querySelector('input[name="original_agreed_amount"]');
+  var downInput   = document.querySelector('input[name="down_payment"]');
+  var display     = document.getElementById('financed_balance_display');
+
+  function update() {
+    var agreed = parseFloat(agreedInput.value) || 0;
+    var down   = parseFloat(downInput.value)   || 0;
+    if (agreed <= 0) {
+      display.textContent = '—';
+      display.style.color = '#6b7280';
+    } else if (down > agreed) {
+      display.textContent = 'Down payment exceeds agreed amount';
+      display.style.color = '#dc2626';
+    } else {
+      display.textContent = '$' + (agreed - down).toFixed(2);
+      display.style.color = '#111827';
+    }
+  }
+
+  agreedInput.addEventListener('input', update);
+  downInput.addEventListener('input', update);
+})();
+</script>
 {% endif %}
 
 {% endblock %}
