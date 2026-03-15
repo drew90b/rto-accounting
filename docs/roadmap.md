@@ -87,10 +87,10 @@ Operational awareness screens for the owner and site manager. Replace count-base
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 4.1 | Cash collected this month | 🔲 | Total payments collected, broken out by revenue stream. |
-| 4.2 | Delinquent balance panel | 🔲 | Total outstanding balance on delinquent accounts, with account list. |
-| 4.3 | Inventory investment widget | 🔲 | Total acquisition + recon cost for all units not yet sold or paid off. |
-| 4.4 | Open exceptions panel | 🔲 | Count and aging of unresolved exceptions. |
+| 4.1 | Cash collected this month | ✅ | Sum of payments in current calendar month. Shown as metric card on dashboard. |
+| 4.2 | Delinquent balance panel | ✅ | Total remaining balance on active late/delinquent/default accounts. Shown as metric card. |
+| 4.3 | Inventory investment widget | ✅ | Sum of acquisition_cost for unsold units. Shown as metric card on dashboard. |
+| 4.4 | Open exceptions panel | ✅ | Active exception count (open + in_review) shown as metric card. Panel preserved below. |
 | 4.5 | Collections due this week | 🔲 | Lease accounts with scheduled payments due in next 7 days. |
 | 4.6 | Units on lot summary | 🔲 | Count by status: frontline ready, in repair, waiting parts, etc. |
 | 4.7 | Open repair jobs panel | 🔲 | Jobs open > N days with no status change. |

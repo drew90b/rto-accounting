@@ -16,6 +16,33 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-03-14 — Dashboard Cash and Control Metrics
+
+**Goal:** Replace count-based stat cards with money and control metrics visible at a glance for the owner.
+
+#### New files
+- [x] `app/services/dashboard_service.py` — three aggregation functions: `cash_collected_this_month()`, `delinquent_balance_total()`, `inventory_investment()`
+- [x] `tests/test_dashboard_metrics.py` — 13 tests covering all three service functions plus a dashboard route smoke test
+
+#### Modified files
+- [x] `app/main.py` — dashboard route updated: imports dashboard_service, computes `metrics` dict, updates exception count to include `in_review`, updates exceptions panel query to match
+- [x] `app/templates/index.html` — stats-grid replaced with four money/control metric cards; exceptions panel gains Status column; old count widgets removed
+- [x] `app/static/css/style.css` — added `.stat-value.money`, `.stat-value.warning`, `.stat-meta` classes
+
+#### Key decisions
+| Decision | Reason |
+|---|---|
+| New `dashboard_service.py` rather than inline queries | Keeps route thin; service functions are independently testable |
+| `delinquent_balance_total` filters `status = active` | Prevents paid_off/cancelled leases with stale delinquency_status from inflating the figure |
+| Reuse `build_balance_map()` for delinquent total | Keeps balance calculation consistent with the rest of the app; avoids a second code path |
+| Exception count changed from `open` only to `open + in_review` | In_review exceptions still require attention; count should reflect total workload |
+| Dashboard exceptions panel updated to match (open + in_review) | Prevents mismatch between metric card count and visible panel rows |
+| `acquisition_cost = NULL` units excluded from inventory investment | SQL SUM ignores NULLs; noted in service docstring as a known understatement risk |
+
+**Result:** All 33 tests pass. Dashboard now shows Cash Collected, Delinquent Balance, Inventory Investment, and Active Exceptions.
+
+---
+
 ### 2026-03-14 — Vendor UI
 
 **Goal:** Expose the existing vendors table and ORM model through a complete CRUD interface, consistent with the customers module pattern.
