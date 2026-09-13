@@ -15,6 +15,7 @@
     </div>
     <nav class="sidebar-nav">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+      <a href="/review/" class="{% if '/review' in request.url.path %}active{% endif %}">Review<span id="review-count-badge"></span></a>
 
       <div class="sidebar-section">Purchases</div>
       <a href="/purchases/" class="{% if '/purchases' in request.url.path %}active{% endif %}">Purchases</a>
@@ -48,5 +49,13 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+<script>
+  // Progressive enhancement only: the nav link works fine without this.
+  fetch('/review/count').then(function (r) { return r.json(); }).then(function (data) {
+    if (data.count > 0) {
+      document.getElementById('review-count-badge').textContent = ' (' + data.count + ')';
+    }
+  }).catch(function () {});
+</script>
 </body>
 </html>

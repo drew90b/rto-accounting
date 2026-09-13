@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Review{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Review{% if pending_count %} <span class="badge badge-red">{{ pending_count }}</span>{% endif %}</h1>
+</div>
+
+<div class="filter-bar">
+  <a href="/review/?show=all" class="btn btn-sm {% if show == 'all' %}btn-primary{% else %}btn-secondary{% endif %}">All</a>
+  <a href="/review/?show=purchases" class="btn btn-sm {% if show == 'purchases' %}btn-primary{% else %}btn-secondary{% endif %}">Purchases</a>
+  <a href="/review/?show=expenses" class="btn btn-sm {% if show == 'expenses' %}btn-primary{% else %}btn-secondary{% endif %}">Expenses</a>
+  <a href="/review/?show=reviewed" class="btn btn-sm {% if show == 'reviewed' %}btn-primary{% else %}btn-secondary{% endif %}">Reviewed</a>
+</div>
+
+{% if not items %}
+<div class="card">
+  <div style="text-align:center; color:#9aa4b0; padding:24px 0;">
+    {% if show == 'reviewed' %}Nothing reviewed yet.{% else %}Nothing waiting on review. 🎉{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% for item in items %}
+  {% set p = item.record if item.kind == 'purchase' else None %}
+  {% set t = item.record if item.kind == 'transaction' else None %}
+
+  <div class="review-card {% if item.flags %}has-flags{% endif %}">
+
+    {% if item.flags %}
+    <div class="review-flags">
+      {% for flag in item.flags %}
+      <span class="badge badge-red">{{ flag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if p %}
+      <div class="review-card-title">
+        {% if p.unit %}{{ p.unit.year or '' }} {{ p.unit.make or '' }} {{ p.unit.model or 'Vehicle Purchase' }}
+        {% else %}{{ p.category.value if p.category else 'Purchase' }}{% endif %}
+      </div>
+      <div class="review-card-sub">
+        {{ p.purchase_date }} &nbsp;·&nbsp; Purchase
+        {% if p.review_status.value == 'reviewed' %}<span class="badge badge-green">Reviewed</span>{% else %}<span class="badge badge-yellow">Needs Review</span>{% endif %}
+      </div>
+
+      <div class="review-facts">
+        <div><div class="review-fact-label">Vendor</div><div class="review-fact-value">{{ p.vendor.name if p.vendor else '—' }}</div></div>
+        <div><div class="review-fact-label">Stock #</div><div class="review-fact-value">{{ p.stock_number or (p.unit.unit_id if p.unit else '—') }}</div></div>
+        {% if p.unit %}
+        <div><div class="review-fact-label">VIN</div><div class="review-fact-value">{{ p.unit.vin_serial or '—' }}</div></div>
+        {% endif %}
+        <div><div class="review-fact-label">Purchase Price</div><div class="review-fact-value">${{ "%.2f" | format(p.amount | float) if p.amount else '0.00' }}</div></div>
+        {% if p.shipping_cost %}
+        <div><div class="review-fact-label">Shipping</div><div class="review-fact-value">${{ "%.2f" | format(p.shipping_cost | float) }}</div></div>
+        {% endif %}
+        {% if p.other_fees %}
+        <div><div class="review-fact-label">Other Fees</div><div class="review-fact-value">${{ "%.2f" | format(p.other_fees | float) }}</div></div>
+        {% endif %}
+        {% if p.unit and p.unit.acquisition_cost %}
+        <div><div class="review-fact-label">Acquisition Cost</div><div class="review-fact-value">${{ "%.2f" | format(p.unit.acquisition_cost | float) }}</div></div>
+        {% endif %}
+      </div>
+
+      <div class="review-actions">
+        <a href="/purchases/{{ p.id }}/edit" class="btn btn-secondary">Review Details</a>
+        {% if p.review_status.value != 'reviewed' %}
+        <form method="post" action="/review/purchases/{{ p.id }}/reviewed" style="margin:0;">
+          <button type="submit" class="btn btn-success">Mark Reviewed</button>
+        </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if t %}
+      <div class="review-card-title">{{ t.category or (t.transaction_type.value | replace('_', ' ') | title if t.transaction_type else 'Expense') }}</div>
+      <div class="review-card-sub">
+        {{ t.transaction_date }} &nbsp;·&nbsp; Expense
+        {% if t.review_status.value == 'reviewed' %}<span class="badge badge-green">Reviewed</span>{% else %}<span class="badge badge-yellow">Needs Review</span>{% endif %}
+      </div>
+
+      <div class="review-facts">
+        <div><div class="review-fact-label">Vendor</div><div class="review-fact-value">{{ t.vendor.name if t.vendor else '—' }}</div></div>
+        <div><div class="review-fact-label">Stock #</div><div class="review-fact-value">{{ t.unit.unit_id if t.unit else '—' }}</div></div>
+        {% if t.unit %}
+        <div><div class="review-fact-label">Vehicle</div><div class="review-fact-value">{{ t.unit.year or '' }} {{ t.unit.make or '' }} {{ t.unit.model or '' }}</div></div>
+        {% endif %}
+        <div><div class="review-fact-label">Amount</div><div class="review-fact-value">${{ "%.2f" | format(t.amount | float) if t.amount else '0.00' }}</div></div>
+      </div>
+
+      <div class="review-actions">
+        <a href="/transactions/{{ t.id }}/edit" class="btn btn-secondary">Review Details</a>
+        {% if t.review_status.value != 'reviewed' %}
+        <form method="post" action="/review/transactions/{{ t.id }}/reviewed" style="margin:0;">
+          <button type="submit" class="btn btn-success">Mark Reviewed</button>
+        </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
+  </div>
+{% endfor %}
+
+{% endblock %}

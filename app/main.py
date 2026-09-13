@@ -7,12 +7,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases
+from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review
 
 app = FastAPI(title="RTO Accounting System")
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+app.include_router(review.router, prefix="/review", tags=["review"])
 app.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 app.include_router(units.router, prefix="/units", tags=["units"])
 app.include_router(customers.router, prefix="/customers", tags=["customers"])

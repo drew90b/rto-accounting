@@ -326,3 +326,40 @@ table a:hover { text-decoration: underline; }
     .form-grid  { grid-template-columns: 1fr; }
     .form-section, .form-full, .form-actions { grid-column: span 1; }
 }
+
+/* Review Queue — mobile-first cards */
+.review-card {
+    background: #fff;
+    border: 1px solid #e2e6ea;
+    border-left: 4px solid #d0d6de;
+    border-radius: 7px;
+    padding: 16px;
+    margin-bottom: 14px;
+}
+
+.review-card.has-flags { border-left-color: #dc2626; }
+
+.review-card-title { font-size: 17px; font-weight: 700; color: #1a2332; margin-bottom: 2px; }
+.review-card-sub { font-size: 13px; color: #6b7280; margin-bottom: 10px; }
+
+.review-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+.review-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    font-size: 14px;
+    margin-bottom: 14px;
+}
+
+.review-fact-label { font-size: 11px; text-transform: uppercase; color: #9aa4b0; letter-spacing: 0.4px; }
+.review-fact-value { font-weight: 600; color: #1a2332; }
+
+.review-actions { display: flex; flex-direction: column; gap: 8px; }
+.review-actions .btn, .review-actions button { width: 100%; text-align: center; padding: 12px 16px; font-size: 15px; }
+
+@media (min-width: 700px) {
+    .review-facts { grid-template-columns: repeat(4, 1fr); }
+    .review-actions { flex-direction: row; }
+    .review-actions .btn, .review-actions button { width: auto; flex: 0 0 auto; padding: 8px 16px; font-size: 13px; }
+}

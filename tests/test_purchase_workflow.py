@@ -14,7 +14,7 @@ import io
 from decimal import Decimal
 
 
-def make_unit(db, unit_id="U-0042", vin="1FAFP42X1YF123456"):
+def make_unit(db, unit_id="U-TEST-DEFAULT", vin="1FAFP42X1YF123456"):
     from app.models.unit import Unit
     from app.models.enums import UnitType, BusinessLine
     u = Unit(unit_type=UnitType.car, business_line=BusinessLine.car, vin_serial=vin, status="in_repair")
@@ -112,7 +112,7 @@ def test_create_purchase_links_matching_unit_by_stock_number(client, db):
     unit = make_unit(db)
     db.commit()
 
-    r = post_purchase(client, stock_number="U-0042")
+    r = post_purchase(client, stock_number="U-TEST-DEFAULT")
     assert r.status_code == 303
 
     from app.models.purchase import Purchase
