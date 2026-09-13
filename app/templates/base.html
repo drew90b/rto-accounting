@@ -7,8 +7,14 @@
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+<div class="mobile-header">
+  <span class="mobile-header-title">RTO Accounting</span>
+  <button type="button" class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Menu" aria-expanded="false">
+    <span aria-hidden="true">&#9776;</span> Menu<span id="mobile-review-count-badge"></span>
+  </button>
+</div>
 <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       RTO Accounting
       <span class="sidebar-sub">Finance Operations</span>
@@ -53,9 +59,39 @@
   // Progressive enhancement only: the nav link works fine without this.
   fetch('/review/count').then(function (r) { return r.json(); }).then(function (data) {
     if (data.count > 0) {
-      document.getElementById('review-count-badge').textContent = ' (' + data.count + ')';
+      var text = ' (' + data.count + ')';
+      document.getElementById('review-count-badge').textContent = text;
+      document.getElementById('mobile-review-count-badge').textContent = text;
     }
   }).catch(function () {});
+
+  // Mobile nav: the sidebar doubles as the dropdown menu on narrow screens.
+  (function () {
+    var btn = document.getElementById('mobile-menu-btn');
+    var sidebar = document.getElementById('sidebar');
+    if (!btn || !sidebar) return;
+
+    function closeMenu() {
+      sidebar.classList.remove('mobile-open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = sidebar.classList.toggle('mobile-open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    sidebar.addEventListener('click', function (e) {
+      if (e.target.tagName === 'A') closeMenu();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (sidebar.classList.contains('mobile-open') && !sidebar.contains(e.target) && e.target !== btn) {
+        closeMenu();
+      }
+    });
+  })();
 </script>
 </body>
 </html>

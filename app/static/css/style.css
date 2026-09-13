@@ -10,6 +10,33 @@ body {
 /* Layout */
 .layout { display: flex; min-height: 100vh; }
 
+/* Mobile header — hidden on desktop, replaces the permanent sidebar below
+   the mobile breakpoint. The sidebar itself becomes the dropdown menu. */
+.mobile-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: #1a2332;
+    color: #fff;
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.mobile-header-title { font-size: 15px; font-weight: 700; }
+
+.mobile-menu-btn {
+    background: none;
+    border: 1px solid #3b4a5c;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
 .sidebar {
     width: 210px;
     background: #1a2332;
@@ -325,6 +352,50 @@ table a:hover { text-decoration: underline; }
     .dash-grid  { grid-template-columns: 1fr; }
     .form-grid  { grid-template-columns: 1fr; }
     .form-section, .form-full, .form-actions { grid-column: span 1; }
+}
+
+/* Global mobile nav — sidebar becomes a hidden dropdown, mobile header takes over */
+@media (max-width: 768px) {
+    .mobile-header { display: flex; }
+
+    .layout { flex-direction: column; min-height: 0; }
+
+    .sidebar {
+        display: none;
+        width: 100%;
+        max-height: 75vh;
+        overflow-y: auto;
+        position: sticky;
+        top: 45px; /* below the mobile header */
+        z-index: 25;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    }
+
+    .sidebar.mobile-open { display: flex; }
+
+    .main { padding: 16px; }
+
+    .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* Overflow root causes — applies at all widths, not just the sidebar
+   breakpoint, since any of these can clip content on a narrow phone
+   regardless of whether the sidebar is showing. */
+.review-fact-value, .review-card-title, .card-title {
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.review-flags .badge {
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
+.filter-bar input[type="text"] { max-width: 100%; }
+
+@media (max-width: 420px) {
+    .review-facts { grid-template-columns: 1fr; }
 }
 
 /* Review Queue — mobile-first cards */
