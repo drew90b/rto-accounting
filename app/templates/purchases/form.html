@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Purchase' if purchase else 'Record Purchase' }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">{% if purchase %}Edit Purchase — {{ purchase.purchase_id }}{% else %}Record Purchase{% endif %}</h1>
+  <a href="/purchases/" class="btn btn-secondary">← Back to Purchases</a>
+</div>
+
+<div class="card" style="max-width:680px;">
+  <form method="post" enctype="multipart/form-data"
+        action="{% if purchase %}/purchases/{{ purchase.id }}/edit{% else %}/purchases/new{% endif %}">
+    <div class="form-grid">
+
+      <div class="form-section">What did you buy?</div>
+
+      <div class="form-group">
+        <label>Who Made the Purchase *</label>
+        <input type="text" name="purchaser" required autocomplete="name"
+               value="{{ purchase.purchaser if purchase else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Date of Purchase *</label>
+        <input type="date" name="purchase_date" required
+               value="{{ purchase.purchase_date | string if purchase and purchase.purchase_date else today }}">
+      </div>
+
+      <div class="form-group">
+        <label>Vendor / Store *</label>
+        <input type="text" name="vendor" list="vendor-options" required
+               value="{{ purchase.vendor.name if purchase and purchase.vendor else '' }}">
+        <datalist id="vendor-options">
+          {% for v in vendor_names %}
+          <option value="{{ v }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="form-group">
+        <label>Amount ($) *</label>
+        <input type="number" step="0.01" min="0" name="amount" required
+               value="{{ purchase.amount if purchase else '' }}" placeholder="0.00">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Expense Category *</label>
+        <select name="category" required>
+          <option value="" disabled {% if not purchase %}selected{% endif %}>— Select a category —</option>
+          {% for c in categories %}
+          <option value="{{ c }}" {% if purchase and purchase.category.value == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-section">What is it for?</div>
+
+      <div class="form-group">
+        <label>Site Location</label>
+        <input type="text" name="site_location" list="site-options"
+               value="{{ purchase.site_location if purchase else 'Eunice' }}">
+        <datalist id="site-options">
+          {% for s in site_locations %}
+          <option value="{{ s }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="form-group">
+        <label>Stock #</label>
+        <input type="text" name="stock_number"
+               value="{{ purchase.stock_number if purchase else '' }}"
+               placeholder="e.g. U-0042 or VIN">
+        <span class="form-hint">If it matches a unit already on file, this purchase links to it automatically.</span>
+      </div>
+
+      <div class="form-group">
+        <label>Mileage</label>
+        <input type="number" min="0" name="mileage"
+               value="{{ purchase.mileage if purchase and purchase.mileage is not none else '' }}">
+      </div>
+
+      <div class="form-group form-full">
+        <label>Notes / Description</label>
+        <textarea name="description">{{ purchase.description or '' if purchase else '' }}</textarea>
+      </div>
+
+      <div class="form-section">Receipt</div>
+
+      {% if purchase %}
+      <div class="form-group form-full">
+        <label>Current Receipt</label>
+        {% if receipt %}
+        <div><a href="/documents/{{ receipt.id }}/download" class="btn btn-sm btn-secondary" target="_blank">View Receipt ({{ receipt.original_filename }})</a></div>
+        {% else %}
+        <div class="form-hint">No receipt attached yet.</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="form-group form-full">
+        <label>{% if purchase %}Upload New Receipt{% else %}Upload Receipt{% endif %}</label>
+        <input type="file" name="receipt" accept="image/*,application/pdf" capture="environment">
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Submit Purchase</button>
+        <a href="/purchases/" class="btn btn-secondary">Cancel</a>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+{% endblock %}

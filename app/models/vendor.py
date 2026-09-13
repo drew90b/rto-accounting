@@ -17,3 +17,4 @@ class Vendor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     transactions = relationship("Transaction", back_populates="vendor")
+    purchases = relationship("Purchase", back_populates="vendor")

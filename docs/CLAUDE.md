@@ -550,6 +550,96 @@ Do not merge these into one field.
 
 
 
+\### 3a. Purchases Module
+
+Added 2026-09-12. Replaces the business's Google Purchase Order Form as the single front door for recording purchasing activity — the employee thinks "I made a purchase," not "I need to log a Transaction."
+
+
+
+A Purchase is a first-class domain model, distinct from a Transaction:
+
+
+
+\- Purchase — the durable, employee-facing record of what was submitted (who bought it, from whom, for how much, in which legacy expense category, optional stock number/mileage/notes, receipt, review status).
+
+\- Transaction — the accounting ledger entry. Every Purchase always creates exactly one linked Transaction (`transaction\_type=purchase`); `business\_line` is derived from the expense category, never asked of the user.
+
+
+
+Fields captured (verbatim from the legacy Google Form — do not rename, consolidate, or normalize):
+
+
+
+\- Who Made the Purchase (purchaser)
+
+\- Date of Purchase
+
+\- Vendor / Store — free text; matched case-insensitively to an existing Vendor or a new Vendor is created automatically (`app/services/purchase\_service.py: find\_or\_create\_vendor`)
+
+\- Amount ($)
+
+\- Expense Category — one of the 9 literal strings below (`PurchaseCategory` enum in `app/models/enums.py`)
+
+\- Site Location (e.g. "Eunice")
+
+\- Stock # — free text; matched against an existing Unit's `unit\_id` or `vin\_serial` and linked when found (`match\_unit\_by\_stock\_number`). A Unit is never fabricated for an unmatched stock number — a purchase may legitimately have no associated unit (general/shop expenses).
+
+\- Mileage
+
+\- Notes / Description
+
+\- Upload Receipt — uses the existing Document architecture (`linked\_record\_type="purchase"`), attachable in the same request that creates the purchase
+
+
+
+Expense categories (preserved verbatim, including inconsistent quoting/capitalization):
+
+
+
+\- PARTS - "RTO" car parts (Repair)
+
+\- PARTS - "RTO" - Car parTs (WIP)
+
+\- PARTS - "Flip" - Car Parts (Repair)
+
+\- PARTS - "Flip" - Car Parts (WIP)
+
+\- PARTS - "Flip" - Golf Cart Parts - (Built to sell)
+
+\- PARTS - "Repairs" - Golf Cart Parts - (repairs only)
+
+\- AUCTION - Purchased Cars (RTO)
+
+\- AUCTION - Purchased Cars ("Flip")
+
+\- AUCTION - Purchased Golf Carts - ("Flip")
+
+
+
+Routes (`app/routes/purchases.py`):
+
+
+
+\- `GET /purchases/` — ledger with filters (date range, vendor, purchaser, category, stock number, review status)
+
+\- `GET /purchases/new`, `POST /purchases/new` — the "+ Record Purchase" form (one page, three visual sections: What did you buy? / What is it for? / Receipt)
+
+\- `GET /purchases/{id}/edit`, `POST /purchases/{id}/edit` — owner correction; also re-syncs the linked Transaction and accepts a replacement/late receipt upload
+
+\- `POST /purchases/{id}/review` — toggles review status between "Needs Review" (`pending`) and `reviewed`
+
+\- `GET /purchases/export` — Excel export
+
+
+
+This is data-quality review, not an approval workflow — keep it that simple.
+
+
+
+---
+
+
+
 \### 4. Repair Jobs
 
 The system must support repair jobs for both cars and golf carts.

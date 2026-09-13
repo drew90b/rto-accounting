@@ -32,3 +32,4 @@ class Unit(Base):
     sales = relationship("Sale", back_populates="unit")
     lease_accounts = relationship("LeaseAccount", back_populates="unit")
     transactions = relationship("Transaction", back_populates="unit")
+    purchases = relationship("Purchase", back_populates="unit")

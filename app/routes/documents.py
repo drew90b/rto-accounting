@@ -1,5 +1,4 @@
 import os
-import shutil
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.document import Document
 from app.models.enums import LinkedRecordType
-from app.config import STORAGE_DIR
+from app.services.document_service import save_uploaded_file
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -44,25 +43,14 @@ async def upload_document(
     file: UploadFile = File(...),
 ):
     record_id = int(linked_record_id)
-    dest_dir = os.path.join(STORAGE_DIR, linked_record_type, str(record_id))
-    os.makedirs(dest_dir, exist_ok=True)
-    dest_path = os.path.join(dest_dir, file.filename)
-    with open(dest_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    ext = os.path.splitext(file.filename)[1].lower()
-    doc = Document(
+    save_uploaded_file(
         linked_record_type=linked_record_type,
-        linked_record_id=record_id,
-        file_path=dest_path,
-        original_filename=file.filename,
-        file_type=ext,
-        uploaded_by=uploaded_by or None,
-        notes=notes or None,
+        record_id=record_id,
+        file=file,
+        uploaded_by=uploaded_by,
+        notes=notes,
+        db=db,
     )
-    db.add(doc)
-    db.flush()
-    doc.document_id = f"D-{doc.id:04d}"
     db.commit()
     return RedirectResponse(url="/documents/?msg=Document+uploaded", status_code=303)
 

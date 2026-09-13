@@ -16,6 +16,9 @@
     <nav class="sidebar-nav">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
 
+      <div class="sidebar-section">Purchases</div>
+      <a href="/purchases/" class="{% if '/purchases' in request.url.path %}active{% endif %}">Purchases</a>
+
       <div class="sidebar-section">Inventory</div>
       <a href="/units/" class="{% if '/units' in request.url.path %}active{% endif %}">Units</a>
 

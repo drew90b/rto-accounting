@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Purchases{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Purchases</h1>
+  <div class="page-header-actions">
+    <a href="/purchases/export" class="btn btn-secondary">Export Excel</a>
+    <a href="/purchases/new" class="btn btn-primary">+ Record Purchase</a>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <input type="text" name="vendor" placeholder="Vendor" value="{{ vendor_filter }}">
+  <input type="text" name="purchaser" placeholder="Purchaser" value="{{ purchaser_filter }}">
+  <input type="text" name="stock_number" placeholder="Stock #" value="{{ stock_number_filter }}">
+  <select name="category">
+    <option value="">All Categories</option>
+    {% for c in categories %}
+    <option value="{{ c }}" {% if category_filter == c %}selected{% endif %}>{{ c }}</option>
+    {% endfor %}
+  </select>
+  <select name="review_status">
+    <option value="">All Review Status</option>
+    {% for r in review_statuses %}
+    <option value="{{ r }}" {% if review_status_filter == r %}selected{% endif %}>{{ r | title }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="date_from" value="{{ date_from }}" title="From date">
+  <input type="date" name="date_to" value="{{ date_to }}" title="To date">
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/purchases/" class="btn btn-secondary">Clear</a>
+</form>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Vendor</th>
+        <th>Amount</th>
+        <th>Expense Category</th>
+        <th>Stock #</th>
+        <th>Purchaser</th>
+        <th>Receipt</th>
+        <th>Review</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in purchases %}
+      <tr>
+        <td><a href="/purchases/{{ p.id }}/edit">{{ p.purchase_date }}</a></td>
+        <td>{{ p.vendor.name if p.vendor else '—' }}</td>
+        <td><strong>${{ "%.2f" | format(p.amount | float) if p.amount else '0.00' }}</strong></td>
+        <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px;" title="{{ p.category.value if p.category else '' }}">{{ p.category.value if p.category else '—' }}</td>
+        <td>{{ p.stock_number or '—' }}{% if p.unit %} <span class="badge badge-blue" style="font-size:10px;">{{ p.unit.unit_id }}</span>{% endif %}</td>
+        <td>{{ p.purchaser }}</td>
+        <td>{% if p.receipt_attached %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-red">No</span>{% endif %}</td>
+        <td>
+          {% if p.review_status.value == 'reviewed' %}<span class="badge badge-green">Reviewed</span>
+          {% elif p.review_status.value == 'approved' %}<span class="badge badge-blue">Approved</span>
+          {% else %}<span class="badge badge-yellow">Needs Review</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap;">
+          <a href="/purchases/{{ p.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+          <form method="post" action="/purchases/{{ p.id }}/review" style="display:inline;">
+            <button type="submit" class="btn btn-sm btn-secondary">
+              {% if p.review_status.value == 'reviewed' %}Mark Needs Review{% else %}Mark Reviewed{% endif %}
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

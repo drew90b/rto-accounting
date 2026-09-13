@@ -4,17 +4,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.database import get_db, Base, engine
+from app.database import get_db
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices
-
-Base.metadata.create_all(bind=engine)
+from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases
 
 app = FastAPI(title="RTO Accounting System")
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+app.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 app.include_router(units.router, prefix="/units", tags=["units"])
 app.include_router(customers.router, prefix="/customers", tags=["customers"])
 app.include_router(vendors.router, prefix="/vendors", tags=["vendors"])

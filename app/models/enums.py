@@ -117,6 +117,7 @@ class LinkedRecordType(str, enum.Enum):
     sale = "sale"
     lease_account = "lease_account"
     payment = "payment"
+    purchase = "purchase"
 
 
 class ExceptionType(str, enum.Enum):
@@ -139,6 +140,23 @@ class ExceptionStatus(str, enum.Enum):
     in_review = "in_review"
     resolved = "resolved"
     dismissed = "dismissed"
+
+
+class PurchaseCategory(str, enum.Enum):
+    """
+    Verbatim expense-category options from the legacy Google Purchase Order
+    Form. Preserved as-is (including inconsistent quoting/capitalization) so
+    the Purchases module is a drop-in replacement — do not normalize these.
+    """
+    parts_rto_car_repair = 'PARTS - "RTO" car parts (Repair)'
+    parts_rto_car_wip = 'PARTS - "RTO" - Car parTs (WIP)'
+    parts_flip_car_repair = 'PARTS - "Flip" - Car Parts (Repair)'
+    parts_flip_car_wip = 'PARTS - "Flip" - Car Parts (WIP)'
+    parts_flip_golf_cart_build = 'PARTS - "Flip" - Golf Cart Parts - (Built to sell)'
+    parts_golf_cart_repair = 'PARTS - "Repairs" - Golf Cart Parts - (repairs only)'
+    auction_car_rto = "AUCTION - Purchased Cars (RTO)"
+    auction_car_flip = 'AUCTION - Purchased Cars ("Flip")'
+    auction_golf_cart_flip = 'AUCTION - Purchased Golf Carts - ("Flip")'
 
 
 class InvoiceType(str, enum.Enum):

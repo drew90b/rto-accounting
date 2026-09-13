@@ -42,3 +42,4 @@ class Transaction(Base):
     repair_job = relationship("RepairJob", back_populates="transactions")
     sale = relationship("Sale", back_populates="transactions")
     lease_account = relationship("LeaseAccount", back_populates="transactions")
+    purchase = relationship("Purchase", back_populates="transaction", uselist=False)

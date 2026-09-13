@@ -9,9 +9,10 @@ from app.models.transaction import Transaction
 from app.models.document import Document
 from app.models.exception_record import ExceptionRecord
 from app.models.invoice import Invoice, InvoiceItem
+from app.models.purchase import Purchase
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
     "LeaseAccount", "Payment", "Transaction", "Document", "ExceptionRecord",
-    "Invoice", "InvoiceItem",
+    "Invoice", "InvoiceItem", "Purchase",
 ]
