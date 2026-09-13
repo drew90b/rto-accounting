@@ -13,7 +13,9 @@ from app.models.purchase import Purchase
 from app.models.vendor import Vendor
 from app.models.document import Document
 from app.models.enums import PurchaseCategory, ReviewStatus
-from app.services.purchase_service import record_purchase, sync_purchase_transaction, match_unit_by_stock_number
+from app.services.purchase_service import (
+    record_purchase, sync_purchase_transaction, match_unit_by_stock_number, is_vehicle_purchase,
+)
 from app.services.document_service import save_uploaded_file
 
 router = APIRouter()
@@ -37,6 +39,7 @@ def _parse_int(val: str) -> Optional[int]:
 def _form_context(db: Session):
     return {
         "categories": [c.value for c in PurchaseCategory],
+        "vehicle_categories": [c.value for c in PurchaseCategory if is_vehicle_purchase(c)],
         "site_locations": ["Eunice"],
         "vendor_names": [v.name for v in db.query(Vendor).order_by(Vendor.name).all()],
     }
@@ -95,8 +98,8 @@ def export_purchases(db: Session = Depends(get_db)):
     ws = wb.active
     ws.title = "Purchases"
     headers = [
-        "Purchase ID", "Date", "Purchaser", "Vendor", "Amount", "Category",
-        "Site Location", "Stock #", "Unit", "Mileage", "Notes",
+        "Purchase ID", "Date", "Purchaser", "Vendor", "Amount", "Shipping", "Other Fees",
+        "Category", "Site Location", "Stock #", "Unit", "Acquisition Cost", "Mileage", "Notes",
         "Receipt", "Review Status",
     ]
     ws.append(headers)
@@ -109,10 +112,13 @@ def export_purchases(db: Session = Depends(get_db)):
             p.purchaser,
             p.vendor.name if p.vendor else "",
             float(p.amount) if p.amount else 0,
+            float(p.shipping_cost) if p.shipping_cost else "",
+            float(p.other_fees) if p.other_fees else "",
             p.category.value if p.category else "",
             p.site_location or "",
             p.stock_number or "",
             p.unit.unit_id if p.unit else "",
+            float(p.unit.acquisition_cost) if p.unit and p.unit.acquisition_cost else "",
             p.mileage or "",
             p.description or "",
             "Yes" if p.receipt_attached else "No",
@@ -154,21 +160,36 @@ async def create_purchase(
     mileage: str = Form(""),
     description: str = Form(""),
     entered_by: str = Form(""),
+    shipping_cost: str = Form(""),
+    other_fees: str = Form(""),
+    vin: str = Form(""),
+    year: str = Form(""),
+    make: str = Form(""),
+    model: str = Form(""),
     receipt: Optional[UploadFile] = File(None),
 ):
-    purchase = record_purchase(
-        purchase_date=date.fromisoformat(purchase_date),
-        purchaser=purchaser,
-        vendor_name=vendor,
-        amount=_d(amount) or Decimal("0"),
-        category=PurchaseCategory(category),
-        site_location=site_location,
-        stock_number=stock_number,
-        mileage=_parse_int(mileage),
-        description=description,
-        entered_by=entered_by or purchaser,
-        db=db,
-    )
+    try:
+        purchase = record_purchase(
+            purchase_date=date.fromisoformat(purchase_date),
+            purchaser=purchaser,
+            vendor_name=vendor,
+            amount=_d(amount) or Decimal("0"),
+            category=PurchaseCategory(category),
+            site_location=site_location,
+            stock_number=stock_number,
+            mileage=_parse_int(mileage),
+            description=description,
+            entered_by=entered_by or purchaser,
+            shipping_cost=_d(shipping_cost) or Decimal("0"),
+            other_fees=_d(other_fees) or Decimal("0"),
+            vin=vin,
+            year=_parse_int(year),
+            make=make,
+            model=model,
+            db=db,
+        )
+    except ValueError as e:
+        return RedirectResponse(url=f"/purchases/new?error={str(e).replace(' ', '+')}", status_code=303)
 
     if receipt and receipt.filename:
         save_uploaded_file(
@@ -218,6 +239,8 @@ async def update_purchase(
     mileage: str = Form(""),
     description: str = Form(""),
     entered_by: str = Form(""),
+    shipping_cost: str = Form(""),
+    other_fees: str = Form(""),
     receipt: Optional[UploadFile] = File(None),
 ):
     from app.services.purchase_service import find_or_create_vendor
@@ -227,16 +250,22 @@ async def update_purchase(
         return RedirectResponse(url="/purchases/", status_code=303)
 
     v = find_or_create_vendor(vendor, db)
-    unit = match_unit_by_stock_number(stock_number, db) if stock_number else None
+    # Editing can link a purchase to a newly-matched unit; it never silently
+    # unlinks one just because the free-text stock number stopped matching
+    # (e.g. it was never expected to equal an auto-created unit's unit_id).
+    matched_unit = match_unit_by_stock_number(stock_number, db) if stock_number else None
+    if matched_unit:
+        purchase.unit_id = matched_unit.id
 
     purchase.purchaser = purchaser
     purchase.purchase_date = date.fromisoformat(purchase_date)
     purchase.vendor_id = v.id
     purchase.amount = _d(amount) or Decimal("0")
+    purchase.shipping_cost = _d(shipping_cost)
+    purchase.other_fees = _d(other_fees)
     purchase.category = PurchaseCategory(category)
     purchase.site_location = site_location or None
     purchase.stock_number = stock_number or None
-    purchase.unit_id = unit.id if unit else None
     purchase.mileage = _parse_int(mileage)
     purchase.description = description or None
     purchase.entered_by = entered_by or None

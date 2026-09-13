@@ -37,10 +37,11 @@
     <thead>
       <tr>
         <th>Date</th>
+        <th>Stock # / Vehicle</th>
         <th>Vendor</th>
         <th>Amount</th>
+        <th>Acquisition Cost</th>
         <th>Expense Category</th>
-        <th>Stock #</th>
         <th>Purchaser</th>
         <th>Receipt</th>
         <th>Review</th>
@@ -51,10 +52,18 @@
       {% for p in purchases %}
       <tr>
         <td><a href="/purchases/{{ p.id }}/edit">{{ p.purchase_date }}</a></td>
+        <td>
+          {% if p.unit %}
+            <span class="badge badge-blue" style="font-size:10px;">{{ p.unit.unit_id }}</span>
+            {{ p.unit.year or '' }} {{ p.unit.make or '' }} {{ p.unit.model or '' }}
+          {% else %}
+            {{ p.stock_number or '—' }}
+          {% endif %}
+        </td>
         <td>{{ p.vendor.name if p.vendor else '—' }}</td>
         <td><strong>${{ "%.2f" | format(p.amount | float) if p.amount else '0.00' }}</strong></td>
+        <td>{% if p.unit and p.unit.acquisition_cost %}${{ "%.2f" | format(p.unit.acquisition_cost | float) }}{% else %}—{% endif %}</td>
         <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px;" title="{{ p.category.value if p.category else '' }}">{{ p.category.value if p.category else '—' }}</td>
-        <td>{{ p.stock_number or '—' }}{% if p.unit %} <span class="badge badge-blue" style="font-size:10px;">{{ p.unit.unit_id }}</span>{% endif %}</td>
         <td>{{ p.purchaser }}</td>
         <td>{% if p.receipt_attached %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-red">No</span>{% endif %}</td>
         <td>
@@ -72,7 +81,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="9" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
+      <tr><td colspan="10" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
       {% endfor %}
     </tbody>
   </table>

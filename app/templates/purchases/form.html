@@ -7,6 +7,23 @@
   <a href="/purchases/" class="btn btn-secondary">← Back to Purchases</a>
 </div>
 
+{% set error_msg = request.query_params.get('error') %}
+{% if error_msg %}
+<div class="alert-error" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;max-width:680px;">{{ error_msg | replace('+', ' ') }}</div>
+{% endif %}
+
+{% if purchase and purchase.unit %}
+<div class="card" style="max-width:680px; margin-bottom:16px;">
+  <div class="card-title">Vehicle on File — {{ purchase.unit.unit_id }}</div>
+  <div style="font-size:13px; color:#374151; margin-top:6px;">
+    {{ purchase.unit.year or '—' }} {{ purchase.unit.make or '' }} {{ purchase.unit.model or '' }}
+    &nbsp;·&nbsp; VIN: {{ purchase.unit.vin_serial or '—' }}
+    &nbsp;·&nbsp; Acquisition Cost: ${{ "%.2f" | format(purchase.unit.acquisition_cost | float) if purchase.unit.acquisition_cost else '0.00' }}
+    &nbsp;·&nbsp; <a href="/units/{{ purchase.unit.id }}/edit">View Unit →</a>
+  </div>
+</div>
+{% endif %}
+
 <div class="card" style="max-width:680px;">
   <form method="post" enctype="multipart/form-data"
         action="{% if purchase %}/purchases/{{ purchase.id }}/edit{% else %}/purchases/new{% endif %}">
@@ -45,12 +62,53 @@
 
       <div class="form-group form-full">
         <label>Expense Category *</label>
-        <select name="category" required>
+        <select name="category" id="category-select" required>
           <option value="" disabled {% if not purchase %}selected{% endif %}>— Select a category —</option>
           {% for c in categories %}
           <option value="{{ c }}" {% if purchase and purchase.category.value == c %}selected{% endif %}>{{ c }}</option>
           {% endfor %}
         </select>
+      </div>
+
+      <div id="vehicle-fields" class="form-full" style="display:contents;">
+        <div class="form-section">Vehicle Details <span class="form-hint">(auction/vehicle purchases only — creates the inventory record)</span></div>
+
+        <div class="form-group">
+          <label>VIN</label>
+          <input type="text" name="vin" value="{{ purchase.unit.vin_serial if purchase and purchase.unit else '' }}"
+                 {% if purchase and purchase.unit %}readonly{% endif %}>
+          <span class="form-hint">Used to prevent duplicate vehicle records.</span>
+        </div>
+
+        <div class="form-group">
+          <label>Year</label>
+          <input type="number" name="year" value="{{ purchase.unit.year if purchase and purchase.unit and purchase.unit.year else '' }}"
+                 {% if purchase and purchase.unit %}readonly{% endif %}>
+        </div>
+
+        <div class="form-group">
+          <label>Make</label>
+          <input type="text" name="make" value="{{ purchase.unit.make if purchase and purchase.unit else '' }}"
+                 {% if purchase and purchase.unit %}readonly{% endif %}>
+        </div>
+
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" name="model" value="{{ purchase.unit.model if purchase and purchase.unit else '' }}"
+                 {% if purchase and purchase.unit %}readonly{% endif %}>
+        </div>
+
+        <div class="form-group">
+          <label>Shipping / Transportation ($)</label>
+          <input type="number" step="0.01" min="0" name="shipping_cost"
+                 value="{{ purchase.shipping_cost if purchase and purchase.shipping_cost else '' }}" placeholder="0.00">
+        </div>
+
+        <div class="form-group">
+          <label>Other Acquisition Fees ($)</label>
+          <input type="number" step="0.01" min="0" name="other_fees"
+                 value="{{ purchase.other_fees if purchase and purchase.other_fees else '' }}" placeholder="0.00">
+        </div>
       </div>
 
       <div class="form-section">What is it for?</div>
@@ -71,7 +129,10 @@
         <input type="text" name="stock_number"
                value="{{ purchase.stock_number if purchase else '' }}"
                placeholder="e.g. U-0042 or VIN">
-        <span class="form-hint">If it matches a unit already on file, this purchase links to it automatically.</span>
+        <span class="form-hint">
+          {% if purchase and purchase.unit %}Linked to {{ purchase.unit.unit_id }}.
+          {% else %}If it matches a unit already on file, this purchase links to it automatically. For a new vehicle purchase, leave blank or use your own lot/tag number — a unit is created automatically.{% endif %}
+        </span>
       </div>
 
       <div class="form-group">
@@ -111,5 +172,24 @@
     </div>
   </form>
 </div>
+
+<script>
+  // Progressive enhancement only: the Vehicle Details block is visible by
+  // default (and fully usable) without JS. When JS is available, hide it
+  // for categories that aren't vehicle purchases, to keep the common case
+  // (parts/repairs) uncluttered.
+  (function () {
+    var vehicleCategories = {{ vehicle_categories | tojson }};
+    var select = document.getElementById('category-select');
+    var block = document.getElementById('vehicle-fields');
+    if (!select || !block) return;
+
+    function sync() {
+      block.style.display = vehicleCategories.indexOf(select.value) !== -1 ? 'contents' : 'none';
+    }
+    select.addEventListener('change', sync);
+    sync();
+  })();
+</script>
 
 {% endblock %}

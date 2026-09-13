@@ -12,7 +12,7 @@ class Unit(Base):
     unit_id = Column(String(20), unique=True, nullable=True)
     unit_type = Column(SAEnum(UnitType), nullable=False)
     business_line = Column(SAEnum(BusinessLine), nullable=False)
-    vin_serial = Column(String(50))
+    vin_serial = Column(String(50), unique=True)
     year = Column(Integer)
     make = Column(String(50))
     model = Column(String(100))

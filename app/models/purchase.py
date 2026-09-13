@@ -20,6 +20,8 @@ class Purchase(Base):
     purchaser = Column(String(100), nullable=False)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
+    shipping_cost = Column(Numeric(10, 2), nullable=True)
+    other_fees = Column(Numeric(10, 2), nullable=True)
     category = Column(SAEnum(PurchaseCategory), nullable=False)
     site_location = Column(String(100))
     stock_number = Column(String(50))
