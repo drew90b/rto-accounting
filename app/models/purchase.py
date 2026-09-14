@@ -32,6 +32,9 @@ class Purchase(Base):
     receipt_attached = Column(Boolean, default=False)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
     entered_by = Column(String(50))
+    # Set only by the historical importer (app/scripts/import_historical_purchases.py)
+    # so a re-run can never create a duplicate. NULL for every native/UI-created purchase.
+    source_reference = Column(String(100), unique=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
