@@ -28,6 +28,7 @@ Migration `003_nullable_human_readable_ids` removed the `NOT NULL` constraint fr
 7. [payments](#payments)
 8. [transactions](#transactions)
 9. [purchases](#purchases)
+    - [users](#users) and [purchase_events](#purchase_events) (migration 009)
 10. [documents](#documents)
 11. [exceptions](#exceptions)
 12. [Enums Reference](#enums-reference)
@@ -258,14 +259,54 @@ Employee-facing purchase submission. Every purchase has one linked `transactions
 | review_status | string | NO | `pending` | `pending`, `reviewed`, `approved` |
 | receipt_attached | boolean | YES | false | |
 | transaction_id | integer | YES | — | FK → transactions.id |
-| entered_by | varchar(50) | YES | — | |
+| entered_by | varchar(50) | YES | — | Display name of the user who entered it (new rows) or the typed name (historical rows) |
+| entered_by_user_id | integer | YES | — | FK → users.id. The signed-in user who entered it. NULL on historical rows. Added in migration 009. |
+| reviewed_by_user_id | integer | YES | — | FK → users.id. Set when marked reviewed; cleared on reopen. NULL on historical rows. |
+| reviewed_at | timestamp | YES | — | When it was marked reviewed; cleared on reopen. |
 | source_reference | varchar(100) | YES | — | Unique. `historical-import:<source_row>` for rows created by `app/scripts/import_historical_purchases.py`; NULL for purchases entered in the app. |
+
+`purchaser` (who made the purchase) is separate from `entered_by_user_id` and `reviewed_by_user_id`.
 
 **Payment source** is stored on the linked `transactions` row (`transactions.payment_source`), not on `purchases`.
 
 **General-expense categories:** `general_expense_car`, `general_expense_golf_cart`, `general_expense_shared`, `general_expense_unsure`. They never create or link a unit. Business line is derived from the category: `car`, `golf_cart`, `shared`, `unallocated` respectively.
 
 **Stock number rule:** units have no stock-number column. A purchase links by exact `units.unit_id` or `units.vin_serial` match. A vehicle category (`auction_car_rto`, `auction_car_flip`, `auction_golf_cart_flip`) with no match always creates a new unit.
+
+---
+
+## users
+
+People who sign in. Added in migration 009. Managed only by `python -m app.scripts.users`.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| id | integer | NO | autoincrement | Primary key |
+| username | varchar(50) | NO | — | Unique, stored lowercase |
+| display_name | varchar(100) | NO | — | Shown as entered-by / reviewed-by |
+| password_hash | varchar(255) | NO | — | argon2; never displayed |
+| role | string | NO | — | `admin` or `employee` |
+| active | boolean | NO | true | A disabled user is signed out on the next request |
+| session_version | integer | NO | 1 | Bumped on password reset, disable and role change; ends that user's other sessions |
+| must_change_password | boolean | NO | true | True for a temporary password |
+| failed_login_count, locked_until | integer, timestamp | NO, YES | 0, — | Five failures lock the account for 15 minutes |
+| last_login_at, created_at | timestamp | YES | — | |
+
+---
+
+## purchase_events
+
+History of a purchase made through the app (none for historical rows). Added in migration 009.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| id | integer | NO | autoincrement | Primary key |
+| purchase_id | integer | NO | — | FK → purchases.id, indexed |
+| user_id | integer | NO | — | FK → users.id. Who did it |
+| action | string | NO | — | `created`, `edited`, `receipt_added`, `reviewed`, `reopened` |
+| changes | json | YES | — | `{field: [old, new]}` in readable values. `created` holds a snapshot; `reopened` holds the previous reviewer and time |
+| note | text | YES | — | The reason, for `reopened` |
+| created_at | timestamp | YES | — | UTC |
 
 ---
 

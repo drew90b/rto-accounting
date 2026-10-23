@@ -9,13 +9,37 @@ Update this file as work is completed.
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
 **As of:** 2026-10-23
-**Server:** Deployed on Render (with github and locally).
-**Database:** Migrations 001–008 exist in the repo. `rto_accounting_dev` is at 007; **008 has been tested on an isolated database but not yet applied to `rto_accounting_dev`**. Apply it (`alembic upgrade head`) before running the new code against that database, because the Transaction model now reads `payment_source`.
+**Server:** The running instance is uvicorn in tmux session `rto` on ubuntu-dev, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. It is not a systemd service. (An earlier note said "Deployed on Render"; nothing in the repo supports that.)
+**Database:** Migrations 001–009 exist in the repo. `rto_accounting_dev` is at 008 (applied 2026-10-23). **Migration 009 (sign-in) is on branch `feature/employee-access` and is not applied.** The deployed app has no sign-in until that branch is merged and deployed; see the 2026-10-23 "Employee Sign-In" entry.
 **Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
 
 ---
 
 ## Completed Work
+
+### 2026-10-23 — Employee Sign-In and Purchase Permissions (branch `feature/employee-access`, not deployed)
+
+**Goal:** Let Belinda (employee) sign in individually, enter purchases, attach receipts and correct pending purchases, while review and everything else stays administrator-only. Record who entered and who reviewed each purchase, separate from who made it. Enforce on the server.
+
+#### What was built
+- [x] Stage 0: test isolation fixed with SQLAlchemy's pysqlite SAVEPOINT recipe (`tests/conftest.py`). The suite is green in random order; the `pytest-randomly` workaround below is no longer needed.
+- [x] Stage 1: migration 009 (additive, no backfill): `users`, `purchases.entered_by_user_id` / `reviewed_by_user_id` / `reviewed_at`, `purchase_events`. User CLI `python -m app.scripts.users` (create, reset-password, disable, enable, set-role, unlock, list). Passwords are argon2-hashed, at least 12 characters, prompted or generated, never passed as arguments.
+- [x] Stage 2: `app/auth.py` (`require_user`, `require_admin`), `app/csrf.py` (Origin/Referer check on every POST), `app/routes/auth.py` (login, logout, change password). Signed session cookie, absolute 12-hour limit, re-checked against the database on every request; `/docs` and `/openapi.json` are off. Five wrong passwords lock an account for 15 minutes.
+- [x] Stage 3: employees can create, list, search and edit **pending** purchases and attach receipts; they can download receipts linked to purchases and nothing else. Mark reviewed and reopen are admin-only (`POST /purchases/{id}/reviewed`, `/reopen` with a required reason; the old toggle is gone). A reviewed purchase is locked for everyone until reopened. Vehicle purchases keep their unit on edit, and category changes that cross the vehicle line (or car/golf cart) are rejected, so an edit cannot overwrite another unit's acquisition cost. The `entered_by` form field is gone and an edit no longer erases it. Receipts are stored under random names.
+- [x] Stage 4: `purchase_events` history (created, edited with old → new, receipt added, reviewed, reopened) shown on the purchase page.
+
+#### Decisions
+- Reviewed means reviewed as it stands: no edits (including a late receipt) without an admin reopening with a reason. Reopen clears the reviewer; the event keeps who and when.
+- Historical purchases keep NULL attribution and show "(typed, not verified)" / "Reviewed — reviewer not recorded". Nothing is backfilled or guessed.
+- Argon2 and the lockout were kept as planned although two users would be fine with less.
+- `tests/conftest.py`: `client` is now signed in as an administrator through the real `POST /login`; `anon_client` and `employee_client` are added. Auth is never bypassed in tests. Tests also write receipts to a temporary folder (earlier runs left test folders under `storage/receipts/purchase/`; they were not touched).
+
+#### Validation
+- 264 tests pass, in random order, repeatedly. Deliberate breakages (an admin router opened to employees, the pending-only edit guard, the other-unit guard) were each caught.
+- Migration 009 rehearsed on a throwaway PostgreSQL cluster restored from the pre-rollout backup: 007 → 008 → 009, downgrade to 008, upgrade again. The 962 purchases were byte-identical (checksum) and every attribution column was NULL. The app was then run against that copy and exercised end to end (sign-in, forced password change, Belinda's 403s, create/edit/review/reopen, history). `rto_accounting_dev` was not touched.
+
+#### Deployment still to do (needs the owner)
+Back up the database and `storage/receipts`; add `SESSION_SECRET`, `ALLOWED_ORIGINS` (and `SESSION_COOKIE_SECURE` if HTTPS) to `.env`; `pip install -r requirements.txt`; `alembic upgrade head`; create the admin and Belinda with `users create ... --temporary`; restart `rto:web`. Rollback: check out the previous commit (the old code runs against the new schema); a downgrade destroys attribution, so restore from backup instead. HTTPS through Tailscale Serve and running under systemd are separate, pending decisions.
 
 ### 2026-10-23 — General Expenses and Payment Source
 
@@ -50,7 +74,7 @@ Update this file as work is completed.
 - Migration 008 tested on a throwaway PostgreSQL cluster: upgrade from 007 with legacy rows (payment source stays NULL), ORM round-trip of all four categories and both new business lines, downgrade, re-upgrade. `rto_accounting_dev` was not touched.
 
 #### Known issue (pre-existing)
-- `pytest-randomly` is in `requirements-dev.txt` and shuffles test order. Because per-test rollback does not fully hold on SQLite (rows committed through the client persist), random order fails 1–6 tests per run. This predates these changes. Run `pytest -p no:randomly` for a stable result. `tests/test_review_queue.py` points to `memory/test_isolation_bug.md`, which is not in the repository.
+- (Fixed on `feature/employee-access`, Stage 0.) `pytest-randomly` shuffled test order, and per-test rollback did not hold on SQLite because pysqlite's SAVEPOINTs need `isolation_level=None` plus an explicit `BEGIN`; random order failed 1–6 tests per run. Until that branch is merged, run `pytest -p no:randomly`. `tests/test_review_queue.py` points to `memory/test_isolation_bug.md`, which is not in the repository.
 
 
 ### 2026-10-23 — Historical Inventory Reconciliation: Findings (investigation only, paused)
@@ -487,7 +511,7 @@ See `docs/roadmap.md` for full list.
 | 2026-03-08 | All enum values stored as strings in the DB (not native PG enums) | Easier to add values later without schema migrations |
 | 2026-03-08 | `outstanding_balance` on lease accounts updated manually | Avoids complex auto-calculation in MVP; acceptable for small portfolio |
 | 2026-03-08 | `outstanding_balance` refactored to computed-at-runtime | Eliminated mutable stored state; balance = `financed_balance − SUM(payments)`; column renamed to `outstanding_balance_deprecated` in migration 002; `app/services/lease_service.py` is the single authoritative calculation |
-| 2026-03-08 | No authentication in Phase 1 | Speeds up MVP; single-user or trusted-network use assumed initially |
+| 2026-03-08 | No authentication in Phase 1 | Speeds up MVP; single-user or trusted-network use assumed initially. **Superseded 2026-10-23** by individual sign-in (branch `feature/employee-access`). |
 | 2026-03-08 | `customer_support_repair` added as a third repair job type | BHPH model requires tracking goodwill/retention repairs as a portfolio cost, not revenue |
 | 2026-03-08 | Documents stored on disk, metadata in DB | Simple; avoids binary storage in Postgres; easy to back up |
 | 2026-03-08 | Flash messages via URL query param (`?msg=...`) | No session middleware required; keeps stack simple |

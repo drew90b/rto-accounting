@@ -19,7 +19,9 @@ For an explanation of how Payments, Transactions, Invoices, and Lease Balances r
 
 ```
 app/
-  config.py          — DATABASE_URL and STORAGE_DIR from environment
+  config.py          — DATABASE_URL, STORAGE_DIR, SESSION_SECRET, ALLOWED_ORIGINS from environment
+  auth.py            — require_user / require_admin dependencies; signed-session checks
+  csrf.py            — Origin/Referer check on every POST
   database.py        — Engine, SessionLocal, Base, get_db dependency
   main.py            — FastAPI app, router registration, create_all, dashboard
   models/            — One file per entity; all imported in __init__.py
@@ -33,6 +35,16 @@ storage/receipts/    — Uploaded receipts and supporting documents
 tests/               — pytest suite (see Testing section below)
 docs/                — Project documentation
 ```
+
+---
+
+## Sign-In and Access Control
+
+- `SessionMiddleware` keeps a signed (not encrypted) cookie holding only `uid`, `ver` and `login_at`. `require_user` re-reads the user from the database on every request, so disabling an account or changing a role applies on the next click; sessions also end after `SESSION_MAX_HOURS` from sign-in.
+- `app/main.py` includes every router with a dependency, so a new router is protected only if someone remembers to add one: Purchases and Documents use `require_user`, everything else `require_admin`, with admin-only routes inside those two. The route-inventory test catches mistakes.
+- `OriginCheckMiddleware` rejects any POST whose Origin (or Referer) is not in `ALLOWED_ORIGINS`.
+- `/docs`, `/redoc` and `/openapi.json` are disabled. The app refuses to start without `SESSION_SECRET`.
+- Set `SESSION_COOKIE_SECURE=true` only when served over HTTPS (for example behind Tailscale Serve); over plain HTTP the cookie cannot be marked Secure.
 
 ---
 
@@ -138,6 +150,15 @@ SQLite does not create read isolation between savepoints on the same connection.
 execution order on every run, which surfaces hidden state dependencies early.
 A fixed seed can be specified with `--randomly-seed=<n>` to reproduce a run.
 
+### Sign-in in tests
+
+Tests never bypass authentication. `admin_client` and `employee_client` create a
+user and sign in through the real `POST /login`, sending the `Origin` header a
+browser would. `client` is the admin client, so most route tests are unchanged;
+`anon_client` is signed out. `tests/test_access.py` walks every route the app has
+and fails if one is reachable without sign-in, or by an employee outside an
+explicit allow-list.
+
 ### Fixture Summary
 
 | Fixture | Scope | Purpose |
@@ -145,7 +166,8 @@ A fixed seed can be specified with `--randomly-seed=<n>` to reproduce a run.
 | `engine` | session | One SQLite engine; schema created once |
 | `db_connection` | function | Per-test connection + outer rollback transaction |
 | `db` | function | ORM session for unit/service tests |
-| `client` | function | FastAPI TestClient with get_db overridden |
+| `client` | function | TestClient signed in as an admin (alias of `admin_client`) |
+| `anon_client`, `admin_client`, `employee_client` | function | TestClients signed out / in as admin / in as employee |
 
 ---
 

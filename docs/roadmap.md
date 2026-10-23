@@ -104,13 +104,13 @@ Role-based access for different user types. Required before any multi-user or ex
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 5.1 | User table and login | 🔲 | Username/password login. Session-based auth. |
-| 5.2 | Role definitions | 🔲 | owner, admin, salesperson, mechanic, accountant |
-| 5.3 | Role-based route protection | 🔲 | Restrict create/edit/delete by role. |
+| 5.1 | User table and login | ✅ | Individual username/password sign-in, signed session cookie, forced password change on a temporary password. Accounts are created from the command line (`python -m app.scripts.users`); there is no signup page. |
+| 5.2 | Role definitions | 🔧 | `admin` and `employee` only. Accountant, salesperson and mechanic roles are not built. |
+| 5.3 | Role-based route protection | ✅ | Default-deny: every router requires sign-in, and everything except Purchases and receipt downloads is admin-only. Enforced on the server and covered by a route-inventory test. |
 | 5.4 | Read-only accountant view | 🔲 | Accountant role: read-only access to registers and exports. |
 | 5.5 | Mechanic limited view | 🔲 | Mechanic role: repair job status updates only. |
-| 5.6 | Entered-by auto-populate | 🔲 | Auto-fill `entered_by` from logged-in user. |
-| 5.7 | Audit log | 🔲 | Record who changed what and when on key records. |
+| 5.6 | Entered-by auto-populate | ✅ | Purchases record the signed-in user as entered-by and reviewer, separate from the purchaser. Other modules still use typed `entered_by`. |
+| 5.7 | Audit log | 🔧 | Purchases only: `purchase_events` records create, edit (old → new), receipt, review and reopen. |
 
 ---
 

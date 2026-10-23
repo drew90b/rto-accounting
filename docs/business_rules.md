@@ -155,6 +155,16 @@ A purchase transaction with no `unit_id`, no `repair_job_id`, and `transaction_t
 
 ---
 
+### Access and attribution rules (purchases)
+- Everyone signs in individually. Roles are `admin` and `employee`. Accounts are managed only from the command line.
+- An employee can enter purchases, attach receipts, search and view all purchases, and correct **pending** purchases. Everything else (review, reopen, exports, the document list, every other module) is administrator-only. This is enforced on the server.
+- Who **made** the purchase (`purchaser`, typed) is separate from who **entered** it and who **reviewed** it (`entered_by_user_id`, `reviewed_by_user_id`, taken from the signed-in user, never from a form).
+- A reviewed (or approved) purchase cannot be edited by anyone, including a late receipt. An admin reopens it with a required reason, it is corrected, then reviewed again. The reviewer is cleared on reopen; the history keeps the earlier reviewer and the reason.
+- A vehicle purchase cannot be re-linked to a different unit or change between a vehicle and a non-vehicle category through the edit form.
+- Historical purchases have no recorded entering or reviewing user. That is shown as such, never invented.
+
+---
+
 ## 5. Repair Job Rules
 
 ### Job types
@@ -270,7 +280,7 @@ open → dismissed  (use sparingly; requires a note)
 ## 10. Document Rules
 
 ### Rules
-- Receipts and supporting documents are stored on disk under `storage/receipts/{record_type}/{record_id}/`.
+- Receipts and supporting documents are stored on disk under `storage/receipts/{record_type}/{record_id}/`, each under a random file name; the original name is kept in the database for display. An employee can download only receipts linked to purchases.
 - The database stores metadata only — file path, original filename, upload date, uploader, and notes.
 - A document may be linked to any of: `transaction`, `unit`, `repair_job`, `sale`, `lease_account`, `payment`.
 - There is no limit on the number of documents per record.

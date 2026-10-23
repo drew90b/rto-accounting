@@ -73,6 +73,14 @@ uvicorn app.main:app --reload
 
 Open `http://localhost:8000` in a browser.
 
+Sign-in: set `SESSION_SECRET` and `ALLOWED_ORIGINS` in `.env` (see `.env.example`), then create the first administrator. The app will not start without a secret.
+
+```bash
+python -m app.scripts.users create --username drew --display-name "Drew" --role admin --temporary
+```
+
+`--temporary` prints a one-time password to change at first sign-in. There is no signup page; see `docs/system_workflows.md` (11b) for managing accounts.
+
 ---
 
 ## Documentation
@@ -94,6 +102,6 @@ Open `http://localhost:8000` in a browser.
 
 ## Current status
 
-Deployed on Render. GitHub-connected. MVP complete and operational as of March 2026. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
+MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in and employee permissions are built on `feature/employee-access` and not yet deployed. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for what is built, in progress, and planned.

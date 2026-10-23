@@ -234,4 +234,4 @@ Edit the transaction directly. The system does not prevent edits, but edits are 
 Every list view has an Excel export button. The full month-end export pack (Phase 2) will produce a single workbook with all required tabs.
 
 **"Can multiple people use this at once?"**
-Yes — it is a web application. Authentication and role-based access are planned for Phase 5.
+Yes — it is a web application. Individual sign-in with admin and employee roles is built on the `feature/employee-access` branch (Phase 5, partial) and not yet deployed.

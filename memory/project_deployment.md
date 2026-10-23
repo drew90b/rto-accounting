@@ -1,10 +1,10 @@
 ---
-name: Deployment — Render
-description: RTO finance system is deployed on Render (not local-only)
+name: Deployment — ubuntu-dev over Tailscale
+description: Where the RTO finance system actually runs; corrects an earlier note that said Render
 type: project
 ---
 
-Server is deployed on Render.
+The running instance is uvicorn in tmux session `rto` (window `web`) on ubuntu-dev, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. It is not a systemd service and does not survive a reboot. Reached only over the tailnet.
 
-**Why:** Production deployment as of March 2026.
-**How to apply:** Do not describe the server as "local development only" or "not yet deployed." When advising on configuration, environment variables, or infrastructure, assume a Render deployment environment.
+**Why:** An earlier version of this note said the server was deployed on Render. Nothing in the repository supports that, and the app is run from ubuntu-dev.
+**How to apply:** Do not assume a Render environment. Treat restarts, migrations and secrets as manual steps on ubuntu-dev, and back up the database and `storage/receipts` first.

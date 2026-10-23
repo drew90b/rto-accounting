@@ -174,7 +174,7 @@ Use a Python web application as the system of record.
 
 \- local file storage for receipts initially
 
-\- role-based authentication
+\- role-based authentication (admin and employee: built on `feature/employee-access`; see `docs/business_rules.md`)
 
 
 

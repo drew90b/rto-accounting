@@ -19,6 +19,7 @@ what to enter, in what order, and what records get created.
 10. [Upload a Receipt or Document](#10-upload-a-receipt-or-document)
 11. [Log a Transaction Manually](#11-log-a-transaction-manually)
     - [11a. Record a General Expense](#11a-record-a-general-expense)
+    - [11b. Sign In, Correct a Purchase, Review and Reopen](#11b-sign-in-correct-a-purchase-review-and-reopen)
 12. [Resolve an Exception](#12-resolve-an-exception)
 13. [Month-End Close Process](#13-month-end-close-process)
 
@@ -427,9 +428,27 @@ what to enter, in what order, and what records get created.
    - `EXPENSE - General operating (Shared)`: serves both lines
    - `EXPENSE - Not sure (needs review)`: you cannot tell which
 5. **Upload the receipt** (photo from a phone is fine) and submit.
-6. **Review:** open **Review** and clear any flags. "Not sure" entries stay flagged until the owner recodes them (Purchases → Edit → change the category). Shared entries are not flagged for being shared. Click **Mark Reviewed** once you have checked an entry; this does not clear any warning that is still true (for example a missing receipt).
+6. **Review (administrator):** open **Review** and clear any flags. "Not sure" entries stay flagged until the owner recodes them (Purchases → Edit → change the category). Shared entries are not flagged for being shared. Click **Mark Reviewed** once you have checked an entry; this records who reviewed it and when, and does not clear any warning that is still true (for example a missing receipt). A reviewed purchase is locked; to correct it, an administrator opens it and uses **Reopen for editing** with a reason.
 
 **Records created:** 1 purchase and 1 linked transaction (`transaction_type = purchase`). **No unit is created or linked.** Shared and Not sure entries carry `business_line` `shared` / `unallocated`.
+
+---
+
+## 11b. Sign In, Correct a Purchase, Review and Reopen
+
+**Sign in:** open the app address, enter your username and password. A temporary password must be changed at first sign-in (at least 12 characters). **Sign out** is at the bottom of the menu. Sessions last 12 hours; five wrong passwords lock the account for 15 minutes.
+
+**Employee entering and correcting:**
+1. Purchases → Record Purchase. The system records you as the person who entered it. "Who made the purchase" is a separate typed field.
+2. To correct a mistake, open the purchase from the list and edit it, as long as it is still *Needs Review*. A receipt can be added the same way.
+3. If the purchase shows as reviewed, it is read-only. Ask an administrator to reopen it.
+
+**Administrator:**
+1. Review, or Purchases → Mark Reviewed, records you as the reviewer with the time.
+2. To allow a correction, open the purchase → **Reopen for editing**, enter the reason. The reviewer is cleared; the page's History keeps who reviewed it before and why it was reopened.
+3. After the correction, mark it reviewed again.
+
+**Accounts (administrator, on ubuntu-dev):** `python -m app.scripts.users create --username belinda --display-name "Belinda" --role employee --temporary` prints a one-time password. Other commands: `reset-password`, `disable`, `enable`, `set-role`, `unlock`, `list`. The last active admin cannot be disabled or demoted.
 
 ---
 
