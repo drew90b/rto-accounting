@@ -206,3 +206,10 @@ def employee_client(_override_db):
 def client(admin_client):
     """The default client for route tests: signed in as an administrator."""
     return admin_client
+
+
+@pytest.fixture(autouse=True)
+def _receipt_storage(tmp_path, monkeypatch):
+    """Tests must never write into the real storage/receipts folder."""
+    import app.services.document_service as document_service
+    monkeypatch.setattr(document_service, "STORAGE_DIR", str(tmp_path / "receipts"))

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit Purchase' if purchase else 'Record Purchase' }}{% endblock %}
+{% from "purchases/_attribution.html" import entered_by, reviewed_by %}
 {% block content %}
 
 <div class="page-header">
@@ -10,6 +11,34 @@
 {% set error_msg = request.query_params.get('error') %}
 {% if error_msg %}
 <div class="alert-error" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;max-width:680px;">{{ error_msg | replace('+', ' ') }}</div>
+{% endif %}
+
+{% if purchase %}
+<div class="card" style="max-width:680px; margin-bottom:16px;">
+  <div style="font-size:13px; color:#374151;">
+    Entered by: <strong>{{ entered_by(purchase) }}</strong>
+    &nbsp;·&nbsp; Reviewed: <strong>{{ reviewed_by(purchase) }}</strong>
+  </div>
+  {% if not editable %}
+  <div class="alert alert-error" style="margin:10px 0 0;">
+    This purchase has been reviewed and can't be changed.
+    {% if request.state.user.is_admin %}Reopen it below to make a correction.{% else %}Ask an administrator to reopen it.{% endif %}
+  </div>
+  {% if request.state.user.is_admin %}
+  <form method="post" action="/purchases/{{ purchase.id }}/reopen" style="margin-top:10px;">
+    <div class="form-group">
+      <label for="reopen-reason">Reason for reopening *</label>
+      <input id="reopen-reason" type="text" name="reason" required>
+    </div>
+    <button type="submit" class="btn btn-secondary" style="margin-top:8px;">Reopen for editing</button>
+  </form>
+  {% endif %}
+  {% elif request.state.user.is_admin %}
+  <form method="post" action="/purchases/{{ purchase.id }}/reviewed" style="margin-top:10px;">
+    <button type="submit" class="btn btn-sm btn-secondary">Mark Reviewed</button>
+  </form>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if purchase and purchase.unit %}
@@ -27,6 +56,7 @@
 <div class="card" style="max-width:680px;">
   <form method="post" enctype="multipart/form-data"
         action="{% if purchase %}/purchases/{{ purchase.id }}/edit{% else %}/purchases/new{% endif %}">
+    <fieldset {% if purchase and not editable %}disabled{% endif %} style="border:0;padding:0;margin:0;min-width:0;">
     <div class="form-grid">
 
       <div class="form-section">What did you buy?</div>
@@ -178,11 +208,12 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Submit Purchase</button>
-        <a href="/purchases/" class="btn btn-secondary">Cancel</a>
+        {% if not purchase or editable %}<button type="submit" class="btn btn-primary">Submit Purchase</button>{% endif %}
+        <a href="/purchases/" class="btn btn-secondary">{% if purchase and not editable %}Back{% else %}Cancel{% endif %}</a>
       </div>
 
     </div>
+    </fieldset>
   </form>
 </div>
 

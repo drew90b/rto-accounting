@@ -3,20 +3,21 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import require_admin
+from app.auth import require_admin, require_user
 from app.database import get_db
 from app.models.purchase import Purchase
 from app.models.vendor import Vendor
 from app.models.document import Document
+from app.models.user import User
 from app.models.enums import PurchaseCategory, ReviewStatus
 from app.services.purchase_service import (
     record_purchase, sync_purchase_transaction, match_unit_by_stock_number, is_vehicle_purchase,
-    payment_source_suggestions,
+    payment_source_suggestions, is_editable, check_edit_allowed, mark_reviewed, reopen,
 )
 from app.services.document_service import save_uploaded_file
 
@@ -154,6 +155,7 @@ def new_purchase_form(request: Request, db: Session = Depends(get_db)):
 @router.post("/new")
 async def create_purchase(
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
     purchaser: str = Form(...),
     purchase_date: str = Form(...),
     vendor: str = Form(...),
@@ -163,7 +165,6 @@ async def create_purchase(
     stock_number: str = Form(""),
     mileage: str = Form(""),
     description: str = Form(""),
-    entered_by: str = Form(""),
     shipping_cost: str = Form(""),
     other_fees: str = Form(""),
     vin: str = Form(""),
@@ -189,7 +190,9 @@ async def create_purchase(
             stock_number=stock_number,
             mileage=_parse_int(mileage),
             description=description,
-            entered_by=entered_by or purchaser,
+            # Who entered it is the signed-in user, never a form field.
+            entered_by=user.display_name,
+            entered_by_user_id=user.id,
             shipping_cost=_d(shipping_cost) or Decimal("0"),
             other_fees=_d(other_fees) or Decimal("0"),
             vin=vin,
@@ -207,7 +210,7 @@ async def create_purchase(
             linked_record_type="purchase",
             record_id=purchase.id,
             file=receipt,
-            uploaded_by=entered_by or purchaser,
+            uploaded_by=user.display_name,
             db=db,
         )
         purchase.receipt_attached = True
@@ -218,7 +221,10 @@ async def create_purchase(
 
 
 @router.get("/{purchase_id}/edit", response_class=HTMLResponse)
-def edit_purchase_form(purchase_id: int, request: Request, db: Session = Depends(get_db)):
+def edit_purchase_form(
+    purchase_id: int, request: Request, db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
     purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
     if not purchase:
         return RedirectResponse(url="/purchases/")
@@ -232,6 +238,7 @@ def edit_purchase_form(purchase_id: int, request: Request, db: Session = Depends
         "request": request,
         "purchase": purchase,
         "receipt": receipt,
+        "editable": is_editable(purchase),
         **_form_context(db),
     })
 
@@ -240,6 +247,7 @@ def edit_purchase_form(purchase_id: int, request: Request, db: Session = Depends
 async def update_purchase(
     purchase_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
     purchaser: str = Form(...),
     purchase_date: str = Form(...),
     vendor: str = Form(...),
@@ -249,7 +257,6 @@ async def update_purchase(
     stock_number: str = Form(""),
     mileage: str = Form(""),
     description: str = Form(""),
-    entered_by: str = Form(""),
     shipping_cost: str = Form(""),
     other_fees: str = Form(""),
     payment_source: str = Form(""),
@@ -261,12 +268,23 @@ async def update_purchase(
     if not purchase:
         return RedirectResponse(url="/purchases/", status_code=303)
 
+    # A reviewed purchase is locked for everyone; an admin reopens it first.
+    if not is_editable(purchase):
+        raise HTTPException(status_code=403, detail="This purchase has been reviewed and can't be changed. An administrator can reopen it.")
+
+    new_category = PurchaseCategory(category)
+    matched_unit = match_unit_by_stock_number(stock_number, db) if stock_number else None
+    try:
+        check_edit_allowed(purchase, new_category, matched_unit)
+    except ValueError as e:
+        return RedirectResponse(url=f"/purchases/{purchase_id}/edit?error={str(e).replace(' ', '+')}", status_code=303)
+
     v = find_or_create_vendor(vendor, db)
-    # Editing can link a purchase to a newly-matched unit; it never silently
+    # A non-vehicle purchase links to a newly-matched unit; it never silently
     # unlinks one just because the free-text stock number stopped matching
     # (e.g. it was never expected to equal an auto-created unit's unit_id).
-    matched_unit = match_unit_by_stock_number(stock_number, db) if stock_number else None
-    if matched_unit:
+    # A vehicle purchase keeps its unit: check_edit_allowed rejected any other match.
+    if matched_unit and not is_vehicle_purchase(purchase.category):
         purchase.unit_id = matched_unit.id
 
     purchase.purchaser = purchaser
@@ -280,7 +298,6 @@ async def update_purchase(
     purchase.stock_number = stock_number or None
     purchase.mileage = _parse_int(mileage)
     purchase.description = description or None
-    purchase.entered_by = entered_by or None
 
     sync_purchase_transaction(purchase, db)
 
@@ -293,7 +310,7 @@ async def update_purchase(
             linked_record_type="purchase",
             record_id=purchase.id,
             file=receipt,
-            uploaded_by=entered_by or purchaser,
+            uploaded_by=user.display_name,
             db=db,
         )
         purchase.receipt_attached = True
@@ -304,13 +321,27 @@ async def update_purchase(
     return RedirectResponse(url=f"/purchases/{purchase_id}/edit?msg=Purchase+updated", status_code=303)
 
 
-@router.post("/{purchase_id}/review", dependencies=[Depends(require_admin)])
-def toggle_review_status(purchase_id: int, db: Session = Depends(get_db)):
+@router.post("/{purchase_id}/reviewed")
+def mark_purchase_reviewed(
+    purchase_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin),
+):
+    purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
+    if purchase and mark_reviewed(purchase, user, db):
+        db.commit()
+    return RedirectResponse(url="/purchases/?msg=Marked+reviewed", status_code=303)
+
+
+@router.post("/{purchase_id}/reopen")
+def reopen_purchase(
+    purchase_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin),
+    reason: str = Form(""),
+):
     purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
     if not purchase:
         return RedirectResponse(url="/purchases/", status_code=303)
-    purchase.review_status = (
-        ReviewStatus.pending if purchase.review_status == ReviewStatus.reviewed else ReviewStatus.reviewed
-    )
+    try:
+        reopen(purchase, user, reason, db)
+    except ValueError as e:
+        return RedirectResponse(url=f"/purchases/{purchase_id}/edit?error={str(e).replace(' ', '+')}", status_code=303)
     db.commit()
-    return RedirectResponse(url="/purchases/?msg=Review+status+updated", status_code=303)
+    return RedirectResponse(url=f"/purchases/{purchase_id}/edit?msg=Reopened+for+editing", status_code=303)

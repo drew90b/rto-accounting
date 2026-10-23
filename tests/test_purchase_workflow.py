@@ -374,7 +374,7 @@ def test_edit_purchase_syncs_linked_transaction(client, db):
 # Review workflow
 # ---------------------------------------------------------------------------
 
-def test_review_toggle_marks_reviewed_then_back_to_needs_review(client, db):
+def test_review_then_reopen_returns_purchase_to_needs_review(client, db):
     r = post_purchase(client)
     assert r.status_code == 303
 
@@ -383,12 +383,13 @@ def test_review_toggle_marks_reviewed_then_back_to_needs_review(client, db):
     purchase = db.query(Purchase).order_by(Purchase.id.desc()).first()
     assert purchase.review_status == ReviewStatus.pending
 
-    r2 = client.post(f"/purchases/{purchase.id}/review", follow_redirects=False)
+    r2 = client.post(f"/purchases/{purchase.id}/reviewed", follow_redirects=False)
     assert r2.status_code == 303
     db.expire(purchase)
     assert purchase.review_status == ReviewStatus.reviewed
 
-    r3 = client.post(f"/purchases/{purchase.id}/review", follow_redirects=False)
+    r3 = client.post(f"/purchases/{purchase.id}/reopen", data={"reason": "wrong amount"},
+                     follow_redirects=False)
     assert r3.status_code == 303
     db.expire(purchase)
     assert purchase.review_status == ReviewStatus.pending
@@ -423,7 +424,7 @@ def test_purchase_list_filters_by_review_status(client, db):
     assert r0.status_code == 303
     from app.models.purchase import Purchase
     purchase = db.query(Purchase).order_by(Purchase.id.desc()).first()
-    client.post(f"/purchases/{purchase.id}/review", follow_redirects=False)
+    client.post(f"/purchases/{purchase.id}/reviewed", follow_redirects=False)
 
     r = client.get("/purchases/", params={"review_status": "reviewed"})
     assert r.status_code == 200

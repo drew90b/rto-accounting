@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Purchases{% endblock %}
+{% from "purchases/_attribution.html" import entered_by, reviewed_by %}
 {% block content %}
 
 <div class="page-header">
   <h1 class="page-title">Purchases</h1>
   <div class="page-header-actions">
-    <a href="/purchases/export" class="btn btn-secondary">Export Excel</a>
+    {% if request.state.user.is_admin %}<a href="/purchases/export" class="btn btn-secondary">Export Excel</a>{% endif %}
     <a href="/purchases/new" class="btn btn-primary">+ Record Purchase</a>
   </div>
 </div>
@@ -43,6 +44,7 @@
         <th>Acquisition Cost</th>
         <th>Expense Category</th>
         <th>Purchaser</th>
+        <th>Entered by</th>
         <th>Payment Source</th>
         <th>Receipt</th>
         <th>Review</th>
@@ -66,24 +68,26 @@
         <td>{% if p.unit and p.unit.acquisition_cost %}${{ "%.2f" | format(p.unit.acquisition_cost | float) }}{% else %}—{% endif %}</td>
         <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px;" title="{{ p.category.value if p.category else '' }}">{{ p.category.value if p.category else '—' }}</td>
         <td>{{ p.purchaser }}</td>
+        <td style="font-size:12px;">{{ entered_by(p) }}</td>
         <td>{{ p.transaction.payment_source if p.transaction and p.transaction.payment_source else '—' }}</td>
         <td>{% if p.receipt_attached %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-red">No</span>{% endif %}</td>
         <td>
           {% if p.review_status.value == 'reviewed' %}<span class="badge badge-green">Reviewed</span>
           {% elif p.review_status.value == 'approved' %}<span class="badge badge-blue">Approved</span>
           {% else %}<span class="badge badge-yellow">Needs Review</span>{% endif %}
+          {% if p.reviewed_by_user %}<div class="form-hint">{{ reviewed_by(p) }}</div>{% endif %}
         </td>
         <td style="white-space:nowrap;">
           <a href="/purchases/{{ p.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
-          <form method="post" action="/purchases/{{ p.id }}/review" style="display:inline;">
-            <button type="submit" class="btn btn-sm btn-secondary">
-              {% if p.review_status.value == 'reviewed' %}Mark Needs Review{% else %}Mark Reviewed{% endif %}
-            </button>
+          {% if request.state.user.is_admin and p.review_status.value == 'pending' %}
+          <form method="post" action="/purchases/{{ p.id }}/reviewed" style="display:inline;">
+            <button type="submit" class="btn btn-sm btn-secondary">Mark Reviewed</button>
           </form>
+          {% endif %}
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="11" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
+      <tr><td colspan="12" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
       {% endfor %}
     </tbody>
   </table>

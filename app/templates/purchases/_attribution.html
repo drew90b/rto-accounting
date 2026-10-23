@@ -1,0 +1,12 @@
+{# Who entered and who reviewed a purchase, kept separate from who made it. #}
+{% macro entered_by(p) -%}
+  {%- if p.entered_by_user -%}{{ p.entered_by_user.display_name }}
+  {%- elif p.entered_by -%}{{ p.entered_by }} <span class="form-hint">(typed, not verified)</span>
+  {%- else -%}Not recorded{%- endif -%}
+{%- endmacro %}
+
+{% macro reviewed_by(p) -%}
+  {%- if p.reviewed_by_user -%}{{ p.reviewed_by_user.display_name }}{% if p.reviewed_at %}, {{ p.reviewed_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+  {%- elif p.review_status.value in ('reviewed', 'approved') -%}Reviewed — reviewer not recorded
+  {%- else -%}Not yet reviewed{%- endif -%}
+{%- endmacro %}

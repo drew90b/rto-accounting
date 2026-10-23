@@ -37,9 +37,17 @@ Rules enforced:
   - transaction_type is always 'purchase'. The Transaction is the accounting
     ledger entry; Purchase is the durable record of what was submitted.
 
+Attribution and review:
+  - entered_by_user_id / reviewed_by_user_id come from the signed-in user, never
+    from a form field, and are separate from purchaser (who made the purchase).
+  - Only a pending purchase can be edited. Marking it reviewed locks it for
+    everyone; an admin must reopen it (with a reason) before it can change, so
+    "reviewed" always describes the figures that were actually reviewed.
+  - Every review and reopen is written to purchase_events.
+
 Caller must db.commit() after each function returns.
 """
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -50,7 +58,9 @@ from app.models.purchase import Purchase
 from app.models.transaction import Transaction
 from app.models.vendor import Vendor
 from app.models.unit import Unit
-from app.models.enums import PurchaseCategory, UnitType
+from app.models.enums import PurchaseCategory, PurchaseEventAction, ReviewStatus, UnitType
+from app.models.purchase_event import PurchaseEvent
+from app.models.user import User
 
 _GOLF_CART_CATEGORIES = {
     PurchaseCategory.parts_flip_golf_cart_build,
@@ -164,6 +174,7 @@ def record_purchase(
     make: str = "",
     model: str = "",
     payment_source: str = "",
+    entered_by_user_id: Optional[int] = None,
     db: Session,
 ) -> Purchase:
     vendor = find_or_create_vendor(vendor_name, db)
@@ -207,6 +218,7 @@ def record_purchase(
         mileage=mileage,
         description=description or None,
         entered_by=entered_by or None,
+        entered_by_user_id=entered_by_user_id,
     )
     db.add(purchase)
     db.flush()
@@ -248,7 +260,90 @@ def sync_purchase_transaction(purchase: Purchase, db: Session) -> None:
         t.amount = total
         t.description = purchase.description or purchase.category.value
         t.category = purchase.category.name
-        t.entered_by = purchase.entered_by
 
     if is_vehicle_purchase(purchase.category) and purchase.unit:
         purchase.unit.acquisition_cost = total
+
+
+# ---------------------------------------------------------------------------
+# Editing rules
+# ---------------------------------------------------------------------------
+
+def is_editable(purchase: Purchase) -> bool:
+    """Only a pending purchase can change; reviewed and approved ones are locked."""
+    return purchase.review_status == ReviewStatus.pending
+
+
+def check_edit_allowed(purchase: Purchase, new_category: PurchaseCategory, matched_unit: Optional[Unit]) -> None:
+    """
+    Raise ValueError if an edit would damage a linked Unit.
+
+    Saving an edit pushes a vehicle purchase's total onto its Unit's
+    acquisition_cost, so a stock-number typo that matches a different unit, or
+    a category change that turns a parts purchase into a vehicle purchase (or
+    the reverse), would overwrite the wrong unit's cost.
+    """
+    was_vehicle = is_vehicle_purchase(purchase.category)
+    will_be_vehicle = is_vehicle_purchase(new_category)
+    if was_vehicle != will_be_vehicle:
+        raise ValueError(
+            "The category can't change between a vehicle purchase and a parts/expense "
+            "purchase here, because that would change a vehicle's cost. Ask an administrator."
+        )
+    if was_vehicle and business_line_for_category(new_category) != business_line_for_category(purchase.category):
+        raise ValueError("A vehicle purchase can't move between car and golf cart. Ask an administrator.")
+    if was_vehicle and matched_unit and matched_unit.id != purchase.unit_id:
+        raise ValueError(
+            f"That stock number belongs to a different unit ({matched_unit.unit_id}). "
+            "A vehicle purchase can't be re-linked here. Ask an administrator."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Review and history
+# ---------------------------------------------------------------------------
+
+def add_event(
+    db: Session, purchase: Purchase, user: User, action: PurchaseEventAction,
+    changes: Optional[dict] = None, note: Optional[str] = None,
+) -> PurchaseEvent:
+    event = PurchaseEvent(
+        purchase_id=purchase.id, user_id=user.id, action=action,
+        changes=changes or None, note=note or None,
+    )
+    db.add(event)
+    return event
+
+
+def mark_reviewed(purchase: Purchase, user: User, db: Session) -> bool:
+    """Mark a pending purchase reviewed by `user`. Returns False if it was not pending."""
+    if purchase.review_status != ReviewStatus.pending:
+        return False
+    purchase.review_status = ReviewStatus.reviewed
+    purchase.reviewed_by_user_id = user.id
+    purchase.reviewed_at = datetime.utcnow()
+    add_event(db, purchase, user, PurchaseEventAction.reviewed)
+    return True
+
+
+def reopen(purchase: Purchase, user: User, reason: str, db: Session) -> None:
+    """
+    Return a reviewed purchase to pending so it can be corrected. The reason is
+    required. The previous reviewer and time are kept in the event, since the
+    purchase itself no longer says who reviewed it.
+    """
+    reason = reason.strip()
+    if not reason:
+        raise ValueError("A reason is required to reopen a purchase.")
+    if purchase.review_status == ReviewStatus.pending:
+        raise ValueError("That purchase is already open for editing.")
+    previous = purchase.reviewed_by_user.display_name if purchase.reviewed_by_user else None
+    previous_at = purchase.reviewed_at.isoformat(timespec="minutes") if purchase.reviewed_at else None
+    purchase.review_status = ReviewStatus.pending
+    purchase.reviewed_by_user_id = None
+    purchase.reviewed_at = None
+    add_event(
+        db, purchase, user, PurchaseEventAction.reopened,
+        changes={"reviewed_by": [previous, None], "reviewed_at": [previous_at, None]},
+        note=reason,
+    )

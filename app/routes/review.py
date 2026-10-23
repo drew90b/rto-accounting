@@ -22,7 +22,9 @@ from app.database import get_db
 from app.models.purchase import Purchase
 from app.models.transaction import Transaction
 from app.models.enums import PurchaseCategory, ReviewStatus, TransactionType
-from app.services.purchase_service import is_vehicle_purchase, is_payment_source_unknown
+from app.auth import require_admin
+from app.models.user import User
+from app.services.purchase_service import is_vehicle_purchase, is_payment_source_unknown, mark_reviewed
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -131,10 +133,11 @@ def review_count(db: Session = Depends(get_db)):
 
 
 @router.post("/purchases/{purchase_id}/reviewed")
-def mark_purchase_reviewed(purchase_id: int, db: Session = Depends(get_db)):
+def mark_purchase_reviewed(
+    purchase_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin),
+):
     purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
-    if purchase:
-        purchase.review_status = ReviewStatus.reviewed
+    if purchase and mark_reviewed(purchase, user, db):
         db.commit()
     return RedirectResponse(url="/review/?msg=Marked+reviewed", status_code=303)
 
