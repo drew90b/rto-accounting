@@ -106,6 +106,19 @@ class RevenueStream(str, enum.Enum):
     car_repair = "car_repair"
 
 
+class UserRole(str, enum.Enum):
+    admin = "admin"
+    employee = "employee"
+
+
+class PurchaseEventAction(str, enum.Enum):
+    created = "created"
+    edited = "edited"
+    receipt_added = "receipt_added"
+    reviewed = "reviewed"
+    reopened = "reopened"
+
+
 class ReviewStatus(str, enum.Enum):
     pending = "pending"
     reviewed = "reviewed"

@@ -31,7 +31,14 @@ class Purchase(Base):
     review_status = Column(SAEnum(ReviewStatus), default=ReviewStatus.pending, nullable=False)
     receipt_attached = Column(Boolean, default=False)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    # Free text. Historical rows only; native rows are attributed by entered_by_user_id.
     entered_by = Column(String(50))
+    # Set by the server from the signed-in user, never from a form field.
+    # purchaser (above) is who made the purchase; these are who entered/reviewed it.
+    # NULL on historical rows: attribution is never backfilled or guessed.
+    entered_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     # Set only by the historical importer (app/scripts/import_historical_purchases.py)
     # so a re-run can never create a duplicate. NULL for every native/UI-created purchase.
     source_reference = Column(String(100), unique=True, nullable=True)
@@ -41,3 +48,9 @@ class Purchase(Base):
     vendor = relationship("Vendor", back_populates="purchases")
     unit = relationship("Unit", back_populates="purchases")
     transaction = relationship("Transaction", back_populates="purchase")
+    entered_by_user = relationship("User", foreign_keys=[entered_by_user_id])
+    reviewed_by_user = relationship("User", foreign_keys=[reviewed_by_user_id])
+    events = relationship(
+        "PurchaseEvent", back_populates="purchase", order_by="PurchaseEvent.id",
+        cascade="all, delete-orphan",
+    )

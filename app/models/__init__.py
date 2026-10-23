@@ -10,9 +10,11 @@ from app.models.document import Document
 from app.models.exception_record import ExceptionRecord
 from app.models.invoice import Invoice, InvoiceItem
 from app.models.purchase import Purchase
+from app.models.user import User
+from app.models.purchase_event import PurchaseEvent
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
     "LeaseAccount", "Payment", "Transaction", "Document", "ExceptionRecord",
-    "Invoice", "InvoiceItem", "Purchase",
+    "Invoice", "InvoiceItem", "Purchase", "User", "PurchaseEvent",
 ]
