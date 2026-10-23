@@ -111,6 +111,18 @@ def unlock_user(user: User) -> None:
     user.locked_until = None
 
 
+def is_locked(user: User) -> bool:
+    return bool(user.locked_until and user.locked_until > datetime.utcnow())
+
+
+def record_failure(user: User) -> None:
+    """Count a wrong password; lock the account after MAX_FAILED_LOGINS in a row."""
+    user.failed_login_count += 1
+    if user.failed_login_count >= MAX_FAILED_LOGINS:
+        user.locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
+        user.failed_login_count = 0
+
+
 def authenticate(db: Session, username: str, password: str) -> Optional[User]:
     """Return the user if the credentials are good, else None. Records failures."""
     user = get_user_by_username(db, username)
@@ -123,10 +135,7 @@ def authenticate(db: Session, username: str, password: str) -> Optional[User]:
         return None
     if not user.active or not verify_password(user.password_hash, password):
         if user.active:
-            user.failed_login_count += 1
-            if user.failed_login_count >= MAX_FAILED_LOGINS:
-                user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
-                user.failed_login_count = 0
+            record_failure(user)
         return None
     user.failed_login_count = 0
     user.locked_until = None

@@ -206,8 +206,9 @@ async def create_purchase(
     except ValueError as e:
         return RedirectResponse(url=f"/purchases/new?error={str(e).replace(' ', '+')}", status_code=303)
 
+    saved = None
     if receipt and receipt.filename:
-        save_uploaded_file(
+        saved = save_uploaded_file(
             linked_record_type="purchase",
             record_id=purchase.id,
             file=receipt,
@@ -222,9 +223,9 @@ async def create_purchase(
     snapshot = purchase_snapshot(purchase)
     add_event(db, purchase, user, PurchaseEventAction.created,
               changes={k: [None, v] for k, v in snapshot.items() if v is not None})
-    if receipt and receipt.filename:
+    if saved:
         add_event(db, purchase, user, PurchaseEventAction.receipt_added,
-                  changes={"receipt": [None, receipt.filename]})
+                  changes={"receipt": [None, saved.original_filename]})
 
     db.commit()
     return RedirectResponse(url=f"/purchases/{purchase.id}/edit?msg=Purchase+recorded", status_code=303)
@@ -323,7 +324,7 @@ async def update_purchase(
         add_event(db, purchase, user, PurchaseEventAction.edited, changes=changes)
 
     if receipt and receipt.filename:
-        save_uploaded_file(
+        saved = save_uploaded_file(
             linked_record_type="purchase",
             record_id=purchase.id,
             file=receipt,
@@ -334,7 +335,7 @@ async def update_purchase(
         if purchase.transaction:
             purchase.transaction.receipt_attached = True
         add_event(db, purchase, user, PurchaseEventAction.receipt_added,
-                  changes={"receipt": [None, receipt.filename]})
+                  changes={"receipt": [None, saved.original_filename]})
 
     db.commit()
     return RedirectResponse(url=f"/purchases/{purchase_id}/edit?msg=Purchase+updated", status_code=303)

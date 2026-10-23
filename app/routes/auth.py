@@ -68,7 +68,13 @@ def change_password(
             "request": request, "error": message, "forced": user.must_change_password,
         }, status_code=400)
 
+    # Guessing the current password here is throttled like sign-in, so an
+    # unattended session can't be used to find it and take over the account.
+    if user_service.is_locked(user):
+        return again("Too many wrong passwords. Try again in a few minutes.")
     if not user_service.verify_password(user.password_hash, current_password):
+        user_service.record_failure(user)
+        db.commit()
         return again("Current password is wrong.")
     if new_password != confirm_password:
         return again("The new passwords do not match.")

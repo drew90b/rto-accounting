@@ -18,7 +18,8 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)  # stored lowercase
     display_name = Column(String(100), nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(SAEnum(UserRole), nullable=False)
+    # native_enum=False: the column is varchar (migration 009), not a Postgres enum type.
+    role = Column(SAEnum(UserRole, native_enum=False, length=20), nullable=False)
     active = Column(Boolean, nullable=False, default=True)
     session_version = Column(Integer, nullable=False, default=1)
     must_change_password = Column(Boolean, nullable=False, default=True)

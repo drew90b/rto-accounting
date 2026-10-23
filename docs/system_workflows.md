@@ -436,7 +436,7 @@ what to enter, in what order, and what records get created.
 
 ## 11b. Sign In, Correct a Purchase, Review and Reopen
 
-**Sign in:** open the app address, enter your username and password. A temporary password must be changed at first sign-in (at least 12 characters). **Sign out** is at the bottom of the menu. Sessions last 12 hours; five wrong passwords lock the account for 15 minutes.
+**Sign in:** open the app address, enter your username and password. A temporary password must be changed at first sign-in (at least 12 characters). **Sign out** is at the bottom of the menu. Sessions end after 30 minutes without use, and in any case 12 hours after sign-in. Five wrong passwords, at sign-in or as the "current password" on the change-password page, lock the account for 15 minutes.
 
 **Employee entering and correcting:**
 1. Purchases → Record Purchase. The system records you as the person who entered it. "Who made the purchase" is a separate typed field.

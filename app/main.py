@@ -22,6 +22,13 @@ if len(config.SESSION_SECRET) < 32:
         "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(48))'"
     )
 
+if not config.ALLOWED_ORIGINS:
+    # Without it every POST (including sign-in) is refused and the app looks healthy.
+    raise RuntimeError(
+        "ALLOWED_ORIGINS must be set to the address(es) people use to reach the app, "
+        "e.g. ALLOWED_ORIGINS=http://100.123.116.111:8000 (scheme and port included, comma-separated)."
+    )
+
 # The API docs would show the whole route map to anyone, signed in or not.
 app = FastAPI(title="RTO Accounting System", docs_url=None, redoc_url=None, openapi_url=None)
 

@@ -4,7 +4,8 @@ Sign-in enforcement.
 Every request re-reads the user from the database, so disabling an account or
 changing a role takes effect on the very next click. The session cookie is
 signed (not encrypted) and holds only uid, ver (the user's session_version)
-and login_at; nothing sensitive.
+login_at and seen_at; nothing sensitive. A session ends after SESSION_MAX_HOURS
+from sign-in, or after SESSION_IDLE_MINUTES without a request.
 
   require_user   - signed in; sends a user who must change their password to
                    /account/password first.
@@ -40,7 +41,9 @@ def start_session(request: Request, user: User) -> None:
     request.session.clear()
     request.session["uid"] = user.id
     request.session["ver"] = user.session_version
-    request.session["login_at"] = int(time.time())
+    now = int(time.time())
+    request.session["login_at"] = now
+    request.session["seen_at"] = now
 
 
 def _user_from_session(request: Request, db: Session) -> Optional[User]:
@@ -48,11 +51,16 @@ def _user_from_session(request: Request, db: Session) -> Optional[User]:
     uid, ver, login_at = session.get("uid"), session.get("ver"), session.get("login_at")
     if not isinstance(uid, int) or not isinstance(login_at, int):
         return None
-    if time.time() - login_at > config.SESSION_MAX_HOURS * 3600:
+    now = time.time()
+    if now - login_at > config.SESSION_MAX_HOURS * 3600:
+        return None
+    seen_at = session.get("seen_at", login_at)
+    if not isinstance(seen_at, int) or now - seen_at > config.SESSION_IDLE_MINUTES * 60:
         return None
     user = db.query(User).filter(User.id == uid).first()
     if user is None or not user.active or user.session_version != ver:
         return None
+    session["seen_at"] = int(now)  # sliding: each request restarts the idle clock
     return user
 
 

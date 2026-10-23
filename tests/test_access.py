@@ -310,3 +310,95 @@ def test_app_refuses_to_start_without_a_session_secret():
                             capture_output=True, text=True,
                             cwd=os.path.dirname(os.path.dirname(__file__)))
     assert result.returncode != 0 and "SESSION_SECRET" in result.stderr
+
+
+# --- Idle timeout (30 minutes) inside the 12-hour absolute limit --------------
+
+class Clock:
+    """Stands in for auth.time so a test can move time forward."""
+    def __init__(self):
+        self.offset = 0
+
+    def time(self):
+        return time.time() + self.offset
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    c = Clock()
+    monkeypatch.setattr(auth, "time", c)
+    return c
+
+
+def test_session_survives_29_idle_minutes(anon_client, db, clock):
+    signed_in(anon_client, db)
+    clock.offset = 29 * 60
+    assert anon_client.get("/purchases/", follow_redirects=False).status_code == 200
+
+
+def test_session_ends_after_31_idle_minutes(anon_client, db, clock):
+    signed_in(anon_client, db)
+    clock.offset = 31 * 60
+    r = anon_client.get("/purchases/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+
+
+def test_activity_restarts_the_idle_clock_but_not_the_12_hour_limit(anon_client, db, clock):
+    signed_in(anon_client, db)
+    for minutes in range(25, 12 * 60, 25):       # a request every 25 minutes keeps it alive
+        clock.offset = minutes * 60
+        assert anon_client.get("/purchases/", follow_redirects=False).status_code == 200, minutes
+    clock.offset = 12 * 3600 + 60                 # ...until the absolute limit
+    assert anon_client.get("/purchases/", follow_redirects=False).status_code == 303
+
+
+def test_idle_session_cannot_post(anon_client, db, clock):
+    signed_in(anon_client, db)
+    clock.offset = 31 * 60
+    r = anon_client.post("/purchases/new", data={}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+# --- Startup configuration ---------------------------------------------------
+
+def test_app_refuses_to_start_without_allowed_origins():
+    env = {**os.environ, "ALLOWED_ORIGINS": ""}
+    result = subprocess.run([sys.executable, "-c", "import app.main"], env=env,
+                            capture_output=True, text=True,
+                            cwd=os.path.dirname(os.path.dirname(__file__)))
+    assert result.returncode != 0 and "ALLOWED_ORIGINS must be set" in result.stderr
+
+
+# --- Current-password guesses are throttled ------------------------------------
+
+def test_wrong_current_passwords_lock_the_account(anon_client, db):
+    user = signed_in(anon_client, db)
+
+    def guess(pw):
+        return anon_client.post("/account/password", follow_redirects=False, data={
+            "current_password": pw, "new_password": "new password 12345",
+            "confirm_password": "new password 12345"})
+
+    for _ in range(svc.MAX_FAILED_LOGINS):
+        assert guess("wrong password!!").status_code == 400
+    db.refresh(user)
+    assert user.locked_until is not None
+    # Even the right current password is refused while locked, and nothing changed.
+    r = guess(TEST_PASSWORD)
+    assert r.status_code == 400 and "Too many" in r.text
+    db.refresh(user)
+    assert svc.verify_password(user.password_hash, TEST_PASSWORD)
+    # The lock also blocks signing in again until it expires or is cleared.
+    anon_client.post("/logout")
+    assert login(anon_client).status_code == 401
+
+
+def test_a_correct_password_change_still_works_after_a_few_misses(anon_client, db):
+    user = signed_in(anon_client, db)
+    for _ in range(svc.MAX_FAILED_LOGINS - 1):
+        anon_client.post("/account/password", data={
+            "current_password": "wrong password!!", "new_password": "x" * 14, "confirm_password": "x" * 14})
+    r = anon_client.post("/account/password", follow_redirects=False, data={
+        "current_password": TEST_PASSWORD, "new_password": "new password 12345",
+        "confirm_password": "new password 12345"})
+    assert r.status_code == 303

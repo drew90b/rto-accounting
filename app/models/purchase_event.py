@@ -19,7 +19,9 @@ class PurchaseEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     purchase_id = Column(Integer, ForeignKey("purchases.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    action = Column(SAEnum(PurchaseEventAction), nullable=False)
+    # native_enum=False: the column is varchar (migration 009). A native enum makes
+    # Postgres cast batched inserts to a type that does not exist.
+    action = Column(SAEnum(PurchaseEventAction, native_enum=False, length=20), nullable=False)
     changes = Column(JSON, nullable=True)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -89,3 +89,34 @@ def test_historical_purchase_has_no_history_section(admin_client, db):
         db.delete(e)
     db.commit()
     assert "<div class=\"card-title\">History</div>" not in admin_client.get(f"/purchases/{p.id}/edit").text
+
+
+def test_history_records_the_stored_sanitized_filename(employee_client, db):
+    # On create...
+    r = employee_client.post(
+        "/purchases/new",
+        data={"purchaser": "P", "purchase_date": "2026-11-02", "vendor": "Evil Name Vendor",
+              "amount": "5.00", "category": 'PARTS - "RTO" car parts (Repair)',
+              "payment_source": "Cash"},
+        files=upload("../../evil.pdf"), follow_redirects=False)
+    assert r.status_code == 303
+    (e,) = events(db, A.receipt_added)
+    assert e.changes == {"receipt": [None, "evil.pdf"]}
+    # ...and on edit.
+    p = last_purchase(db)
+    employee_client.post(f"/purchases/{p.id}/edit", data=edit_data(p), files=upload("..\\..\\other.pdf"))
+    names = [e.changes["receipt"][1] for e in events(db, A.receipt_added)]
+    assert names == ["evil.pdf", "other.pdf"]
+    html = employee_client.get(f"/purchases/{p.id}/edit").text
+    assert "../../evil.pdf" not in html and "evil.pdf" in html
+
+
+def test_created_and_receipt_events_flush_together(employee_client, db):
+    """Create with a receipt writes two events in one flush (the case that crashed on Postgres)."""
+    employee_client.post(
+        "/purchases/new",
+        data={"purchaser": "P", "purchase_date": "2026-11-02", "vendor": "Receipt Vendor",
+              "amount": "5.00", "category": 'PARTS - "RTO" car parts (Repair)',
+              "payment_source": "Cash"},
+        files=upload("r.jpg"))
+    assert [e.action for e in events(db)] == [A.created, A.receipt_added]

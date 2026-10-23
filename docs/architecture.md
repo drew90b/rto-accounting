@@ -40,10 +40,11 @@ docs/                — Project documentation
 
 ## Sign-In and Access Control
 
-- `SessionMiddleware` keeps a signed (not encrypted) cookie holding only `uid`, `ver` and `login_at`. `require_user` re-reads the user from the database on every request, so disabling an account or changing a role applies on the next click; sessions also end after `SESSION_MAX_HOURS` from sign-in.
+- `SessionMiddleware` keeps a signed (not encrypted) cookie holding only `uid`, `ver` and `login_at`. `require_user` re-reads the user from the database on every request, so disabling an account or changing a role applies on the next click; a session ends after `SESSION_MAX_HOURS` (default 12) from sign-in, or after `SESSION_IDLE_MINUTES` (default 30) without a request; activity restarts only the idle clock.
 - `app/main.py` includes every router with a dependency, so a new router is protected only if someone remembers to add one: Purchases and Documents use `require_user`, everything else `require_admin`, with admin-only routes inside those two. The route-inventory test catches mistakes.
 - `OriginCheckMiddleware` rejects any POST whose Origin (or Referer) is not in `ALLOWED_ORIGINS`.
-- `/docs`, `/redoc` and `/openapi.json` are disabled. The app refuses to start without `SESSION_SECRET`.
+- `/docs`, `/redoc` and `/openapi.json` are disabled. The app refuses to start without `SESSION_SECRET` or `ALLOWED_ORIGINS` (list every exact address people type, scheme and port included, or sign-in returns 403).
+- Enum columns that are varchar in the schema must be declared `SAEnum(..., native_enum=False)`; a native enum makes Postgres cast batched inserts to a type that does not exist. `tests/test_postgres_receipt.py` (opt-in, needs `RTO_TEST_POSTGRES_URL` pointing at a scratch database named `*_scratch`) exercises receipt creation on real Postgres.
 - Set `SESSION_COOKIE_SECURE=true` only when served over HTTPS (for example behind Tailscale Serve); over plain HTTP the cookie cannot be marked Secure.
 
 ---

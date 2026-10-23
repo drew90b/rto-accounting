@@ -27,3 +27,5 @@ ALLOWED_ORIGINS = [
 SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
 # Absolute session length, measured from sign-in.
 SESSION_MAX_HOURS = int(os.environ.get("SESSION_MAX_HOURS", "12"))
+# A session unused for this long ends, even inside the absolute limit.
+SESSION_IDLE_MINUTES = int(os.environ.get("SESSION_IDLE_MINUTES", "30"))
