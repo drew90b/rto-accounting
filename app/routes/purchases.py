@@ -14,10 +14,11 @@ from app.models.purchase import Purchase
 from app.models.vendor import Vendor
 from app.models.document import Document
 from app.models.user import User
-from app.models.enums import PurchaseCategory, ReviewStatus
+from app.models.enums import PurchaseCategory, PurchaseEventAction, ReviewStatus
 from app.services.purchase_service import (
     record_purchase, sync_purchase_transaction, match_unit_by_stock_number, is_vehicle_purchase,
     payment_source_suggestions, is_editable, check_edit_allowed, mark_reviewed, reopen,
+    add_event, purchase_snapshot, changes_between,
 )
 from app.services.document_service import save_uploaded_file
 
@@ -216,6 +217,15 @@ async def create_purchase(
         purchase.receipt_attached = True
         purchase.transaction.receipt_attached = True
 
+    db.flush()
+    db.expire(purchase, ["vendor", "unit", "transaction"])
+    snapshot = purchase_snapshot(purchase)
+    add_event(db, purchase, user, PurchaseEventAction.created,
+              changes={k: [None, v] for k, v in snapshot.items() if v is not None})
+    if receipt and receipt.filename:
+        add_event(db, purchase, user, PurchaseEventAction.receipt_added,
+                  changes={"receipt": [None, receipt.filename]})
+
     db.commit()
     return RedirectResponse(url=f"/purchases/{purchase.id}/edit?msg=Purchase+recorded", status_code=303)
 
@@ -279,6 +289,7 @@ async def update_purchase(
     except ValueError as e:
         return RedirectResponse(url=f"/purchases/{purchase_id}/edit?error={str(e).replace(' ', '+')}", status_code=303)
 
+    before = purchase_snapshot(purchase)
     v = find_or_create_vendor(vendor, db)
     # A non-vehicle purchase links to a newly-matched unit; it never silently
     # unlinks one just because the free-text stock number stopped matching
@@ -305,6 +316,12 @@ async def update_purchase(
     if payment_source.strip() and purchase.transaction:
         purchase.transaction.payment_source = payment_source.strip()
 
+    db.flush()
+    db.expire(purchase, ["vendor", "unit"])
+    changes = changes_between(before, purchase_snapshot(purchase))
+    if changes:
+        add_event(db, purchase, user, PurchaseEventAction.edited, changes=changes)
+
     if receipt and receipt.filename:
         save_uploaded_file(
             linked_record_type="purchase",
@@ -316,6 +333,8 @@ async def update_purchase(
         purchase.receipt_attached = True
         if purchase.transaction:
             purchase.transaction.receipt_attached = True
+        add_event(db, purchase, user, PurchaseEventAction.receipt_added,
+                  changes={"receipt": [None, receipt.filename]})
 
     db.commit()
     return RedirectResponse(url=f"/purchases/{purchase_id}/edit?msg=Purchase+updated", status_code=303)

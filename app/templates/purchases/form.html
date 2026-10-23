@@ -217,6 +217,29 @@
   </form>
 </div>
 
+{% if purchase and purchase.events %}
+<div class="card" style="max-width:680px; margin-top:16px;">
+  <div class="card-title">History</div>
+  <ul style="list-style:none;padding:0;margin:8px 0 0;font-size:13px;">
+    {% for e in purchase.events | reverse %}
+    <li style="padding:6px 0;border-top:1px solid #e5e7eb;">
+      <strong>{{ e.action.value | replace('_', ' ') | capitalize }}</strong>
+      by {{ e.user.display_name }}
+      <span class="form-hint">{{ e.created_at.strftime('%Y-%m-%d %H:%M') if e.created_at else '' }} UTC</span>
+      {% if e.note %}<div>Reason: {{ e.note }}</div>{% endif %}
+      {% if e.changes and e.action.value != 'created' %}
+      <ul style="margin:4px 0 0 16px;">
+        {% for field, change in e.changes.items() %}
+        <li>{{ field | replace('_', ' ') }}: {{ change[0] if change[0] is not none else '—' }} → {{ change[1] if change[1] is not none else '—' }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <script>
   // Progressive enhancement only: the Vehicle Details block is visible by
   // default (and fully usable) without JS. When JS is available, hide it

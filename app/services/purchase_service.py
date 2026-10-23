@@ -315,6 +315,36 @@ def add_event(
     return event
 
 
+_MONEY_FIELDS = ("amount", "shipping_cost", "other_fees")
+
+
+def purchase_snapshot(purchase: Purchase) -> dict:
+    """The fields a reviewer cares about, as plain readable values, for the history log."""
+    def money(value):
+        return None if value is None else f"{value:.2f}"
+
+    return {
+        "purchaser": purchase.purchaser,
+        "purchase_date": purchase.purchase_date.isoformat() if purchase.purchase_date else None,
+        "vendor": purchase.vendor.name if purchase.vendor else None,
+        "amount": money(purchase.amount),
+        "shipping_cost": money(purchase.shipping_cost),
+        "other_fees": money(purchase.other_fees),
+        "category": purchase.category.value if purchase.category else None,
+        "site_location": purchase.site_location or None,
+        "stock_number": purchase.stock_number or None,
+        "unit": purchase.unit.unit_id if purchase.unit else None,
+        "mileage": purchase.mileage,
+        "description": purchase.description or None,
+        "payment_source": purchase.transaction.payment_source if purchase.transaction else None,
+    }
+
+
+def changes_between(before: dict, after: dict) -> dict:
+    """{field: [old, new]} for the fields that differ. Empty when nothing changed."""
+    return {k: [before[k], after[k]] for k in after if before.get(k) != after[k]}
+
+
 def mark_reviewed(purchase: Purchase, user: User, db: Session) -> bool:
     """Mark a pending purchase reviewed by `user`. Returns False if it was not pending."""
     if purchase.review_status != ReviewStatus.pending:
