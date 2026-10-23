@@ -28,6 +28,10 @@ Update this file as work is completed.
 - [x] Stage 3: employees can create, list, search and edit **pending** purchases and attach receipts; they can download receipts linked to purchases and nothing else. Mark reviewed and reopen are admin-only (`POST /purchases/{id}/reviewed`, `/reopen` with a required reason; the old toggle is gone). A reviewed purchase is locked for everyone until reopened. Vehicle purchases keep their unit on edit, and category changes that cross the vehicle line (or car/golf cart) are rejected, so an edit cannot overwrite another unit's acquisition cost. The `entered_by` form field is gone and an edit no longer erases it. Receipts are stored under random names.
 - [x] Stage 4: `purchase_events` history (created, edited with old → new, receipt added, reviewed, reopened) shown on the purchase page.
 
+#### Unit cost provenance (added after review)
+- Review found that editing any purchase linked to an existing unit overwrote the unit's acquisition cost (a $5,001 unit became $300 when the only linked purchase, for $300, was saved). Fix: `purchases.created_unit` (in migration 009, default false, no backfill) is true only for the purchase that created the unit; only that purchase syncs a cost correction. Others leave the cost alone and are flagged "Unit cost not changed" in the review queue (new entries only; historical rows are not flagged). Tested with the $5,001 → $300 scenario, including when it is the only linked purchase, and with a second purchase on a unit the first created.
+- Historical purchases have `created_unit = false`, so editing them never changes a unit's cost; the owner corrects those on the unit if needed.
+
 #### Decisions
 - Reviewed means reviewed as it stands: no edits (including a late receipt) without an admin reopening with a reason. Reopen clears the reviewer; the event keeps who and when.
 - Historical purchases keep NULL attribution and show "(typed, not verified)" / "Reviewed — reviewer not recorded". Nothing is backfilled or guessed.
@@ -35,7 +39,7 @@ Update this file as work is completed.
 - `tests/conftest.py`: `client` is now signed in as an administrator through the real `POST /login`; `anon_client` and `employee_client` are added. Auth is never bypassed in tests. Tests also write receipts to a temporary folder (earlier runs left test folders under `storage/receipts/purchase/`; they were not touched).
 
 #### Validation
-- 264 tests pass, in random order, repeatedly. Deliberate breakages (an admin router opened to employees, the pending-only edit guard, the other-unit guard) were each caught.
+- 270 tests pass, in random order, repeatedly. Deliberate breakages (an admin router opened to employees, the pending-only edit guard, the other-unit guard) were each caught.
 - Migration 009 rehearsed on a throwaway PostgreSQL cluster restored from the pre-rollout backup: 007 → 008 → 009, downgrade to 008, upgrade again. The 962 purchases were byte-identical (checksum) and every attribution column was NULL. The app was then run against that copy and exercised end to end (sign-in, forced password change, Belinda's 403s, create/edit/review/reopen, history). `rto_accounting_dev` was not touched.
 
 #### Deployment still to do (needs the owner)

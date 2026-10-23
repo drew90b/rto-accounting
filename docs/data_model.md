@@ -258,6 +258,7 @@ Employee-facing purchase submission. Every purchase has one linked `transactions
 | description | text | YES | — | |
 | review_status | string | NO | `pending` | `pending`, `reviewed`, `approved` |
 | receipt_attached | boolean | YES | false | |
+| created_unit | boolean | NO | false | True only when this purchase created its unit and so established the unit's `acquisition_cost`. False for every row that existed before migration 009 (provenance unknown, never guessed) and for purchases that matched an existing unit. Added in migration 009. |
 | transaction_id | integer | YES | — | FK → transactions.id |
 | entered_by | varchar(50) | YES | — | Display name of the user who entered it (new rows) or the typed name (historical rows) |
 | entered_by_user_id | integer | YES | — | FK → users.id. The signed-in user who entered it. NULL on historical rows. Added in migration 009. |

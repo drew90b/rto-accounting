@@ -160,6 +160,7 @@ A purchase transaction with no `unit_id`, no `repair_job_id`, and `transaction_t
 - An employee can enter purchases, attach receipts, search and view all purchases, and correct **pending** purchases. Everything else (review, reopen, exports, the document list, every other module) is administrator-only. This is enforced on the server.
 - Who **made** the purchase (`purchaser`, typed) is separate from who **entered** it and who **reviewed** it (`entered_by_user_id`, `reviewed_by_user_id`, taken from the signed-in user, never from a form).
 - A reviewed (or approved) purchase cannot be edited by anyone, including a late receipt. An admin reopens it with a required reason, it is corrected, then reviewed again. The reviewer is cleared on reopen; the history keeps the earlier reviewer and the reason.
+- A unit's `acquisition_cost` is changed by an edit only if that purchase created the unit (`purchases.created_unit`). Being the only purchase linked to a unit proves nothing about who set its cost. A purchase that matched an existing unit, or any historical purchase, never overwrites it; when its total differs, the review queue shows "Unit cost not changed" so someone decides, and the unit's cost can be corrected on the unit itself.
 - A vehicle purchase cannot be re-linked to a different unit or change between a vehicle and a non-vehicle category through the edit form.
 - Historical purchases have no recorded entering or reviewing user. That is shown as such, never invented.
 

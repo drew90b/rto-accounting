@@ -9,9 +9,11 @@ record_purchase()   — atomically creates the Purchase and its linked
                        For every other category, Unit is linked only on a
                        best-effort stock-number match, same as before.
 sync_purchase_transaction() — re-applies a purchase's fields onto its linked
-                       Transaction (and, for a vehicle purchase, its Unit's
-                       acquisition_cost) after an edit, so corrections in the
-                       Purchases ledger are reflected everywhere else.
+                       Transaction after an edit, so corrections in the
+                       Purchases ledger are reflected everywhere else. A
+                       Unit's acquisition_cost is corrected only by the
+                       purchase that created the unit (created_unit); any
+                       other linked purchase leaves it alone.
 
 Rules enforced:
   - A Vendor is always linked. If no Vendor with a matching name (case
@@ -180,9 +182,11 @@ def record_purchase(
     vendor = find_or_create_vendor(vendor_name, db)
     business_line = business_line_for_category(category)
 
+    created_unit = False
     if is_vehicle_purchase(category):
         unit = resolve_vehicle_unit(stock_number, vin, db)
         acquisition_cost = amount + shipping_cost + other_fees
+        unit_is_new = unit is None
         if unit is None:
             unit = Unit(
                 unit_type=UnitType.car if business_line == "car" else UnitType.golf_cart,
@@ -200,6 +204,7 @@ def record_purchase(
             db.flush()
             unit.unit_id = f"U-{unit.id:04d}"
         transaction_amount = acquisition_cost
+        created_unit = unit_is_new
     else:
         unit = match_unit_by_stock_number(stock_number, db) if stock_number else None
         transaction_amount = amount
@@ -219,6 +224,7 @@ def record_purchase(
         description=description or None,
         entered_by=entered_by or None,
         entered_by_user_id=entered_by_user_id,
+        created_unit=created_unit,
     )
     db.add(purchase)
     db.flush()
@@ -247,9 +253,22 @@ def record_purchase(
     return purchase
 
 
+def purchase_total(purchase: Purchase) -> Decimal:
+    return purchase.amount + (purchase.shipping_cost or Decimal("0")) + (purchase.other_fees or Decimal("0"))
+
+
+def unit_cost_disagrees(purchase: Purchase) -> bool:
+    """A vehicle purchase linked to a unit it did not create, whose total differs from the
+    unit's acquisition cost. Nothing is synced in that case; someone has to decide."""
+    return bool(
+        is_vehicle_purchase(purchase.category) and purchase.unit and not purchase.created_unit
+        and purchase.unit.acquisition_cost != purchase_total(purchase)
+    )
+
+
 def sync_purchase_transaction(purchase: Purchase, db: Session) -> None:
     """Push a purchase's current fields onto its linked Transaction after an edit."""
-    total = purchase.amount + (purchase.shipping_cost or Decimal("0")) + (purchase.other_fees or Decimal("0"))
+    total = purchase_total(purchase)
 
     t = purchase.transaction
     if t:
@@ -261,7 +280,11 @@ def sync_purchase_transaction(purchase: Purchase, db: Session) -> None:
         t.description = purchase.description or purchase.category.value
         t.category = purchase.category.name
 
-    if is_vehicle_purchase(purchase.category) and purchase.unit:
+    # A correction reaches the unit's acquisition cost only if this purchase created
+    # the unit. A purchase that merely matched an existing unit (or whose origin is
+    # unknown) must never overwrite a cost someone else established; the review
+    # queue flags the mismatch instead.
+    if purchase.created_unit and purchase.unit:
         purchase.unit.acquisition_cost = total
 
 

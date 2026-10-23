@@ -24,7 +24,9 @@ from app.models.transaction import Transaction
 from app.models.enums import PurchaseCategory, ReviewStatus, TransactionType
 from app.auth import require_admin
 from app.models.user import User
-from app.services.purchase_service import is_vehicle_purchase, is_payment_source_unknown, mark_reviewed
+from app.services.purchase_service import (
+    is_vehicle_purchase, is_payment_source_unknown, mark_reviewed, purchase_total, unit_cost_disagrees,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -77,6 +79,13 @@ def _purchase_flags(purchase: Purchase) -> list:
             flags.append("Missing VIN")
         if not purchase.stock_number:
             flags.append("Missing stock number")
+    if purchase.source_reference is None and unit_cost_disagrees(purchase):
+        cost = purchase.unit.acquisition_cost
+        flags.append(
+            f"Unit cost not changed: this purchase ({purchase_total(purchase):,.2f}) did not create "
+            f"unit {purchase.unit.unit_id}, whose acquisition cost is "
+            f"{'not recorded' if cost is None else f'{cost:,.2f}'}. Confirm which is right."
+        )
     if purchase.category == PurchaseCategory.general_expense_unsure:
         flags.append("Classification uncertain: decide car, golf cart, or shared")
     # Shared is a valid classification, not a warning; it is not flagged.

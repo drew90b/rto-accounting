@@ -13,6 +13,9 @@ Rationale:
     columns stay NULL because the real entering/reviewing user was never
     recorded and must not be guessed.
 
+    purchases.created_unit records which purchase established a unit's
+    acquisition cost; see app/services/purchase_service.py.
+
     Downgrade drops these tables and columns and therefore destroys all
     attribution recorded since. To undo a bad rollout, restore from backup
     (the old code runs fine against the new schema).
@@ -48,6 +51,10 @@ def upgrade():
     op.add_column("purchases", sa.Column("entered_by_user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=True))
     op.add_column("purchases", sa.Column("reviewed_by_user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=True))
     op.add_column("purchases", sa.Column("reviewed_at", sa.DateTime, nullable=True))
+    # Provenance of a unit's acquisition cost: true only for a purchase that created
+    # its unit. Existing rows get false ("unknown"), not a guess, so editing them can
+    # never overwrite a unit's cost.
+    op.add_column("purchases", sa.Column("created_unit", sa.Boolean, nullable=False, server_default=sa.false()))
 
     op.create_table(
         "purchase_events",
@@ -67,6 +74,7 @@ def downgrade():
     op.drop_index("ix_purchase_events_purchase_id", table_name="purchase_events")
     op.drop_index("ix_purchase_events_id", table_name="purchase_events")
     op.drop_table("purchase_events")
+    op.drop_column("purchases", "created_unit")
     op.drop_column("purchases", "reviewed_at")
     op.drop_column("purchases", "reviewed_by_user_id")
     op.drop_column("purchases", "entered_by_user_id")

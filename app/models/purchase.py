@@ -30,6 +30,11 @@ class Purchase(Base):
     description = Column(Text)
     review_status = Column(SAEnum(ReviewStatus), default=ReviewStatus.pending, nullable=False)
     receipt_attached = Column(Boolean, default=False)
+    # True only when this purchase itself created its Unit, and so established the
+    # unit's acquisition_cost. Only such a purchase may sync a correction onto the
+    # unit. False for every historical row (provenance unknown, never guessed) and
+    # for purchases that matched a pre-existing unit.
+    created_unit = Column(Boolean, nullable=False, default=False)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
     # Free text. Historical rows only; native rows are attributed by entered_by_user_id.
     entered_by = Column(String(50))

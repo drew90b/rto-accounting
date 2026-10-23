@@ -335,3 +335,106 @@ def test_two_uploads_with_the_same_name_do_not_overwrite_each_other(employee_cli
     assert len(docs) == 2 and docs[0].file_path != docs[1].file_path
     assert open(docs[0].file_path, "rb").read() == b"one"
     assert open(docs[1].file_path, "rb").read() == b"two"
+
+
+# --- Unit acquisition cost provenance --------------------------------------------
+
+def unit_with_cost(db, unit_id, vin, cost):
+    unit = make_unit(db, unit_id=unit_id, vin=vin)
+    unit.acquisition_cost = cost
+    db.commit()
+    return unit
+
+
+def vehicle_edit(client, p, **overrides):
+    return client.post(
+        f"/purchases/{p.id}/edit",
+        data=edit_data(p, shipping_cost="", other_fees="", **overrides),
+        follow_redirects=False,
+    )
+
+
+def test_unrelated_edit_of_a_purchase_linked_to_an_existing_unit_keeps_its_cost(employee_client, db):
+    """The reviewer's scenario: unit cost $5,001, a $300 purchase is its only linked vehicle purchase."""
+    unit = unit_with_cost(db, "U-5001", "COSTVIN000000001", Decimal("5001.00"))
+    r = post_vehicle_purchase(employee_client, stock_number="U-5001", vin="", amount="300.00",
+                              shipping_cost="", other_fees="")
+    assert r.status_code == 303
+    p = last_purchase(db)
+    assert p.unit_id == unit.id and p.created_unit is False
+    assert db.query(Purchase).filter_by(unit_id=unit.id).count() == 1   # the only linked purchase
+
+    vehicle_edit(employee_client, p, description="unrelated note")
+    db.expire_all()
+    assert db.get(Unit, unit.id).acquisition_cost == Decimal("5001.00")
+
+    vehicle_edit(employee_client, p, amount="350.00")                  # even a changed amount
+    db.expire_all()
+    assert db.get(Unit, unit.id).acquisition_cost == Decimal("5001.00")
+    assert last_purchase(db).amount == Decimal("350.00")               # the purchase itself is corrected
+
+
+def test_matching_purchase_with_a_different_cost_is_flagged_for_review(employee_client, admin_client, db):
+    unit_with_cost(db, "U-FLAG", "COSTVIN000000002", Decimal("5001.00"))
+    post_vehicle_purchase(employee_client, stock_number="U-FLAG", vin="", amount="300.00",
+                          shipping_cost="", other_fees="")
+    html = admin_client.get("/review/").text
+    assert "Unit cost not changed" in html and "5,001.00" in html and "300.00" in html
+
+
+def test_flag_clears_when_costs_agree_and_is_absent_for_the_creating_purchase(employee_client, admin_client, db):
+    post_vehicle_purchase(employee_client)                              # creates its own unit
+    assert "Unit cost not changed" not in admin_client.get("/review/").text
+    unit_with_cost(db, "U-SAME", "COSTVIN000000003", Decimal("300.00"))
+    post_vehicle_purchase(employee_client, stock_number="U-SAME", vin="", amount="300.00",
+                          shipping_cost="", other_fees="", vendor="Same Cost Vendor")
+    assert "Unit cost not changed" not in admin_client.get("/review/").text
+
+
+def test_purchase_that_created_the_unit_can_still_correct_its_cost(employee_client, db):
+    post_vehicle_purchase(employee_client)
+    p = last_purchase(db)
+    assert p.created_unit is True
+    employee_client.post(
+        f"/purchases/{p.id}/edit",
+        data=edit_data(p, amount="6000.00", shipping_cost="100.00", other_fees="0"),
+        follow_redirects=False)
+    db.expire_all()
+    assert last_purchase(db).unit.acquisition_cost == Decimal("6100.00")
+
+
+def test_second_purchase_on_a_unit_cannot_change_cost_but_the_first_still_can(employee_client, db):
+    post_vehicle_purchase(employee_client)                              # creates the unit, $6,775
+    first = last_purchase(db)
+    unit_id = first.unit_id
+    post_vehicle_purchase(employee_client, stock_number=first.unit.unit_id, vin="", amount="50.00",
+                          shipping_cost="", other_fees="", vendor="Second Vendor")
+    second = last_purchase(db)
+    assert second.unit_id == unit_id and second.created_unit is False
+
+    vehicle_edit(employee_client, second, amount="60.00")
+    db.expire_all()
+    assert db.get(Unit, unit_id).acquisition_cost == Decimal("6775.00")
+
+    employee_client.post(
+        f"/purchases/{first.id}/edit",
+        data=edit_data(first, amount="7000.00", shipping_cost="200.00", other_fees="75.00"),
+        follow_redirects=False)
+    db.expire_all()
+    assert db.get(Unit, unit_id).acquisition_cost == Decimal("7275.00")
+
+
+def test_historical_purchase_with_unknown_provenance_never_changes_unit_cost(admin_client, db):
+    post_vehicle_purchase(admin_client)
+    p = last_purchase(db)
+    p.created_unit = False                      # what every pre-existing row has
+    p.source_reference = "historical-import:77"
+    db.commit()
+    cost = p.unit.acquisition_cost
+    admin_client.post(
+        f"/purchases/{p.id}/edit",
+        data=edit_data(p, amount="1.00", shipping_cost="", other_fees=""),
+        follow_redirects=False)
+    db.expire_all()
+    assert last_purchase(db).unit.acquisition_cost == cost
+    assert "Unit cost not changed" not in admin_client.get("/review/?show=reviewed").text  # history isn't flagged
