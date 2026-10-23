@@ -476,6 +476,8 @@ Required transaction attributes:
 
 \- payment method if applicable
 
+\- payment source (which card, account, cash source, or person paid) if known
+
 \- receipt attached yes/no
 
 \- coding complete yes/no
@@ -499,6 +501,10 @@ Claude should model these dimensions separately:
 &nbsp; - car
 
 &nbsp; - golf\_cart
+
+&nbsp; - shared (expenses only)
+
+&nbsp; - unallocated (expenses only)
 
 
 
@@ -578,11 +584,13 @@ Fields captured (verbatim from the legacy Google Form — do not rename, consoli
 
 \- Amount ($)
 
-\- Expense Category — one of the 9 literal strings below (`PurchaseCategory` enum in `app/models/enums.py`)
+\- Payment Source — free text, required on every new purchase: which card, account, cash source, or person paid. The form suggests values already used and always offers "Unknown - needs review" so an employee who does not know can still submit. Stored on the linked Transaction (`transactions.payment\_source`). Never backfilled for historical purchases.
+
+\- Expense Category — one of the 13 strings below (`PurchaseCategory` enum in `app/models/enums.py`): the 9 verbatim legacy categories plus 4 general-expense categories
 
 \- Site Location (e.g. "Eunice")
 
-\- Stock # — free text; matched against an existing Unit's `unit\_id` or `vin\_serial` and linked when found (`match\_unit\_by\_stock\_number`). A Unit is never fabricated for an unmatched stock number — a purchase may legitimately have no associated unit (general/shop expenses).
+\- Stock # — free text; matched against an existing Unit's `unit\_id` or full `vin\_serial` only (`match\_unit\_by\_stock\_number`). `Unit` has no stock-number column; the tag lives only on the Purchase. For a non-vehicle category, an unmatched stock number leaves the purchase unlinked — a purchase may legitimately have no associated unit (general/shop expenses). For a vehicle category (`auction\_*`), an unmatched stock number and VIN always create a new Unit (`resolve\_vehicle\_unit`), so choosing an auction category for a parts or repair purchase creates a bogus Unit. Historical stock tags are often VIN suffixes or shop placeholders ("Shop", "Misc") and never match. See `docs/progress.md` (2026-10-23).
 
 \- Mileage
 
@@ -616,6 +624,22 @@ Expense categories (preserved verbatim, including inconsistent quoting/capitaliz
 
 
 
+General-expense categories (added 2026-10-23; not on the legacy form). They record operating spending that is not a vehicle or parts purchase, never create or link a Unit, and set the Transaction `business\_line`:
+
+
+
+\- EXPENSE - General operating (Car) — `car`
+
+\- EXPENSE - General operating (Golf Cart) — `golf\_cart`
+
+\- EXPENSE - General operating (Shared) — `shared`
+
+\- EXPENSE - Not sure (needs review) — `unallocated`, flagged in the Review Queue until recoded
+
+
+
+
+
 Routes (`app/routes/purchases.py`):
 
 
@@ -632,7 +656,7 @@ Routes (`app/routes/purchases.py`):
 
 
 
-This is data-quality review, not an approval workflow — keep it that simple.
+This is data-quality review, not an approval workflow — keep it that simple. The Review Queue (`/review/`) flags: vehicle purchase with no unit, missing VIN or stock number, uncertain classification ("Not sure"), missing or unknown payment source, and missing receipt. "Shared" is a valid classification and is not flagged. Marking a purchase reviewed is a separate action from resolving its flags: it never changes the data, and a reviewed purchase keeps any unresolved flags visible. Purchases imported from history (`source\_reference` set) are not flagged for payment source or receipt, because those were never recorded.
 
 
 

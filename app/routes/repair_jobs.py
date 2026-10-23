@@ -12,7 +12,7 @@ from app.models.repair_job import RepairJob
 from app.models.payment import Payment
 from app.models.unit import Unit
 from app.models.customer import Customer
-from app.models.enums import BusinessLine, RepairJobType, RepairJobStatus, PaymentMethod
+from app.models.enums import BusinessLine, ASSET_BUSINESS_LINES, RepairJobType, RepairJobStatus, PaymentMethod
 from app.services.repair_service import close_repair_job, record_repair_payment
 
 router = APIRouter()
@@ -49,7 +49,7 @@ def list_repair_jobs(
         "business_line_filter": business_line or "",
         "job_type_filter": job_type or "",
         "statuses": [s.value for s in RepairJobStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
         "job_types": [t.value for t in RepairJobType],
     })
 
@@ -106,7 +106,7 @@ def new_job_form(request: Request, db: Session = Depends(get_db)):
         "units": units,
         "customers": customers,
         "statuses": [s.value for s in RepairJobStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
         "job_types": [t.value for t in RepairJobType],
     })
 
@@ -268,7 +268,7 @@ def edit_job_form(job_id: int, request: Request, db: Session = Depends(get_db)):
         "units": units,
         "customers": customers,
         "statuses": [s.value for s in RepairJobStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
         "job_types": [t.value for t in RepairJobType],
         "payments": payments,
         "total_paid": total_paid,

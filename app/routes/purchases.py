@@ -15,6 +15,7 @@ from app.models.document import Document
 from app.models.enums import PurchaseCategory, ReviewStatus
 from app.services.purchase_service import (
     record_purchase, sync_purchase_transaction, match_unit_by_stock_number, is_vehicle_purchase,
+    payment_source_suggestions,
 )
 from app.services.document_service import save_uploaded_file
 
@@ -42,6 +43,7 @@ def _form_context(db: Session):
         "vehicle_categories": [c.value for c in PurchaseCategory if is_vehicle_purchase(c)],
         "site_locations": ["Eunice"],
         "vendor_names": [v.name for v in db.query(Vendor).order_by(Vendor.name).all()],
+        "payment_sources": payment_source_suggestions(db),
     }
 
 
@@ -100,7 +102,7 @@ def export_purchases(db: Session = Depends(get_db)):
     headers = [
         "Purchase ID", "Date", "Purchaser", "Vendor", "Amount", "Shipping", "Other Fees",
         "Category", "Site Location", "Stock #", "Unit", "Acquisition Cost", "Mileage", "Notes",
-        "Receipt", "Review Status",
+        "Receipt", "Review Status", "Payment Source",
     ]
     ws.append(headers)
     for cell in ws[1]:
@@ -123,6 +125,7 @@ def export_purchases(db: Session = Depends(get_db)):
             p.description or "",
             "Yes" if p.receipt_attached else "No",
             p.review_status.value if p.review_status else "",
+            p.transaction.payment_source if p.transaction and p.transaction.payment_source else "",
         ])
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 18
@@ -166,8 +169,14 @@ async def create_purchase(
     year: str = Form(""),
     make: str = Form(""),
     model: str = Form(""),
+    payment_source: str = Form(""),
     receipt: Optional[UploadFile] = File(None),
 ):
+    if not payment_source.strip():
+        return RedirectResponse(
+            url="/purchases/new?error=Payment+source+is+required.+Type+%22Unknown+-+needs+review%22+if+you+don%27t+know.",
+            status_code=303,
+        )
     try:
         purchase = record_purchase(
             purchase_date=date.fromisoformat(purchase_date),
@@ -186,6 +195,7 @@ async def create_purchase(
             year=_parse_int(year),
             make=make,
             model=model,
+            payment_source=payment_source,
             db=db,
         )
     except ValueError as e:
@@ -241,6 +251,7 @@ async def update_purchase(
     entered_by: str = Form(""),
     shipping_cost: str = Form(""),
     other_fees: str = Form(""),
+    payment_source: str = Form(""),
     receipt: Optional[UploadFile] = File(None),
 ):
     from app.services.purchase_service import find_or_create_vendor
@@ -271,6 +282,10 @@ async def update_purchase(
     purchase.entered_by = entered_by or None
 
     sync_purchase_transaction(purchase, db)
+
+    # A blank value never erases an existing one (historical purchases have none).
+    if payment_source.strip() and purchase.transaction:
+        purchase.transaction.payment_source = payment_source.strip()
 
     if receipt and receipt.filename:
         save_uploaded_file(

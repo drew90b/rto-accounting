@@ -57,6 +57,11 @@
       </div>
 
       <div class="form-group">
+        <label>Payment Source</label>
+        <input type="text" name="payment_source" value="{{ txn.payment_source or '' if txn else '' }}" placeholder="e.g. Visa 1234, Cash, Steve (personal)">
+      </div>
+
+      <div class="form-group">
         <label>Payment Method</label>
         <select name="payment_method">
           <option value="">— None —</option>

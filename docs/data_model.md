@@ -27,10 +27,11 @@ Migration `003_nullable_human_readable_ids` removed the `NOT NULL` constraint fr
 6. [lease\_accounts](#lease_accounts)
 7. [payments](#payments)
 8. [transactions](#transactions)
-9. [documents](#documents)
-10. [exceptions](#exceptions)
-11. [Enums Reference](#enums-reference)
-12. [Entity Relationships](#entity-relationships)
+9. [purchases](#purchases)
+10. [documents](#documents)
+11. [exceptions](#exceptions)
+12. [Enums Reference](#enums-reference)
+13. [Entity Relationships](#entity-relationships)
 
 ---
 
@@ -210,7 +211,7 @@ Financial event log. Every financially significant event should have a transacti
 | transaction_date | date | NO | — | Date of the business event |
 | entry_date | date | YES | — | Date record was entered in the system |
 | transaction_type | varchar(30) | NO | — | See transaction type enum below |
-| business_line | varchar(20) | NO | — | `car`, `golf_cart` |
+| business_line | varchar(20) | NO | — | `car`, `golf_cart`, `shared`, `unallocated` (the last two for expenses only) |
 | revenue_stream | varchar(30) | YES | — | See revenue stream enum below. Null for costs. |
 | vendor_id | integer | YES | — | FK → vendors.id. Set for purchases. |
 | customer_id | integer | YES | — | FK → customers.id. Set for revenue events. |
@@ -222,6 +223,7 @@ Financial event log. Every financially significant event should have a transacti
 | lease_account_id | integer | YES | — | FK → lease_accounts.id |
 | category | varchar(50) | YES | — | e.g. parts, labor, overhead, inventory_purchase |
 | payment_method | varchar(20) | YES | — | `cash`, `check`, `card`, `transfer`, `other` |
+| payment_source | varchar(100) | YES | — | Free text: which card, account, cash, or person paid. Added in migration 008. NULL for historical rows; never backfilled. |
 | receipt_attached | boolean | YES | false | |
 | coding_complete | boolean | YES | false | |
 | review_status | varchar(20) | YES | `pending` | `pending`, `reviewed`, `approved` |
@@ -231,6 +233,39 @@ Financial event log. Every financially significant event should have a transacti
 | updated_at | timestamp | YES | now() | |
 
 **Indexes:** `transaction_date`, `business_line`, `revenue_stream`
+
+---
+
+## purchases
+
+Employee-facing purchase submission. Every purchase has one linked `transactions` row (`transaction_type = purchase`). Added in migrations 005–007.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| id | integer | NO | autoincrement | Primary key |
+| purchase_id | varchar(20) | YES | — | Human-readable ID, e.g. `PO-0001`. Unique. |
+| purchase_date | date | NO | — | |
+| purchaser | varchar(100) | NO | — | Free text |
+| vendor_id | integer | NO | — | FK → vendors.id |
+| amount | numeric(10,2) | NO | — | |
+| shipping_cost, other_fees | numeric(10,2) | YES | — | Added to amount for vehicle acquisition cost |
+| category | string | NO | — | `PurchaseCategory` enum (stored by name, e.g. `auction_car_rto`) |
+| site_location | varchar(100) | YES | — | |
+| stock_number | varchar(50) | YES | — | Free text. Not a unit identifier; see below. |
+| unit_id | integer | YES | — | FK → units.id. Set only on a `unit_id`/VIN match, or when a vehicle category creates the unit. |
+| mileage | integer | YES | — | |
+| description | text | YES | — | |
+| review_status | string | NO | `pending` | `pending`, `reviewed`, `approved` |
+| receipt_attached | boolean | YES | false | |
+| transaction_id | integer | YES | — | FK → transactions.id |
+| entered_by | varchar(50) | YES | — | |
+| source_reference | varchar(100) | YES | — | Unique. `historical-import:<source_row>` for rows created by `app/scripts/import_historical_purchases.py`; NULL for purchases entered in the app. |
+
+**Payment source** is stored on the linked `transactions` row (`transactions.payment_source`), not on `purchases`.
+
+**General-expense categories:** `general_expense_car`, `general_expense_golf_cart`, `general_expense_shared`, `general_expense_unsure`. They never create or link a unit. Business line is derived from the category: `car`, `golf_cart`, `shared`, `unallocated` respectively.
+
+**Stock number rule:** units have no stock-number column. A purchase links by exact `units.unit_id` or `units.vin_serial` match. A vehicle category (`auction_car_rto`, `auction_car_flip`, `auction_golf_cart_flip`) with no match always creates a new unit.
 
 ---
 
@@ -285,6 +320,8 @@ Exception queue for incomplete, missing, or suspicious records.
 |---|---|
 | `car` | Car business line |
 | `golf_cart` | Golf cart business line |
+| `shared` | Expenses only: spans both lines. Not allowed on units, sales, or repair jobs. |
+| `unallocated` | Expenses only: classification uncertain, awaiting review. Not allowed on units, sales, or repair jobs. |
 
 ### transaction_type
 | Value | Description |

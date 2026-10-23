@@ -13,7 +13,7 @@ from app.models.unit import Unit
 from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.lease_account import LeaseAccount
-from app.models.enums import BusinessLine, SaleStatus, PaymentMethod
+from app.models.enums import BusinessLine, ASSET_BUSINESS_LINES, SaleStatus, PaymentMethod
 from app.services.sale_service import finalize_new_sale, build_sale_balance_map
 
 router = APIRouter()
@@ -60,7 +60,7 @@ def list_sales(
         "status_filter": status or "",
         "business_line_filter": business_line or "",
         "statuses": [s.value for s in SaleStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
     })
 
 
@@ -115,7 +115,7 @@ def new_sale_form(request: Request, db: Session = Depends(get_db)):
         "units": units,
         "customers": customers,
         "statuses": [s.value for s in SaleStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
         "payment_methods": [m.value for m in PaymentMethod],
     })
 
@@ -239,7 +239,7 @@ def edit_sale_form(sale_id: int, request: Request, db: Session = Depends(get_db)
         "units": units,
         "customers": customers,
         "statuses": [s.value for s in SaleStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
         "payment_methods": [m.value for m in PaymentMethod],
         "payments": payments,
         "total_paid": total_paid,

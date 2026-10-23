@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.purchase import Purchase
 from app.models.transaction import Transaction
-from app.models.enums import ReviewStatus, TransactionType
-from app.services.purchase_service import is_vehicle_purchase
+from app.models.enums import PurchaseCategory, ReviewStatus, TransactionType
+from app.services.purchase_service import is_vehicle_purchase, is_payment_source_unknown
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -75,6 +75,19 @@ def _purchase_flags(purchase: Purchase) -> list:
             flags.append("Missing VIN")
         if not purchase.stock_number:
             flags.append("Missing stock number")
+    if purchase.category == PurchaseCategory.general_expense_unsure:
+        flags.append("Classification uncertain: decide car, golf cart, or shared")
+    # Shared is a valid classification, not a warning; it is not flagged.
+    # Historical imports (source_reference set) never had a payment source or
+    # receipt recorded; don't flag what can't be known.
+    if purchase.source_reference is None:
+        source = purchase.transaction.payment_source if purchase.transaction else None
+        if not source:
+            flags.append("Missing payment source")
+        elif is_payment_source_unknown(source):
+            flags.append("Payment source unknown")
+        if not purchase.receipt_attached:
+            flags.append("Missing receipt")
     return flags
 
 

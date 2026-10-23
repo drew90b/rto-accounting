@@ -18,6 +18,7 @@ what to enter, in what order, and what records get created.
 9. [Record a Parts Sale](#9-record-a-parts-sale)
 10. [Upload a Receipt or Document](#10-upload-a-receipt-or-document)
 11. [Log a Transaction Manually](#11-log-a-transaction-manually)
+    - [11a. Record a General Expense](#11a-record-a-general-expense)
 12. [Resolve an Exception](#12-resolve-an-exception)
 13. [Month-End Close Process](#13-month-end-close-process)
 
@@ -406,6 +407,29 @@ what to enter, in what order, and what records get created.
 > If you are unsure how to classify a transaction, enter what you know and leave `coding_complete = false`. A reviewer will code it. Do not guess at revenue stream or category if uncertain.
 
 **Records created:** 1 transaction.
+
+> **General operating spending** (supplies, utilities, anything that is not a vehicle or parts purchase) is normally recorded through **Purchases → Record Purchase**, not here. See Workflow 11a.
+
+---
+
+## 11a. Record a General Expense
+
+**Trigger:** Money was spent on something that is not a vehicle or parts for a specific unit (shop supplies, tools, utilities, insurance, and similar).
+
+### Steps
+
+1. **Go to Purchases** → Record Purchase
+2. **Fill in** date, who made the purchase, vendor, and amount.
+3. **Payment Source** (required): which card, account, cash, or person paid. Pick a suggestion or type a new one. If you do not know, choose **Unknown - needs review**.
+4. **Expense Category**: choose the purpose:
+   - `EXPENSE - General operating (Car)`
+   - `EXPENSE - General operating (Golf Cart)`
+   - `EXPENSE - General operating (Shared)`: serves both lines
+   - `EXPENSE - Not sure (needs review)`: you cannot tell which
+5. **Upload the receipt** (photo from a phone is fine) and submit.
+6. **Review:** open **Review** and clear any flags. "Not sure" entries stay flagged until the owner recodes them (Purchases → Edit → change the category). Shared entries are not flagged for being shared. Click **Mark Reviewed** once you have checked an entry; this does not clear any warning that is still true (for example a missing receipt).
+
+**Records created:** 1 purchase and 1 linked transaction (`transaction_type = purchase`). **No unit is created or linked.** Shared and Not sure entries carry `business_line` `shared` / `unallocated`.
 
 ---
 

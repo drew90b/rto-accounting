@@ -75,11 +75,14 @@ Every unit, repair job, sale, lease account, and transaction must be explicitly 
 |---|---|
 | `car` | Car sales, car RTO/lease, car repairs |
 | `golf_cart` | Golf cart sales, golf cart repairs, parts sales |
+| `shared` | Expenses only. General operating spending that serves both lines (e.g. utilities, insurance). |
+| `unallocated` | Expenses only. A general expense nobody is sure how to classify; held for review until recoded. |
 
 ### Rules
 - `business_line` is required on every transaction, unit, repair job, and sale. It may never be null or ambiguous.
+- Units, repair jobs, and sales are always `car` or `golf_cart`. `shared` and `unallocated` exist only for expense transactions.
 - When entering a transaction, `business_line` must match the linked unit's `business_line` if a unit is provided.
-- Overhead transactions (e.g., utilities, insurance) still require a `business_line`. If truly shared, use the dominant line or split into two transactions and note accordingly.
+- Overhead and general-expense transactions still require a `business_line`. If an expense truly serves both lines, use `shared`. If nobody is sure, use `unallocated` and let the review queue surface it. Do not guess a line to make a flag go away. `shared` is a valid classification, not a warning: it is kept separate from `car` and `golf_cart` in reporting, is never split automatically, and can be marked reviewed while remaining `shared`. Resolving a warning (fixing the data) and marking a purchase reviewed are separate actions.
 
 ---
 
@@ -141,6 +144,14 @@ Every cost transaction must be linked to one of:
 - A mixed case — enter with notes and flag for `review_needed`
 
 A purchase transaction with no `unit_id`, no `repair_job_id`, and `transaction_type` not equal to `overhead` triggers a `missing_assignment` exception.
+
+> **Implementation note (2026-10-23):** exceptions are currently created only by hand (Exceptions → New). Nothing creates them automatically. The Review Queue (`/review/`) is the automated safety net for purchases: it flags missing receipts, missing or unknown payment source, uncertain ("Not sure") general expenses, and vehicle purchases with no unit.
+
+### Payment source rules
+- `payment_source` is free text on the transaction: which card, account, cash source, or person paid (e.g. "Visa 1234", "Cash", "Steve (personal)").
+- It is required when a purchase is entered in the Purchases form. If the employee does not know, they enter "Unknown - needs review", which the review queue flags.
+- It is never backfilled. Historical purchases and any purchase entered before migration 008 keep it blank, and the review queue does not flag them for it.
+- `payment_method` (cash, check, card, transfer, other) is separate and unchanged.
 
 ---
 

@@ -60,6 +60,19 @@
                value="{{ purchase.amount if purchase else '' }}" placeholder="0.00">
       </div>
 
+      <div class="form-group">
+        <label>Payment Source {% if not purchase %}*{% endif %}</label>
+        <input type="text" name="payment_source" list="payment-source-options" {% if not purchase %}required{% endif %}
+               value="{{ purchase.transaction.payment_source if purchase and purchase.transaction and purchase.transaction.payment_source else '' }}"
+               placeholder="e.g. Visa 1234, Cash, Steve (personal)">
+        <datalist id="payment-source-options">
+          {% for s in payment_sources %}
+          <option value="{{ s }}"></option>
+          {% endfor %}
+        </datalist>
+        <span class="form-hint">Which card, account, cash, or person paid. If you don't know, choose "Unknown - needs review".</span>
+      </div>
+
       <div class="form-group form-full">
         <label>Expense Category *</label>
         <select name="category" id="category-select" required>

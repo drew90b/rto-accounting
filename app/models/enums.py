@@ -4,6 +4,14 @@ import enum
 class BusinessLine(str, enum.Enum):
     car = "car"
     golf_cart = "golf_cart"
+    # Expense-only lines (general expenses). A unit, sale, or repair job is
+    # always car or golf_cart — see ASSET_BUSINESS_LINES.
+    shared = "shared"
+    unallocated = "unallocated"
+
+
+# The lines a unit, sale, or repair job can belong to.
+ASSET_BUSINESS_LINES = [BusinessLine.car, BusinessLine.golf_cart]
 
 
 class UnitType(str, enum.Enum):
@@ -147,6 +155,10 @@ class PurchaseCategory(str, enum.Enum):
     Verbatim expense-category options from the legacy Google Purchase Order
     Form. Preserved as-is (including inconsistent quoting/capitalization) so
     the Purchases module is a drop-in replacement — do not normalize these.
+
+    The four general_expense_* categories are NOT from the legacy form. They
+    record operating spending that is not a vehicle or parts purchase, and
+    never create a Unit.
     """
     parts_rto_car_repair = 'PARTS - "RTO" car parts (Repair)'
     parts_rto_car_wip = 'PARTS - "RTO" - Car parTs (WIP)'
@@ -157,6 +169,10 @@ class PurchaseCategory(str, enum.Enum):
     auction_car_rto = "AUCTION - Purchased Cars (RTO)"
     auction_car_flip = 'AUCTION - Purchased Cars ("Flip")'
     auction_golf_cart_flip = 'AUCTION - Purchased Golf Carts - ("Flip")'
+    general_expense_car = "EXPENSE - General operating (Car)"
+    general_expense_golf_cart = "EXPENSE - General operating (Golf Cart)"
+    general_expense_shared = "EXPENSE - General operating (Shared)"
+    general_expense_unsure = "EXPENSE - Not sure (needs review)"
 
 
 class InvoiceType(str, enum.Enum):

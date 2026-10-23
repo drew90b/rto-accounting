@@ -20,6 +20,13 @@ Rules enforced:
   - business_line is derived from the expense category (never asked of the
     user) — RTO/Flip car categories map to 'car', golf cart categories map
     to 'golf_cart'.
+  - General-expense categories (general_expense_*) record operating spending.
+    They never create or link a Unit. Their business_line is car, golf_cart,
+    shared (spans both lines), or unallocated ("Not sure" — held for review
+    until someone decides).
+  - payment_source (which card, account, cash, or person paid) is stored on
+    the Transaction. The Purchases form requires it; the service does not, so
+    the historical importer can leave it NULL rather than guess.
   - Vehicle purchases (auction_car_rto, auction_car_flip, auction_golf_cart_flip)
     always end up linked to a Unit: an existing one (matched by stock number
     or VIN) or a newly created one. No Unit is ever fabricated for any other
@@ -49,7 +56,10 @@ _GOLF_CART_CATEGORIES = {
     PurchaseCategory.parts_flip_golf_cart_build,
     PurchaseCategory.parts_golf_cart_repair,
     PurchaseCategory.auction_golf_cart_flip,
+    PurchaseCategory.general_expense_golf_cart,
 }
+
+PAYMENT_SOURCE_UNKNOWN = "Unknown - needs review"
 
 _VEHICLE_CATEGORIES = {
     PurchaseCategory.auction_car_rto,
@@ -59,11 +69,33 @@ _VEHICLE_CATEGORIES = {
 
 
 def business_line_for_category(category: PurchaseCategory) -> str:
+    if category == PurchaseCategory.general_expense_shared:
+        return "shared"
+    if category == PurchaseCategory.general_expense_unsure:
+        return "unallocated"
     return "golf_cart" if category in _GOLF_CART_CATEGORIES else "car"
 
 
 def is_vehicle_purchase(category: PurchaseCategory) -> bool:
     return category in _VEHICLE_CATEGORIES
+
+
+def is_payment_source_unknown(payment_source: Optional[str]) -> bool:
+    return bool(payment_source) and payment_source.strip().lower().startswith("unknown")
+
+
+def payment_source_suggestions(db: Session) -> list:
+    """Payment sources already used, for the form's suggestion list. 'Unknown'
+    is always offered so an employee who doesn't know can still submit."""
+    used = [
+        row[0] for row in
+        db.query(Transaction.payment_source)
+        .filter(Transaction.payment_source.isnot(None))
+        .distinct()
+        .order_by(Transaction.payment_source)
+        .all()
+    ]
+    return [PAYMENT_SOURCE_UNKNOWN] + [s for s in used if s != PAYMENT_SOURCE_UNKNOWN]
 
 
 def find_or_create_vendor(name: str, db: Session) -> Vendor:
@@ -131,6 +163,7 @@ def record_purchase(
     year: Optional[int] = None,
     make: str = "",
     model: str = "",
+    payment_source: str = "",
     db: Session,
 ) -> Purchase:
     vendor = find_or_create_vendor(vendor_name, db)
@@ -189,6 +222,7 @@ def record_purchase(
         amount=transaction_amount,
         description=description or category.value,
         category=category.name,
+        payment_source=payment_source.strip() or None,
         entered_by=entered_by or None,
         coding_complete=True,
         review_status="pending",

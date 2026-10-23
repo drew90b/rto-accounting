@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.unit import Unit
-from app.models.enums import UnitType, UnitStatus, BusinessLine
+from app.models.enums import UnitType, UnitStatus, BusinessLine, ASSET_BUSINESS_LINES
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -61,7 +61,7 @@ def list_units(
         "status_filter": status or "",
         "business_line_filter": business_line or "",
         "statuses": [s.value for s in UnitStatus],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
     })
 
 
@@ -115,7 +115,7 @@ def new_unit_form(request: Request):
         "unit": None,
         "statuses": [s.value for s in UnitStatus],
         "unit_types": [t.value for t in UnitType],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
     })
 
 
@@ -165,7 +165,7 @@ def edit_unit_form(unit_id: int, request: Request, db: Session = Depends(get_db)
         "unit": unit,
         "statuses": [s.value for s in UnitStatus],
         "unit_types": [t.value for t in UnitType],
-        "business_lines": [b.value for b in BusinessLine],
+        "business_lines": [b.value for b in ASSET_BUSINESS_LINES],
     })
 
 

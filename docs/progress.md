@@ -8,13 +8,82 @@ Update this file as work is completed.
 ## Current State
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
-**As of:** 2026-03-14
+**As of:** 2026-10-23
 **Server:** Deployed on Render (with github and locally).
-**Database:** Migrations 001–004 applied. Seed data tested.
+**Database:** Migrations 001–008 exist in the repo. `rto_accounting_dev` is at 007; **008 has been tested on an isolated database but not yet applied to `rto_accounting_dev`**. Apply it (`alembic upgrade head`) before running the new code against that database, because the Transaction model now reads `payment_source`.
+**Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
 
 ---
 
 ## Completed Work
+
+### 2026-10-23 — General Expenses and Payment Source
+
+**Goal:** Let staff record general operating spending (not a vehicle, not parts for a unit), say who or what paid, tag it car / golf cart / shared, and mark uncertain ones for review. Ready for November entry. Historical records untouched.
+
+#### Findings that shaped the design
+- No existing workflow covered it. Transactions → Log Transaction accepts `overhead` but has no payment source, no `shared` line, no receipt upload, and its entries never reach the Review Queue (the queue lists only unit-linked transactions). The database held zero overhead transactions.
+- Enums are stored as plain strings with no check constraint, so new enum values need no migration.
+
+#### New files
+- [x] `alembic/versions/008_transaction_payment_source.py` — adds nullable `transactions.payment_source` varchar(100). No backfill.
+- [x] `tests/test_general_expense.py` — 32 tests.
+
+#### Modified files
+- [x] `app/models/enums.py` — 4 `general_expense_*` purchase categories; `BusinessLine.shared` and `.unallocated`; `ASSET_BUSINESS_LINES` (car, golf_cart).
+- [x] `app/models/transaction.py` — `payment_source`.
+- [x] `app/services/purchase_service.py` — category→line mapping; `payment_source` parameter on `record_purchase`; `payment_source_suggestions()`; `is_payment_source_unknown()`.
+- [x] `app/routes/purchases.py`, `templates/purchases/form.html`, `list.html` — required Payment Source field with suggestions; list column; export column; edit never erases an existing value.
+- [x] `app/routes/review.py` — new flags (uncertain classification, payment source missing or unknown, missing receipt). Shared is not flagged. Imported purchases are not flagged for payment source or receipt.
+- [x] `app/routes/transactions.py`, `templates/transactions/form.html` — payment source field and export column.
+- [x] `app/routes/units.py`, `sales.py`, `repair_jobs.py` — dropdowns use `ASSET_BUSINESS_LINES`, so units, sales, and repair jobs cannot be `shared` or `unallocated`.
+- [x] `tests/test_purchase_workflow.py`, `tests/test_review_queue.py` — existing purchase posts now send `payment_source`; one "clean entry" test marks a receipt attached.
+
+#### Key decisions
+- **"Not sure" is `unallocated`, separate from `shared`.** It stays out of both lines until someone recodes it, and the review queue flags it.
+- **Payment source is free text with suggestions** taken from earlier entries, plus a permanent "Unknown - needs review" option. Required by the form, not by the schema or `record_purchase`, so the historical importer can leave it blank rather than guess.
+- **No unit is ever created for a general expense.** Spending stays visible in the Purchases ledger, transactions, exports, and review queue. It is not counted in dashboard inventory investment (which sums `Unit.acquisition_cost`).
+- Shared expenses are not split automatically and are not a review warning (revised 2026-10-23): `shared` is a valid classification, kept separate in reporting, and can be marked reviewed while staying shared. Marking reviewed is separate from resolving warnings. Applied to the temporary test app only; dev on port 8000 and `rto_accounting_dev` are unchanged.
+
+#### Validation
+- 184 tests pass in fixed order (152 existing + 32 new). Four deliberate breakages (historical guard, required check, asset dropdowns, unsure mapping) were each caught by the new tests.
+- Migration 008 tested on a throwaway PostgreSQL cluster: upgrade from 007 with legacy rows (payment source stays NULL), ORM round-trip of all four categories and both new business lines, downgrade, re-upgrade. `rto_accounting_dev` was not touched.
+
+#### Known issue (pre-existing)
+- `pytest-randomly` is in `requirements-dev.txt` and shuffles test order. Because per-test rollback does not fully hold on SQLite (rows committed through the client persist), random order fails 1–6 tests per run. This predates these changes. Run `pytest -p no:randomly` for a stable result. `tests/test_review_queue.py` points to `memory/test_isolation_bug.md`, which is not in the repository.
+
+
+### 2026-10-23 — Historical Inventory Reconciliation: Findings (investigation only, paused)
+
+No code or data was changed. All queries ran read-only against `rto_accounting_dev`.
+
+#### Confirmed findings
+- The historical importer (`app/scripts/import_historical_purchases.py`) takes the form's category as is. Vehicle categories (`auction_car_rto`, `auction_car_flip`, `auction_golf_cart_flip`) always create a unit when stock number and VIN match no `unit_id` or `vin_serial`. Historical tags never match, so every vehicle-category row created a unit (154 rows, 154 units).
+- `Unit` has no stock-number column. The tag exists only on `purchases.stock_number`.
+- The importer links parts rows to units through an in-memory map (`stock_to_unit`). A repeated stock number overwrites the earlier entry, so parts link to the vehicle row with the highest `source_row`. Only a warning is logged.
+- `source_reference` is `historical-import:<source_row>`. The updated source file `purchase-orders-updated-2026-10-23.csv` (raw Google Form export, no `source_row` column) lines up with all 959 imported purchases at position = `source_row` (header = row 1) on date, amount, stock number and notes. Vendors differ only by spelling or abbreviation.
+- Form category for refs 865, 902 and 934 was an `AUCTION` category in the source, so the importer was faithful.
+- The review queue flags "Vehicle purchase has no linked unit" but nothing flags a unit created from an unverified stock tag.
+- Dashboard inventory investment sums `Unit.acquisition_cost`, so suspect units inflate it.
+
+#### Affected records (dev database)
+- U-0617 (golf cart, $69): purchase 2979 (ref 902, "Car ramps", stock "Shop") plus 15 car-line "Shop" parts purchases ($972.92).
+- U-0615: purchase 2977 (ref 865, $647.57, stock 169025, "Ac compressor. Hoses supplies"). U-0620: purchase 2982 (ref 934, $554.31, stock 169025, "Abs bearing sensor brake fluid") plus parts purchases 3597, 3618, 3786.
+- Neither unit has VIN, year, make or model, repair jobs, sales, leases or non-purchase transactions.
+- Same pattern elsewhere: "Misc" (62 rows on 2 units, U-0580 and U-0582), "F36140", "Misc. Kevin", and 20 numeric stock numbers with two or three vehicle rows each. Not yet reviewed.
+- Frazer vehicle master export (`FRZDATA1.CSV`): no Stock # = 169025. Last 6 VIN and full VIN ending 169025 both match one 2015 Chevrolet Trax (Frazer stock 10064, purchased 04/03/26, original cost $5,990). The forms also use the tag 69025 for a 2015 Chevy Trax (U-0592, IAA, $1,754, 4/17/2026).
+
+#### Unresolved questions
+- Are U-0592 and the Frazer 10064 Trax the same vehicle? The dates and costs differ.
+- Are purchases 2977 and 2982 parts for that Trax filed under the vehicle category? Notes suggest so, but the source cannot confirm it.
+- Is "Car ramps" (2979) a shop expense? Which category should it have?
+- Are tags like 169025 and 69025 VIN suffixes in general? Not checked beyond this tag.
+- What are the other duplicate-stock groups?
+
+#### Proposed (not built)
+- Importer prevention: hold rows with placeholder tags ("Shop", "Misc*") or conflicting stock matches for review. Import them as unit-less pending purchases so spending stays visible. Rerun-safe via `source_reference`.
+- Correction for units 615, 617 and 620 only after the owner confirms the vehicle questions above.
+
 
 ### 2026-03-15 — Balance Due and Remaining Months on List Views
 
@@ -422,7 +491,7 @@ See `docs/roadmap.md` for full list.
 | 2026-03-08 | `customer_support_repair` added as a third repair job type | BHPH model requires tracking goodwill/retention repairs as a portfolio cost, not revenue |
 | 2026-03-08 | Documents stored on disk, metadata in DB | Simple; avoids binary storage in Postgres; easy to back up |
 | 2026-03-08 | Flash messages via URL query param (`?msg=...`) | No session middleware required; keeps stack simple |
-| 2026-03-08 | `create_all` runs on startup in addition to Alembic | Allows quick startup in dev without running migrations manually |
+| 2026-03-08 | `create_all` runs on startup in addition to Alembic | Allows quick startup in dev without running migrations manually. **Superseded:** no `create_all` call exists in `app/` as of 2026-10-23; apply migrations with Alembic. |
 
 ---
 

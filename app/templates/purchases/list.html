@@ -43,6 +43,7 @@
         <th>Acquisition Cost</th>
         <th>Expense Category</th>
         <th>Purchaser</th>
+        <th>Payment Source</th>
         <th>Receipt</th>
         <th>Review</th>
         <th></th>
@@ -65,6 +66,7 @@
         <td>{% if p.unit and p.unit.acquisition_cost %}${{ "%.2f" | format(p.unit.acquisition_cost | float) }}{% else %}—{% endif %}</td>
         <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px;" title="{{ p.category.value if p.category else '' }}">{{ p.category.value if p.category else '—' }}</td>
         <td>{{ p.purchaser }}</td>
+        <td>{{ p.transaction.payment_source if p.transaction and p.transaction.payment_source else '—' }}</td>
         <td>{% if p.receipt_attached %}<span class="badge badge-green">Yes</span>{% else %}<span class="badge badge-red">No</span>{% endif %}</td>
         <td>
           {% if p.review_status.value == 'reviewed' %}<span class="badge badge-green">Reviewed</span>
@@ -81,7 +83,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="10" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
+      <tr><td colspan="11" class="empty-cell">No purchases found. <a href="/purchases/new">Record one.</a></td></tr>
       {% endfor %}
     </tbody>
   </table>

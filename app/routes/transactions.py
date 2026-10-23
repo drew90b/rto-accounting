@@ -96,6 +96,7 @@ def export_transactions(
         "Amount", "Description", "Category", "Payment Method",
         "Unit", "Repair Job", "Sale", "Lease", "Vendor", "Customer",
         "Receipt", "Coded", "Review Status", "Exception Status", "Entered By",
+        "Payment Source",
     ]
     ws.append(headers)
     for cell in ws[1]:
@@ -123,6 +124,7 @@ def export_transactions(
             t.review_status.value if t.review_status else "",
             t.exception_status.value if t.exception_status else "",
             t.entered_by or "",
+            t.payment_source or "",
         ])
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 16
@@ -172,6 +174,7 @@ def create_transaction(
     revenue_stream: str = Form(""),
     category: str = Form(""),
     payment_method: str = Form(""),
+    payment_source: str = Form(""),
     unit_id: str = Form(""),
     repair_job_id: str = Form(""),
     sale_id: str = Form(""),
@@ -194,6 +197,7 @@ def create_transaction(
         revenue_stream=revenue_stream or None,
         category=category or None,
         payment_method=payment_method or None,
+        payment_source=payment_source.strip() or None,
         unit_id=int(unit_id) if unit_id else None,
         repair_job_id=int(repair_job_id) if repair_job_id else None,
         sale_id=int(sale_id) if sale_id else None,
@@ -236,6 +240,7 @@ def update_transaction(
     revenue_stream: str = Form(""),
     category: str = Form(""),
     payment_method: str = Form(""),
+    payment_source: str = Form(""),
     unit_id: str = Form(""),
     repair_job_id: str = Form(""),
     sale_id: str = Form(""),
@@ -258,6 +263,7 @@ def update_transaction(
         t.revenue_stream = revenue_stream or None
         t.category = category or None
         t.payment_method = payment_method or None
+        t.payment_source = payment_source.strip() or None
         t.unit_id = int(unit_id) if unit_id else None
         t.repair_job_id = int(repair_job_id) if repair_job_id else None
         t.sale_id = int(sale_id) if sale_id else None

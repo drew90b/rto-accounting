@@ -40,6 +40,7 @@ def post_vehicle_purchase(client, vin, stock_number, **overrides):
         "mileage": "82000",
         "description": "",
         "entered_by": "",
+        "payment_source": "Cash",
         "shipping_cost": "200.00",
         "other_fees": "75.00",
         "vin": vin,
@@ -63,6 +64,7 @@ def post_parts_purchase(client, vendor, **overrides):
         "mileage": "",
         "description": "Brake pads",
         "entered_by": "",
+        "payment_source": "Cash",
     }
     data.update(overrides)
     return client.post("/purchases/new", data=data, follow_redirects=False)
@@ -296,6 +298,11 @@ def test_zero_amount_flag_appears_for_expense(client, db):
 def test_clean_vehicle_purchase_has_no_flags(client, db):
     r = post_vehicle_purchase(client, vin="1FAFP42X1YFT00012", stock_number="LOT-T00012")
     assert r.status_code == 303
+
+    from app.models.purchase import Purchase
+    purchase = db.query(Purchase).filter(Purchase.stock_number == "LOT-T00012").first()
+    purchase.receipt_attached = True  # a missing receipt is flagged; this test is about a clean entry
+    db.commit()
 
     resp = client.get("/review/")
     card = card_containing(resp.text, "1FAFP42X1YFT00012")

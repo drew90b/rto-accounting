@@ -28,6 +28,8 @@ class Transaction(Base):
     lease_account_id = Column(Integer, ForeignKey("lease_accounts.id"), nullable=True)
     category = Column(String(50))
     payment_method = Column(SAEnum(PaymentMethod), nullable=True)
+    # Free text: which card, account, cash, or person paid.
+    payment_source = Column(String(100), nullable=True)
     receipt_attached = Column(Boolean, default=False)
     coding_complete = Column(Boolean, default=False)
     review_status = Column(SAEnum(ReviewStatus), default=ReviewStatus.pending)

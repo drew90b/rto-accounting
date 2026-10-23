@@ -36,6 +36,7 @@ def post_purchase(client, **overrides):
         "mileage": "",
         "description": "Brake pads",
         "entered_by": "",
+        "payment_source": "Cash",
     }
     data.update(overrides)
     return client.post("/purchases/new", data=data, follow_redirects=False)
@@ -53,6 +54,7 @@ def post_vehicle_purchase(client, **overrides):
         "mileage": "82000",
         "description": "",
         "entered_by": "",
+        "payment_source": "Cash",
         "shipping_cost": "200.00",
         "other_fees": "75.00",
         "vin": "1FAFP42X1YF123456",
@@ -168,6 +170,7 @@ def test_create_purchase_with_receipt_marks_receipt_attached(client, db):
             "mileage": "",
             "description": "",
             "entered_by": "",
+            "payment_source": "Cash",
         },
         files={"receipt": ("receipt.jpg", io.BytesIO(b"fake-image-bytes"), "image/jpeg")},
         follow_redirects=False,
