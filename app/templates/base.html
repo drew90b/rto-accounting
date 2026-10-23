@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}RTO Accounting{% endblock %} — RTO Accounting</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2">
+  <link rel="stylesheet" href="/static/css/style.css?v=3">
 </head>
 <body>
 <div class="mobile-header">
@@ -20,6 +20,8 @@
       <span class="sidebar-sub">Finance Operations</span>
     </div>
     <nav class="sidebar-nav">
+      {% set user = request.state.user %}
+      {% if user and user.is_admin %}
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
       <a href="/review/" class="{% if '/review' in request.url.path %}active{% endif %}">Review<span id="review-count-badge"></span></a>
 
@@ -44,6 +46,18 @@
       <a href="/invoices/" class="{% if '/invoices' in request.url.path %}active{% endif %}">Invoices</a>
       <a href="/documents/" class="{% if '/documents' in request.url.path %}active{% endif %}">Documents</a>
       <a href="/exceptions/" class="{% if '/exceptions' in request.url.path %}active{% endif %}">Exceptions</a>
+      {% elif user %}
+      <div class="sidebar-section">Purchases</div>
+      <a href="/purchases/new" class="{% if request.url.path == '/purchases/new' %}active{% endif %}">New Purchase</a>
+      <a href="/purchases/" class="{% if request.url.path == '/purchases/' %}active{% endif %}">Purchases</a>
+      {% endif %}
+      {% if user %}
+      <div class="sidebar-section">{{ user.display_name }}</div>
+      <a href="/account/password" class="{% if request.url.path == '/account/password' %}active{% endif %}">Change password</a>
+      <form method="post" action="/logout" style="margin:0;">
+        <button type="submit" class="nav-button">Sign out</button>
+      </form>
+      {% endif %}
     </nav>
   </aside>
 
@@ -57,6 +71,7 @@
 </div>
 <script>
   // Progressive enhancement only: the nav link works fine without this.
+  {% if request.state.user and request.state.user.is_admin %}
   fetch('/review/count').then(function (r) { return r.json(); }).then(function (data) {
     if (data.count > 0) {
       var text = ' (' + data.count + ')';
@@ -64,6 +79,7 @@
       document.getElementById('mobile-review-count-badge').textContent = text;
     }
   }).catch(function () {});
+  {% endif %}
 
   // Mobile nav: the sidebar doubles as the dropdown menu on narrow screens.
   (function () {

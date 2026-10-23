@@ -28,6 +28,12 @@ Data visibility within a test:
     to subsequent queries through the db session.
 """
 
+import os
+
+# Must be set before the app is imported: app.main refuses to start without a secret.
+os.environ.setdefault("SESSION_SECRET", "test-secret-test-secret-test-secret-0123456789")
+os.environ.setdefault("ALLOWED_ORIGINS", "http://testserver")
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -123,20 +129,12 @@ def db(db_connection):
 # Per-test FastAPI HTTP client — for route-level integration tests
 # ---------------------------------------------------------------------------
 
+TEST_PASSWORD = "test password 12345"
+
+
 @pytest.fixture
-def client(db_connection):
-    """
-    FastAPI TestClient with get_db overridden to use the per-test connection.
-
-    Each request to a route receives a fresh session bound to db_connection
-    with join_transaction_mode="create_savepoint". When the route calls
-    db.commit(), only the SAVEPOINT is released — the outer test transaction
-    remains open and is rolled back by db_connection at test teardown.
-
-    Because both this fixture and db depend on the same db_connection
-    instance, data written by routes is visible to verification queries
-    made through db in the same test.
-    """
+def _override_db(db_connection):
+    """Point the app's get_db at the per-test connection (see module docstring)."""
     TestSession = sessionmaker(
         bind=db_connection,
         join_transaction_mode="create_savepoint",
@@ -150,6 +148,61 @@ def client(db_connection):
             session.close()
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
-    with TestClient(fastapi_app, raise_server_exceptions=True) as c:
-        yield c
+    yield TestSession
     fastapi_app.dependency_overrides.pop(get_db, None)
+
+
+def _new_client():
+    # Browsers send Origin on every POST; the app's CSRF check requires it.
+    return TestClient(
+        fastapi_app, raise_server_exceptions=True,
+        headers={"Origin": "http://testserver"},
+    )
+
+
+def _signed_in_client(_override_db, username, role):
+    """A client signed in through the real POST /login. Auth is never bypassed."""
+    from app.models.enums import UserRole
+    from app.services import user_service
+
+    session = _override_db()
+    user_service.create_user(
+        session, username=username, display_name=username.title(), role=UserRole(role),
+        password=TEST_PASSWORD, must_change_password=False,
+    )
+    session.commit()
+    session.close()
+
+    c = _new_client()
+    c.__enter__()
+    r = c.post("/login", data={"username": username, "password": TEST_PASSWORD},
+               follow_redirects=False)
+    assert r.status_code == 303, "test sign-in failed"
+    return c
+
+
+@pytest.fixture
+def anon_client(_override_db):
+    """Not signed in."""
+    with _new_client() as c:
+        yield c
+
+
+@pytest.fixture
+def admin_client(_override_db):
+    c = _signed_in_client(_override_db, "testadmin", "admin")
+    yield c
+    c.__exit__(None, None, None)
+
+
+@pytest.fixture
+def employee_client(_override_db):
+    c = _signed_in_client(_override_db, "testemployee", "employee")
+    yield c
+    c.__exit__(None, None, None)
+
+
+@pytest.fixture
+def client(admin_client):
+    """The default client for route tests: signed in as an administrator."""
+    return admin_client

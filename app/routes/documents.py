@@ -1,12 +1,14 @@
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.auth import require_admin, require_user
 from app.database import get_db
+from app.models.user import User
 from app.models.document import Document
 from app.models.enums import LinkedRecordType
 from app.services.document_service import save_uploaded_file
@@ -15,7 +17,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 def list_documents(
     request: Request,
     db: Session = Depends(get_db),
@@ -33,7 +35,7 @@ def list_documents(
     })
 
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(require_admin)])
 async def upload_document(
     db: Session = Depends(get_db),
     linked_record_type: str = Form(...),
@@ -56,8 +58,11 @@ async def upload_document(
 
 
 @router.get("/{doc_id}/download")
-def download_document(doc_id: int, db: Session = Depends(get_db)):
+def download_document(doc_id: int, db: Session = Depends(get_db), user: User = Depends(require_user)):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc or not os.path.exists(doc.file_path):
-        return RedirectResponse(url="/documents/")
+        raise HTTPException(status_code=404, detail="Document not found.")
+    # Employees may download receipts attached to purchases and nothing else.
+    if not user.is_admin and doc.linked_record_type != LinkedRecordType.purchase:
+        raise HTTPException(status_code=403, detail="Administrator access required.")
     return FileResponse(doc.file_path, filename=doc.original_filename)

@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.auth import require_admin
 from app.database import get_db
 from app.models.purchase import Purchase
 from app.models.vendor import Vendor
@@ -91,7 +92,7 @@ def list_purchases(
     })
 
 
-@router.get("/export")
+@router.get("/export", dependencies=[Depends(require_admin)])
 def export_purchases(db: Session = Depends(get_db)):
     import openpyxl
     from openpyxl.styles import Font
@@ -303,7 +304,7 @@ async def update_purchase(
     return RedirectResponse(url=f"/purchases/{purchase_id}/edit?msg=Purchase+updated", status_code=303)
 
 
-@router.post("/{purchase_id}/review")
+@router.post("/{purchase_id}/review", dependencies=[Depends(require_admin)])
 def toggle_review_status(purchase_id: int, db: Session = Depends(get_db)):
     purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
     if not purchase:
