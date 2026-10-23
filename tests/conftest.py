@@ -29,7 +29,7 @@ Data visibility within a test:
 """
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
@@ -59,6 +59,18 @@ def engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # pysqlite's default transaction handling breaks SAVEPOINTs: it never emits
+    # BEGIN itself, so a "committed" savepoint leaks past the outer rollback.
+    # This is SQLAlchemy's documented recipe for making SAVEPOINT work.
+    @event.listens_for(eng, "connect")
+    def _no_implicit_begin(dbapi_conn, _record):
+        dbapi_conn.isolation_level = None
+
+    @event.listens_for(eng, "begin")
+    def _emit_begin(conn):
+        conn.exec_driver_sql("BEGIN")
+
     Base.metadata.create_all(bind=eng)
     yield eng
     Base.metadata.drop_all(bind=eng)
