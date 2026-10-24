@@ -1326,6 +1326,50 @@ Suggested structure:
 
 
 
+\## Git and GitHub Conventions
+
+
+
+Established by the history of this repository; follow it for every commit and pull request.
+
+
+
+\### Commits
+
+
+
+\- Title: one concise, imperative line naming the actual change ("Only the purchase that created a unit may change its acquisition cost"). No trailing period, no vague titles like "updates".
+
+\- Body (blank line after the title), wrapped near 72 columns: why the change was needed and what behaviour results; name migrations, permissions or data effects; state validation only for checks that were actually run (tests, an isolated Postgres rehearsal), and say what was not tested.
+
+\- Keep each commit to one logical change with its tests and docs. Do not mix a feature with unrelated cleanup.
+
+\- Review `git diff --staged` before committing. Stage files by name, never `git add -A` blindly. Never commit `.env`, secrets, `storage/receipts/`, database dumps or backups, `.claude/settings.local.json` changes, or unrelated files.
+
+\- Attribution: end the message with the trailer lines the session provides (`Co-Authored-By: …` and `Claude-Session: …`). Do not invent other authors or trailers.
+
+\- Identity: the repository has no configured git user. Commit with `git -c user.name=drew90b -c user.email=drew.bollich@gmail.com commit …`.
+
+\- Do not commit or push unless asked. Push normally to `origin`; never `--force` on `main` or any shared branch. Fix a pushed mistake with a new commit.
+
+
+
+\### Pull requests
+
+
+
+\- There is no PR template in this repository. Lead with the problem and the resulting behaviour, then list validation (commands and results actually observed) and material limitations or deployment steps (migrations, `.env` changes, restarts).
+
+\- End the description with the attribution lines the session provides.
+
+\- Deployment is manual on ubuntu-dev; say in the PR when a change needs a backup, migration or `.env` change before it goes live.
+
+
+
+---
+
+
+
 \## Output Expectations for Claude
 
 
