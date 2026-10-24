@@ -442,6 +442,7 @@ what to enter, in what order, and what records get created.
 1. Purchases → Record Purchase. The system records you as the person who entered it. "Who made the purchase" is a separate typed field.
 2. To correct a mistake, open the purchase from the list and edit it, as long as it is still *Needs Review*. A receipt can be added the same way.
 3. If the purchase shows as reviewed, it is read-only. Ask an administrator to reopen it.
+4. The Purchases list shows 50 per page, newest first. Use Previous/Next at the bottom; searches and filters stay applied across pages. Export Excel (administrator) still includes every purchase.
 
 **Administrator:**
 1. Review, or Purchases → Mark Reviewed, records you as the reviewer with the time.

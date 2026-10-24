@@ -17,6 +17,16 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (branch `feature/employee-access`, not deployed)
+
+Prompted by an iPhone Safari demo where pages kept loading and the menu sometimes needed two taps. Not reproduced without the phone; the code-level cause found was structural.
+
+- **Cause found:** `/purchases/` sent all 962 rows (about 1 MB, 0.5 s on the server) and the Menu button's script sat at the very end of the page, so the button was visible but did nothing until the whole page had loaded.
+- **Mobile menu:** the menu script now sits right after the sidebar in `base.html`, so it is wired before any page content. The `/review/count` fetch stays at the end (it is optional).
+- **Paging:** `/purchases/` shows 50 per page, newest first, with Previous/Next and "Page N of M · X purchases". The vendor, purchaser, stock #, category, review status and date filters carry across pages. Out-of-range pages are clamped. Export is unchanged and still includes every purchase.
+- **Not changed:** the menu height (`100vh`); the suspected Safari toolbar overlap has not been reproduced.
+- **Verified:** `tests/test_purchase_pagination.py` (7 tests); suite 288 passed, 1 skipped. On the isolated test app with the restored dev data, both test accounts get 50 rows and about 55 KB for page 1, and 12 rows on page 20.
+
 ### 2026-10-23 — Employee Sign-In and Purchase Permissions (branch `feature/employee-access`, not deployed)
 
 **Goal:** Let Belinda (employee) sign in individually, enter purchases, attach receipts and correct pending purchases, while review and everything else stays administrator-only. Record who entered and who reviewed each purchase, separate from who made it. Enforce on the server.

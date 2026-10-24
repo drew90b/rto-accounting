@@ -93,4 +93,13 @@
   </table>
 </div>
 
+{% if pages > 1 %}
+<div class="pagination" style="display:flex; gap:12px; align-items:center; justify-content:center; margin:12px 0;">
+  {% set base = '/purchases/?' ~ (filter_query ~ '&' if filter_query else '') %}
+  {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}" class="btn btn-secondary">&larr; Previous</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }} &middot; {{ total }} purchases</span>
+  {% if page < pages %}<a href="{{ base }}page={{ page + 1 }}" class="btn btn-secondary">Next &rarr;</a>{% endif %}
+</div>
+{% endif %}
+
 {% endblock %}

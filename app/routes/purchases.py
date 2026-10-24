@@ -1,5 +1,6 @@
 import io
 from datetime import date
+from urllib.parse import urlencode
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -23,6 +24,7 @@ from app.services.purchase_service import (
 from app.services.document_service import save_uploaded_file
 
 router = APIRouter()
+PAGE_SIZE = 50
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -61,6 +63,7 @@ def list_purchases(
     review_status: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    page: int = 1,
 ):
     query = db.query(Purchase)
     if vendor:
@@ -77,11 +80,29 @@ def list_purchases(
         query = query.filter(Purchase.purchase_date >= date.fromisoformat(date_from))
     if date_to:
         query = query.filter(Purchase.purchase_date <= date.fromisoformat(date_to))
-    purchases = query.order_by(Purchase.purchase_date.desc(), Purchase.id.desc()).all()
+    total = query.count()
+    pages = max(1, -(-total // PAGE_SIZE))
+    page = min(max(page, 1), pages)
+    purchases = (
+        query.order_by(Purchase.purchase_date.desc(), Purchase.id.desc())
+        .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).all()
+    )
+    # Filters carried on the Previous/Next links.
+    filters = {
+        "vendor": vendor, "purchaser": purchaser, "category": category,
+        "stock_number": stock_number, "review_status": review_status,
+        "date_from": date_from, "date_to": date_to,
+    }
+    filter_query = urlencode({k: v for k, v in filters.items() if v})
 
     return templates.TemplateResponse("purchases/list.html", {
         "request": request,
         "purchases": purchases,
+        "page": page,
+        "pages": pages,
+        "total": total,
+        "page_size": PAGE_SIZE,
+        "filter_query": filter_query,
         "vendor_filter": vendor or "",
         "purchaser_filter": purchaser or "",
         "category_filter": category or "",

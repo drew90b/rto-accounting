@@ -60,28 +60,10 @@
       {% endif %}
     </nav>
   </aside>
-
-  <main class="main">
-    {% set msg = request.query_params.get('msg') %}
-    {% if msg %}
-    <div class="alert alert-success">{{ msg | replace('+', ' ') }}</div>
-    {% endif %}
-    {% block content %}{% endblock %}
-  </main>
-</div>
 <script>
-  // Progressive enhancement only: the nav link works fine without this.
-  {% if request.state.user and request.state.user.is_admin %}
-  fetch('/review/count').then(function (r) { return r.json(); }).then(function (data) {
-    if (data.count > 0) {
-      var text = ' (' + data.count + ')';
-      document.getElementById('review-count-badge').textContent = text;
-      document.getElementById('mobile-review-count-badge').textContent = text;
-    }
-  }).catch(function () {});
-  {% endif %}
-
   // Mobile nav: the sidebar doubles as the dropdown menu on narrow screens.
+  // Runs right after the sidebar, not at the end of the page, so the Menu
+  // button works while a long page is still loading.
   (function () {
     var btn = document.getElementById('mobile-menu-btn');
     var sidebar = document.getElementById('sidebar');
@@ -108,6 +90,27 @@
       }
     });
   })();
+</script>
+
+  <main class="main">
+    {% set msg = request.query_params.get('msg') %}
+    {% if msg %}
+    <div class="alert alert-success">{{ msg | replace('+', ' ') }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script>
+  // Progressive enhancement only: the nav link works fine without this.
+  {% if request.state.user and request.state.user.is_admin %}
+  fetch('/review/count').then(function (r) { return r.json(); }).then(function (data) {
+    if (data.count > 0) {
+      var text = ' (' + data.count + ')';
+      document.getElementById('review-count-badge').textContent = text;
+      document.getElementById('mobile-review-count-badge').textContent = text;
+    }
+  }).catch(function () {});
+  {% endif %}
 </script>
 </body>
 </html>
