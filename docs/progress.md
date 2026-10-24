@@ -9,7 +9,7 @@ Update this file as work is completed.
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
 **As of:** 2026-10-24
-**Server:** The running instance is the systemd service `rto-web` (enabled, since 2026-10-24) on ubuntu-dev: uvicorn as `drew`, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. Manage it with `sudo systemctl restart|status rto-web` and `journalctl -u rto-web`; see README "Running as a service". Crash-restart and reboot tests are still to be run.
+**Server:** The running instance is the systemd service `rto-web` (enabled, since 2026-10-24) on ubuntu-dev: uvicorn as `drew`, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. Manage it with `sudo systemctl restart|status rto-web` and `journalctl -u rto-web`; see README "Running as a service". Crash-restart and reboot tests passed 2026-10-24.
 **Database:** Migrations 001–009 exist in the repo and `rto_accounting_dev` is at 009 (applied 2026-10-24). Employee sign-in is live; see the 2026-10-23 "Employee Sign-In" entry.
 **Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
 
@@ -21,7 +21,7 @@ Update this file as work is completed.
 
 - `deploy/rto-web.service` runs uvicorn as `drew` from the existing checkout and `.venv`, bound to `100.123.116.111:8000`, `Restart=always` (5 s), no start limit. It starts after `tailscaled` and `postgresql`, and an `ExecStartPre` waits up to 2 minutes for the Tailscale address before binding.
 - Install, verification (including a kill -9 restart test and a reboot) and rollback to tmux are in README "Running as a service". The tmux app must be stopped before the service starts.
-- Installed and enabled 2026-10-24; the tmux `web` window was stopped first. Verified afterwards: one listener on 100.123.116.111:8000 (the service's uvicorn, parent pid 1, in `rto-web.service`'s cgroup), login page 200, anonymous requests redirected to `/login`, export and docs closed, record counts unchanged. Not yet run: forced-crash restart and reboot tests. Belinda's office-computer setup waits until she is available.
+- Installed and enabled 2026-10-24; the tmux `web` window was stopped first. Verified afterwards: one listener on 100.123.116.111:8000 (the service's uvicorn, parent pid 1, in `rto-web.service`'s cgroup), login page 200, anonymous requests redirected to `/login`, export and docs closed, record counts unchanged. Then a forced `kill -9` was followed by an automatic restart about 6 s later, and a reboot brought the service up by itself (started 5 s after boot, no restarts, one listener, login 200, database at 009 with counts intact). Belinda's office-computer setup waits until she is available.
 - PO-3788 (test entry) was corrected to $0 as "VOID - TEST" with its receipt and history kept.
 
 ### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (branch `feature/employee-access`, not deployed)
