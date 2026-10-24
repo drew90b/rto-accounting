@@ -41,7 +41,7 @@ Quality of life improvements that reduce friction for daily users.
 |---|---|---|---|
 | 1.5.1 | Inline form validation | 🔲 | Show errors next to fields, not just silent failure. |
 | 1.5.2 | Confirmation messages | 🔲 | Flash message on every successful create/edit/delete. |
-| 1.5.3 | Pagination | 🔲 | List views load all records. Add pagination for large datasets. |
+| 1.5.3 | Pagination | 🔧 | Purchases list is paged (50 per page, filters kept). Other list views still load all records. |
 | 1.5.4 | Better search filters | 🔲 | Name search, date range, status filter across all list views. |
 | 1.5.5 | Vendor UI | ✅ | List, add, edit, and Excel export. Registered at /vendors/. |
 | 1.5.6 | Lease auto-calculated financed balance | ✅ | Financed balance derived server-side on create as agreed amount − down payment. Live JS display on form. Validation added. |
@@ -111,6 +111,10 @@ Role-based access for different user types. Required before any multi-user or ex
 | 5.5 | Mechanic limited view | 🔲 | Mechanic role: repair job status updates only. |
 | 5.6 | Entered-by auto-populate | ✅ | Purchases record the signed-in user as entered-by and reviewer, separate from the purchaser. Other modules still use typed `entered_by`. |
 | 5.7 | Audit log | 🔧 | Purchases only: `purchase_events` records create, edit (old → new), receipt, review and reopen. |
+| 5.8 | Run under systemd | ✅ | `rto-web` service starts after reboot and restarts after a crash; Tailscale-only binding. Crash and reboot tests passed 2026-10-24. |
+| 5.9 | HTTPS through Tailscale Serve | 🔲 | Then set `SESSION_COOKIE_SECURE=true` and update `ALLOWED_ORIGINS`. |
+| 5.10 | Scheduled backups and an off-server copy | 🔲 | Backups are manual today (verified before the 009 deployment). |
+| 5.11 | Belinda's office-computer onboarding | 🔲 | Waiting until she is available; the idle timeout already covers a computer that may be shared. |
 
 ---
 
@@ -185,11 +189,13 @@ All of those remain in this system. Square feeds raw payment data; this system c
 
 ## Immediate Next Steps (Suggested Order)
 
+Business milestones (not yet done): capture November purchases and receipts in the app, then close November's books in December.
+
 1. **Month-end export pack** — single workbook with all required tabs for accountant review
 2. **Revenue by stream report** — summary view with period filter
 3. **Unit profitability view** — investment vs. collected, per unit
 4. **Lease auto-calculated financed balance** — compute from agreed amount minus down payment on form load
-5. **Authentication** — login and basic role protection before any shared deployment
+5. ~~**Authentication**~~ — done 2026-10-24 (individual sign-in, admin/employee roles). Still open: HTTPS, scheduled and off-server backups, Belinda's office computer (Phase 5)
 
 ---
 

@@ -7,15 +7,27 @@ Update this file as work is completed.
 
 ## Current State
 
-**Phase:** 1.5 — Workflow Hardening (in progress)
+**Phase:** 1.5 — Workflow Hardening (in progress); Phase 5 employee access deployed
 **As of:** 2026-10-24
 **Server:** The running instance is the systemd service `rto-web` (enabled, since 2026-10-24) on ubuntu-dev: uvicorn as `drew`, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. Manage it with `sudo systemctl restart|status rto-web` and `journalctl -u rto-web`; see README "Running as a service". Crash-restart and reboot tests passed 2026-10-24.
 **Database:** Migrations 001–009 exist in the repo and `rto_accounting_dev` is at 009 (applied 2026-10-24). Employee sign-in is live; see the 2026-10-23 "Employee Sign-In" entry.
-**Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
+**Backups:** Manual only. The pre-009 database dump and receipts archive were verified (test restore, file count) and are in `~/rto-backups`. Scheduled backups and an off-server copy are not set up.
+**Open work:** Pending: Belinda's office-computer onboarding, HTTPS through Tailscale Serve, scheduled and off-server backups. Historical inventory reconciliation is paused (see 2026-10-23 entry). Immediate business milestones, not yet done: November purchase capture, then closing November's books in December.
 
 ---
 
 ## Completed Work
+
+### 2026-10-24 — Employee Access Deployed and Verified
+
+- **Deployed:** `feature/employee-access` was fast-forwarded into `main` and the app restarted. Migration 009 is applied to `rto_accounting_dev`. Before it, the database and `storage/receipts` were backed up and the backups verified (the dump was restored into a scratch cluster and its revision and row counts matched live; the archive's file count matched the folder). Existing business records were unchanged: 962 purchases, 157 units, 966 transactions before and after.
+- **Accounts:** the real admin and employee (Belinda) accounts were created through hidden password prompts and both passed browser checks on the live app. No test accounts or data were copied.
+- **Operational:** purchase permissions, entered-by / reviewed-by attribution, correction history, review locking, and reopen with a reason all worked in the live walkthrough. The iPhone walkthrough passed for the mobile menu and 50-row pagination.
+- **Live test entry:** PO-3788 was created by Belinda's sign-in check and corrected by the admin to $0 with "VOID - TEST"; its receipt and history are kept. The app has no void feature; this was the existing reopen/edit path.
+- **systemd:** the app is managed by `rto-web` (see the entry above). A forced `kill -9` was followed by an automatic restart in about 6 seconds; after a manual reboot the service started on its own with one listener on `100.123.116.111:8000`, login 200, anonymous routes redirecting to `/login`, database at 009.
+- **Network:** unchanged. Tailscale-only on port 8000, plain HTTP.
+- **Pending:** Belinda's office-computer onboarding; HTTPS through Tailscale Serve (then `SESSION_COOKIE_SECURE=true` and a new `ALLOWED_ORIGINS`); scheduled backups and an off-server copy.
+- **Immediate business milestones, not yet done:** November purchase capture, then closing November's books in December.
 
 ### 2026-10-24 — systemd Service for the Live App
 
@@ -24,7 +36,7 @@ Update this file as work is completed.
 - Installed and enabled 2026-10-24; the tmux `web` window was stopped first. Verified afterwards: one listener on 100.123.116.111:8000 (the service's uvicorn, parent pid 1, in `rto-web.service`'s cgroup), login page 200, anonymous requests redirected to `/login`, export and docs closed, record counts unchanged. Then a forced `kill -9` was followed by an automatic restart about 6 s later, and a reboot brought the service up by itself (started 5 s after boot, no restarts, one listener, login 200, database at 009 with counts intact). Belinda's office-computer setup waits until she is available.
 - PO-3788 (test entry) was corrected to $0 as "VOID - TEST" with its receipt and history kept.
 
-### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (branch `feature/employee-access`, not deployed)
+### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (deployed 2026-10-24)
 
 Prompted by an iPhone Safari demo where pages kept loading and the menu sometimes needed two taps. Not reproduced without the phone; the code-level cause found was structural.
 
@@ -34,7 +46,7 @@ Prompted by an iPhone Safari demo where pages kept loading and the menu sometime
 - **Not changed:** the menu height (`100vh`); the suspected Safari toolbar overlap has not been reproduced.
 - **Verified:** `tests/test_purchase_pagination.py` (7 tests); suite 288 passed, 1 skipped. On the isolated test app with the restored dev data, both test accounts get 50 rows and about 55 KB for page 1, and 12 rows on page 20.
 
-### 2026-10-23 — Employee Sign-In and Purchase Permissions (branch `feature/employee-access`, not deployed)
+### 2026-10-23 — Employee Sign-In and Purchase Permissions (built on `feature/employee-access`; deployed 2026-10-24)
 
 **Goal:** Let Belinda (employee) sign in individually, enter purchases, attach receipts and correct pending purchases, while review and everything else stays administrator-only. Record who entered and who reviewed each purchase, separate from who made it. Enforce on the server.
 
@@ -67,8 +79,8 @@ Prompted by an iPhone Safari demo where pages kept loading and the menu sometime
 - 281 tests pass (plus 1 opt-in PostgreSQL test), in random order, repeatedly. Deliberate breakages (an admin router opened to employees, the pending-only edit guard, the other-unit guard) were each caught.
 - Migration 009 rehearsed on a throwaway PostgreSQL cluster restored from the pre-rollout backup: 007 → 008 → 009, downgrade to 008, upgrade again. The 962 purchases were byte-identical (checksum) and every attribution column was NULL. The app was then run against that copy and exercised end to end (sign-in, forced password change, Belinda's 403s, create/edit/review/reopen, history). `rto_accounting_dev` was not touched.
 
-#### Deployment still to do (needs the owner)
-Back up the database and `storage/receipts`; add `SESSION_SECRET`, `ALLOWED_ORIGINS` (and `SESSION_COOKIE_SECURE` if HTTPS) to `.env`; `pip install -r requirements.txt`; `alembic upgrade head`; create the admin and Belinda with `users create ... --temporary`; restart `rto:web`. Rollback: check out the previous commit (the old code runs against the new schema); a downgrade destroys attribution, so restore from backup instead. HTTPS through Tailscale Serve and running under systemd are separate, pending decisions.
+#### Deployment plan (carried out 2026-10-24; see that day's "Employee Access Deployed" entry)
+Back up the database and `storage/receipts`; add `SESSION_SECRET`, `ALLOWED_ORIGINS` (and `SESSION_COOKIE_SECURE` if HTTPS) to `.env`; `pip install -r requirements.txt`; `alembic upgrade head`; create the admin and Belinda with `users create ... --temporary`; restart `rto:web`. Rollback: check out the previous commit (the old code runs against the new schema); a downgrade destroys attribution, so restore from backup instead. HTTPS through Tailscale Serve was a separate decision and is still pending; running under systemd was done afterwards (2026-10-24).
 
 ### 2026-10-23 — General Expenses and Payment Source
 
@@ -515,7 +527,7 @@ non-nullable in ORM models, causing schema drift between environments.
 | ~~Vendor UI~~ | ✅ Complete — 2026-03-14 |
 | ~~Dashboard cash warning~~ | ✅ Complete — 2026-03-14 |
 | Form validation feedback | Forms silently fail on missing required fields in some cases. No inline error messages yet. |
-| Pagination | List views load all records. No pagination for large datasets. |
+| Pagination | Purchases list is paged (50 per page, 2026-10-24). Other list views still load all records. |
 | Duplicate transaction guard on sale edit | If a user edits sale_amount after save, the auto-created transaction will be stale. No warning is shown. |
 
 ### Phase 2 — Not started
@@ -545,6 +557,8 @@ See `docs/roadmap.md` for full list.
 | 2026-03-08 | Documents stored on disk, metadata in DB | Simple; avoids binary storage in Postgres; easy to back up |
 | 2026-03-08 | Flash messages via URL query param (`?msg=...`) | No session middleware required; keeps stack simple |
 | 2026-03-08 | `create_all` runs on startup in addition to Alembic | Allows quick startup in dev without running migrations manually. **Superseded:** no `create_all` call exists in `app/` as of 2026-10-23; apply migrations with Alembic. |
+| 2026-10-24 | Sessions end after 30 minutes idle or 12 hours from sign-in | Belinda's office computer is primarily hers but not confirmed private |
+| 2026-10-24 | The live app runs under systemd, bound to the Tailscale address only | Starts after reboot, restarts after a crash; no public exposure |
 
 ---
 

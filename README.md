@@ -137,6 +137,6 @@ tmux new-window -d -t rto -n web -c /home/drew/projects/rto "source .venv/bin/ac
 
 ## Current status
 
-MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in and employee permissions are built on `feature/employee-access` and not yet deployed. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
+MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in with admin and employee roles has been live since 2026-10-24, and systemd keeps the app running (restart after a crash, start after a reboot). Remaining before wider use: Belinda's office-computer setup, HTTPS through Tailscale Serve, and scheduled and off-server backups. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for what is built, in progress, and planned.

@@ -38,9 +38,18 @@ docs/                — Project documentation
 
 ---
 
+## Deployment
+
+- The live app is the systemd service `rto-web` (`deploy/rto-web.service`) on ubuntu-dev: uvicorn as the `drew` user from `/home/drew/projects/rto`, using that checkout's `.venv`, `.env` and `storage/receipts`. It restarts 5 seconds after a crash and starts after a reboot once `tailscaled` and PostgreSQL are up, waiting up to 2 minutes for the Tailscale address.
+- It binds only to the Tailscale address `100.123.116.111` on port 8000, so it is reachable only over the tailnet and speaks plain HTTP. HTTPS through Tailscale Serve is not set up yet.
+- Deployment is manual: back up the database and `storage/receipts`, merge, install any new requirements, `alembic upgrade head`, then `sudo systemctl restart rto-web`. See README "Running as a service".
+- Backups are manual (verified dumps and a receipts archive in `~/rto-backups`). There is no scheduled backup and no off-server copy yet.
+
+---
+
 ## Sign-In and Access Control
 
-- `SessionMiddleware` keeps a signed (not encrypted) cookie holding only `uid`, `ver` and `login_at`. `require_user` re-reads the user from the database on every request, so disabling an account or changing a role applies on the next click; a session ends after `SESSION_MAX_HOURS` (default 12) from sign-in, or after `SESSION_IDLE_MINUTES` (default 30) without a request; activity restarts only the idle clock.
+- `SessionMiddleware` keeps a signed (not encrypted) cookie holding only `uid`, `ver`, `login_at` and `seen_at`. `require_user` re-reads the user from the database on every request, so disabling an account or changing a role applies on the next click; a session ends after `SESSION_MAX_HOURS` (default 12) from sign-in, or after `SESSION_IDLE_MINUTES` (default 30) without a request; activity restarts only the idle clock.
 - `app/main.py` includes every router with a dependency, so a new router is protected only if someone remembers to add one: Purchases and Documents use `require_user`, everything else `require_admin`, with admin-only routes inside those two. The route-inventory test catches mistakes.
 - `OriginCheckMiddleware` rejects any POST whose Origin (or Referer) is not in `ALLOWED_ORIGINS`.
 - `/docs`, `/redoc` and `/openapi.json` are disabled. The app refuses to start without `SESSION_SECRET` or `ALLOWED_ORIGINS` (list every exact address people type, scheme and port included, or sign-in returns 403).
