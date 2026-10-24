@@ -157,6 +157,8 @@ Not covered yet: an off-server copy (plan below). All backups are on the same ma
 
 ### Off-server copy: Backblaze B2 setup (planned, not installed)
 
+The canonical key and recovery runbook, with current status, is [`docs/backup_recovery.md`](docs/backup_recovery.md). Read it before enabling uploads.
+
 Nothing below has been bought, installed or configured. It protects against losing this machine, its disk or its host. Nightly cost should be small (each run is about 13 MB); check Backblaze's current pricing and free tier before relying on that.
 
 The design: the server can encrypt but cannot decrypt. It holds only a GPG **public** key. The **private** key lives off the server, so someone who gets into the server (or the bucket) cannot read the backups, and losing the server does not lose the ability to restore.
@@ -183,6 +185,7 @@ You need to choose or provide: the B2 account and bucket name, the application k
 | [`docs/architecture.md`](docs/architecture.md) | Technical architecture, service layer, and test design |
 | [`docs/roadmap.md`](docs/roadmap.md) | Development phases and current status |
 | [`docs/progress.md`](docs/progress.md) | Development log — what was built and when |
+| [`docs/backup_recovery.md`](docs/backup_recovery.md) | Backup encryption keys, recovery copies, and how to recover from an off-server backup |
 
 ---
 

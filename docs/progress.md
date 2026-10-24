@@ -18,6 +18,14 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-10-24 — Off-Server Backup: Encryption Key and Recovery Runbook (uploads not enabled)
+
+- **Done:** Backblaze account and private bucket `rto-backups-drew` (Object Lock off). A GPG key "RTO Backup Recovery" (fingerprint `288D0C359BDE2DCA218D5F94A251C38DF361E451`) was created on the owner's Windows laptop. The private key was exported to USB copy 1; its SHA-256 matched the export. An isolated GPG-home test showed the USB copy decrypts a file encrypted with only the public key, and the fingerprint matched.
+- **Runbook:** `docs/backup_recovery.md` is the single recovery document (status table, public vs private key, recovery-copy locations without secrets, separated Windows and Ubuntu commands, replacement-computer recovery, pre-replacement verification, D-0001, and the conditions for enabling uploads). The README links to it. No keys, passphrases or credentials are in Git.
+- **Pending:** a second independent private-key copy (not yet confirmed); public key on ubuntu-dev; `rclone` install; restricted B2 application key; the bucket lifecycle rule (not added yet); `deploy/rto-backup-offsite.sh` (not written). **Uploads are disabled.**
+- **Untested:** download from B2, decrypt and restore from a cloud backup. The off-server copy does not count as protection until that drill has passed once.
+- **Known missing attachment:** D-0001 is not in any backup (see the runbook).
+
 ### 2026-10-24 — Nightly Backups (local; off-server copy pending)
 
 - **Job:** `deploy/rto-backup.sh` run by `rto-backup.service` from `rto-backup.timer` (02:30 America/Chicago, `Persistent=true`). Per run: `pg_dump -Fc`, a receipts archive, a copy of `.env` for recovery, a manifest (git commit, alembic revision, counts, packages) and checksums, in a mode-700 folder under `~/rto-backups/auto`. Credentials come from `.env` into `PG*` variables, never onto a command line or into output.
