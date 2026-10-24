@@ -11,16 +11,16 @@ The one place to read when something has gone wrong, or before trusting the off-
 | Item | State |
 |---|---|
 | Nightly local backups (database, receipts, `.env`, manifest, checksums) on ubuntu-dev, restore-verified every run | **Active** (README "Backups") |
-| Backblaze B2 account and private bucket `rto-backups-drew` (Object Lock off) | **Created.** No lifecycle (deletion) rule is set, deliberately: off-server retention is undecided and must preserve the six monthly backups. |
+| Backblaze B2 account and private bucket `rto-backups-drew` (Object Lock off, no lifecycle rule) | **Created.** Initial retention decision (owner, 2026-10-24): keep every uploaded backup, no automatic deletion; the bucket will grow; revisit pruning later. See section 7. |
 | Encryption key "RTO Backup Recovery" created on the owner's Windows laptop | **Done** (fingerprint below) |
 | Private key exported and copied to USB copy 1; SHA-256 of the copy matched | **Verified** |
 | Isolated decrypt test: the USB copy decrypted a file encrypted with only the public key; fingerprint matched | **Verified** |
-| Second independent copy of the private key | **PENDING.** There is no second USB stick and no dependable password manager yet. Today the key exists as USB copy 1 plus the retained export on the laptop; the laptop file is a convenience copy, not an independent one (section 3). |
-| Passphrase storage | **To be confirmed.** A dependable place for it has not been chosen yet. Do not rely on the key until it is recorded somewhere that survives the laptop. |
-| Public key imported on ubuntu-dev | **PENDING** |
-| `rclone` installed, restricted B2 application key configured | **PENDING** (installation approved; not done) |
-| `deploy/rto-backup-offsite.sh` (encrypt and upload) | **NOT WRITTEN.** Uploads are disabled. |
-| Download from B2, decrypt, restore drill | **UNTESTED.** Nothing has been uploaded. Do not treat the off-server copy as protection until section 8 has been completed once. |
+| Second independent copy of the private key | **PENDING (follow-up, not a prerequisite for uploads).** No second USB stick or dependable password manager yet. Today the key exists as USB copy 1 plus the retained export on the laptop; the laptop file is a convenience copy, not an independent one (section 3). The owner authorized encrypted uploads on this basis, knowing a single place can still be lost. |
+| Passphrase storage | **Recorded** by the owner on paper at home (2026-10-24). A second place for it is still advisable. |
+| Public key imported on ubuntu-dev | **Done 2026-10-24.** Primary fingerprint matched; `gpg --list-secret-keys` there lists 0 keys; a test file encrypted on the server could not be decrypted there. |
+| `rclone` (1.60.1) installed on ubuntu-dev; remote `b2rto` configured with a B2 application key limited to the bucket | **Done 2026-10-24.** Listing the bucket works (it is empty); any other bucket name is refused. The config file is mode 600. **The key is Read and Write and therefore *can delete* files in the bucket** (section 7). |
+| `deploy/rto-backup-offsite.sh` (encrypt and upload) | **NOT WRITTEN.** No upload of any kind has happened. **Nightly uploads are disabled.** |
+| Trial encrypted upload, download, laptop decryption, isolated database and receipt restore (section 8) | **PENDING / UNTESTED.** Do not treat the off-server copy as protection until this has passed once. |
 | Document D-0001 attachment | **Known missing** (section 9) |
 
 Until the pending items are done, the only backups are on the same machine and disk as the live data.
@@ -104,7 +104,9 @@ If `--list-secret-keys` shows anything, remove it (`gpg --delete-secret-keys <fi
 
 ## 7. Backup contents and planned off-server layout
 
-Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The planned off-server job tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. The B2 application key will be limited to that bucket, with list/read/write and no delete, so the server cannot erase history. **Off-server retention is undecided.** It must keep at least the six monthly backups that the local policy keeps (plus whatever recent history is wanted) and be settled together with the upload design before any lifecycle rule is added. Until then the bucket has no deletion rule and only grows. Setup steps: README "Off-server copy: Backblaze B2 setup".
+Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The planned off-server job tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. Retention is **keep everything**: no lifecycle rule, no pruning, no automatic deletion. Storage will grow by about one encrypted backup per night (about 13 MB each at today's size, more as receipts accumulate); review the cost in Backblaze periodically and revisit pruning later, as a deliberate decision that keeps at least the six monthly backups the local policy keeps.
+
+**Delete access, stated plainly.** Backblaze's key form offers only Read and Write, Read Only or Write Only. The key `rto-ubuntu-dev-upload` is limited to the one bucket but is **Read and Write, which includes deleting files**. Anyone who gets onto ubuntu-dev (the key is in `~/.config/rclone/rclone.conf`, mode 600) could delete or overwrite the cloud backups. Rules that follow from this: the upload job uses `rclone copy` only, never `sync`, `move`, `delete` or `purge`; `hard_delete` stays off; nothing schedules a deletion; each upload has a new unique name so nothing is overwritten. Possible later hardening, not done: a Write Only key for the nightly job (check that it can still list and copy), keeping the Read key only on the laptop, or Object Lock. Setup steps: README "Off-server copy: Backblaze B2 setup".
 
 ## 8. Recovering on a replacement computer (UNTESTED for the cloud download; the local restore check runs every night)
 
@@ -177,23 +179,20 @@ Document D-0001 (purchase 2, uploaded 2026-09-13 as `image3.jpg`) records a path
 
 All of these must be true, and recorded in `docs/progress.md`:
 
-1. Private key copy 2 exists and its hash and an isolated decrypt test passed.
-2. The public key is imported on ubuntu-dev, its fingerprint matches, and `gpg --list-secret-keys` there is empty.
-3. The off-server retention design is decided and written down (it must preserve the six monthly backups), any lifecycle rule matches it, and the B2 application key is restricted to the bucket without delete access.
+1. The USB recovery key decrypts in an isolated test (done). A second independent key copy is a follow-up, not required for uploads.
+2. The public key is imported on ubuntu-dev, its fingerprint matches, and `gpg --list-secret-keys` there is empty (done).
+3. Retention is the recorded initial decision (keep every upload, no deletion), no lifecycle rule exists, and the job uses `rclone copy` only.
 4. A trial upload has been downloaded, decrypted on the laptop with the USB key, unpacked, and passed section 8's verification.
 
-## 11. Paused: next-step checklist
+## 11. Progress and next steps (paused 2026-10-24; nightly uploads NOT enabled)
 
-Off-server setup is **not complete**. Work stopped here on purpose until a recovery location is chosen. Nothing has been uploaded, and no copy of the key has been deleted.
+Done so far: Backblaze account and private bucket; key created, USB-copy-tested and passphrase recorded on paper; public key on ubuntu-dev (no private key there); `rclone` installed and the restricted `b2rto` remote verified. No backup has been uploaded.
 
-The location test: can you still get to the private key, its passphrase and the B2 login if the whole Proxmox host, ubuntu-dev and its backups are gone? A folder, disk or VM on that host does not count.
+Resume with these, one at a time:
 
-- [ ] **Choose where the second private-key copy lives.** Options: a second USB stick kept in another place (home versus workplace); a password manager's file attachment once you have one you trust; or another service you control that is not on the Proxmox host. The key file is passphrase-protected, but still keep it under your control.
-- [ ] **Choose where the passphrase lives**, separately from the key copies, and record the fingerprint, bucket name and copy locations in a short note kept with it (no secrets in the note).
-- [ ] **Verify copy 2:** matching SHA-256 against the export (section 5), then the isolated decrypt test against copy 2.
-- [ ] **Only then** decide about the laptop export: keep the public file, delete the private export, and note it here.
-- [ ] Import the public key on ubuntu-dev (section 6); fingerprint must match and `gpg --list-secret-keys` must be empty.
-- [ ] Install `rclone` (approved), and create the restricted B2 application key (no delete access); enter it only into `rclone config` on the server.
-- [ ] Decide off-server retention together with the upload design (it must preserve the six monthly backups) and only then add any B2 lifecycle rule; until then add none.
-- [ ] Write `deploy/rto-backup-offsite.sh`, upload one trial backup with uploads still manual, and run the full recovery drill (section 8): download, decrypt on the laptop, unpack, verify.
-- [ ] Record the drill in `docs/progress.md`, update section 1, and only then enable the nightly upload.
+- [ ] Write `deploy/rto-backup-offsite.sh`: tar the newest `rto_*` folder, encrypt it to the public key (`gpg --trust-model always --recipient 288D0C359BDE2DCA218D5F94A251C38DF361E451`), `rclone copy` it to `b2rto:rto-backups-drew/rto/` under a unique name, then check the remote size. Copy only; never sync, move or delete. Run it by hand first; do not wire it to the timer yet.
+- [ ] **Trial upload** of one backup, by hand.
+- [ ] **Download** it (laptop, web console or rclone), **decrypt on the laptop** with the USB key (section 8), unpack, and run `sha256sum -c SHA256SUMS`.
+- [ ] **Isolated database and receipt restore** (`deploy/rto-backup-verify.sh` and the scratch-database steps in section 8). Record the date and result in `docs/progress.md`.
+- [ ] Only after that passes: enable nightly uploads (service/timer hook), then update section 1.
+- [ ] Follow-ups, not blockers: a second independent private-key copy and a second place for the passphrase; then decide whether to delete the laptop's private export; consider a Write Only upload key or Object Lock; decide pruning later.

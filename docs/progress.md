@@ -18,15 +18,14 @@ Update this file as work is completed.
 
 ## Completed Work
 
-### 2026-10-24 — Off-Server Backup: Encryption Key and Recovery Runbook (uploads not enabled)
+### 2026-10-24 — Off-Server Backup: Key, Public Key, rclone Remote (uploads not enabled)
 
-- **Done:** Backblaze account and private bucket `rto-backups-drew` (Object Lock off). A GPG key "RTO Backup Recovery" (fingerprint `288D0C359BDE2DCA218D5F94A251C38DF361E451`) was created on the owner's Windows laptop. The private key was exported to USB copy 1; its SHA-256 matched the export. An isolated GPG-home test showed the USB copy decrypts a file encrypted with only the public key, and the fingerprint matched.
-- **Runbook:** `docs/backup_recovery.md` is the single recovery document (status table, public vs private key, recovery-copy locations without secrets, separated Windows and Ubuntu commands, replacement-computer recovery, pre-replacement verification, D-0001, and the conditions for enabling uploads). The README links to it. No keys, passphrases or credentials are in Git.
-- **Recovery copies today:** USB copy 1 (hash- and decrypt-tested) plus the private export retained on the laptop, which is not independent of the laptop. Nothing was deleted. There is no second USB stick or dependable password manager yet, so the passphrase's storage is also unconfirmed.
-- **Paused:** work stops until a recovery location is chosen that stays reachable if the entire Proxmox host is lost; the checklist is in `docs/backup_recovery.md` section 11.
-- **Pending:** a second independent private-key copy (not yet created); public key on ubuntu-dev; `rclone` install; restricted B2 application key; no bucket lifecycle rule, deliberately (off-server retention must preserve the six monthly backups and is undecided until the upload design is final); `deploy/rto-backup-offsite.sh` (not written). **Uploads are disabled.**
-- **Untested:** download from B2, decrypt and restore from a cloud backup. The off-server copy does not count as protection until that drill has passed once.
-- **Known missing attachment:** D-0001 is not in any backup (see the runbook).
+- **Done:** Backblaze account and private bucket `rto-backups-drew` (Object Lock off, no lifecycle rule). GPG key "RTO Backup Recovery" (fingerprint `288D0C359BDE2DCA218D5F94A251C38DF361E451`) made on the owner's Windows laptop; private key exported to USB copy 1 (SHA-256 matched; an isolated GPG-home test decrypted a file encrypted with only the public key). The passphrase is recorded on paper at home. The public key was copied to ubuntu-dev and imported: fingerprint matched, 0 secret keys on the server, and a file encrypted there could not be decrypted there. `rclone` 1.60.1 was installed (apt) and the `b2rto` remote configured with a bucket-restricted key (config mode 600): the bucket lists (empty) and another bucket name is refused.
+- **Decisions (owner):** encrypted uploads are authorized with the tested USB key and the retained laptop export as recovery copies; a second independent key copy is a follow-up, not a prerequisite. Initial cloud retention is to keep every uploaded backup with no automatic deletion; storage will grow and pruning is revisited later. The earlier plan for a 90-day lifecycle rule was dropped.
+- **Delete access:** Backblaze's form offers only Read and Write, Read Only or Write Only, so the upload key is Read and Write and *can delete* files in the bucket. The design compensates by using `rclone copy` only, never sync, move or delete, with unique names and `hard_delete` off. Stated plainly in the runbook.
+- **Runbook:** `docs/backup_recovery.md` is the single document, linked from the README; its section 11 holds the resume checklist. No keys, passphrases or credentials are in Git.
+- **Not done / untested:** `deploy/rto-backup-offsite.sh` is not written; no backup has been uploaded; download, laptop decryption and isolated restore from the cloud are untested. **Nightly uploads stay disabled until that recovery test passes.** D-0001 remains a known missing attachment, not in any backup.
+- **Follow-ups:** second independent private-key copy and a second place for the passphrase; decision on the laptop's private export; optional hardening (Write Only upload key, Object Lock).
 
 ### 2026-10-24 — Nightly Backups (local; off-server copy pending)
 
