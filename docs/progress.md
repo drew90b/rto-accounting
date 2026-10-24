@@ -9,7 +9,7 @@ Update this file as work is completed.
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
 **As of:** 2026-10-24
-**Server:** The running instance is uvicorn in tmux session `rto` (window `web`) on ubuntu-dev, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. A systemd unit (`deploy/rto-web.service`) is prepared for reboot/crash recovery but not yet installed; see README "Running as a service".
+**Server:** The running instance is the systemd service `rto-web` (enabled, since 2026-10-24) on ubuntu-dev: uvicorn as `drew`, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. Manage it with `sudo systemctl restart|status rto-web` and `journalctl -u rto-web`; see README "Running as a service". Crash-restart and reboot tests are still to be run.
 **Database:** Migrations 001–009 exist in the repo and `rto_accounting_dev` is at 009 (applied 2026-10-24). Employee sign-in is live; see the 2026-10-23 "Employee Sign-In" entry.
 **Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
 
@@ -17,11 +17,11 @@ Update this file as work is completed.
 
 ## Completed Work
 
-### 2026-10-24 — systemd Unit Prepared (not installed)
+### 2026-10-24 — systemd Service for the Live App
 
 - `deploy/rto-web.service` runs uvicorn as `drew` from the existing checkout and `.venv`, bound to `100.123.116.111:8000`, `Restart=always` (5 s), no start limit. It starts after `tailscaled` and `postgresql`, and an `ExecStartPre` waits up to 2 minutes for the Tailscale address before binding.
 - Install, verification (including a kill -9 restart test and a reboot) and rollback to tmux are in README "Running as a service". The tmux app must be stopped before the service starts.
-- Not installed yet; the live app is still the tmux process. Belinda's office-computer setup waits until she is available.
+- Installed and enabled 2026-10-24; the tmux `web` window was stopped first. Verified afterwards: one listener on 100.123.116.111:8000 (the service's uvicorn, parent pid 1, in `rto-web.service`'s cgroup), login page 200, anonymous requests redirected to `/login`, export and docs closed, record counts unchanged. Not yet run: forced-crash restart and reboot tests. Belinda's office-computer setup waits until she is available.
 - PO-3788 (test entry) was corrected to $0 as "VOID - TEST" with its receipt and history kept.
 
 ### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (branch `feature/employee-access`, not deployed)
