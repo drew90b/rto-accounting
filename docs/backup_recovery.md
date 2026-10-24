@@ -11,7 +11,7 @@ The one place to read when something has gone wrong, or before trusting the off-
 | Item | State |
 |---|---|
 | Nightly local backups (database, receipts, `.env`, manifest, checksums) on ubuntu-dev, restore-verified every run | **Active** (README "Backups") |
-| Backblaze B2 account and private bucket `rto-backups-drew` (Object Lock off) | **Created.** The 90-day lifecycle rule has **not** been added yet. |
+| Backblaze B2 account and private bucket `rto-backups-drew` (Object Lock off) | **Created.** No lifecycle (deletion) rule is set, deliberately: off-server retention is undecided and must preserve the six monthly backups. |
 | Encryption key "RTO Backup Recovery" created on the owner's Windows laptop | **Done** (fingerprint below) |
 | Private key exported and copied to USB copy 1; SHA-256 of the copy matched | **Verified** |
 | Isolated decrypt test: the USB copy decrypted a file encrypted with only the public key; fingerprint matched | **Verified** |
@@ -104,7 +104,7 @@ If `--list-secret-keys` shows anything, remove it (`gpg --delete-secret-keys <fi
 
 ## 7. Backup contents and planned off-server layout
 
-Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The planned off-server job tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. The B2 application key will be limited to that bucket, with list/read/write and no delete; the lifecycle rule (hide after 90 days, delete 1 day after hiding, prefix `rto/`) does the cleanup. Setup steps: README "Off-server copy: Backblaze B2 setup".
+Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The planned off-server job tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. The B2 application key will be limited to that bucket, with list/read/write and no delete, so the server cannot erase history. **Off-server retention is undecided.** It must keep at least the six monthly backups that the local policy keeps (plus whatever recent history is wanted) and be settled together with the upload design before any lifecycle rule is added. Until then the bucket has no deletion rule and only grows. Setup steps: README "Off-server copy: Backblaze B2 setup".
 
 ## 8. Recovering on a replacement computer (UNTESTED for the cloud download; the local restore check runs every night)
 
@@ -179,7 +179,7 @@ All of these must be true, and recorded in `docs/progress.md`:
 
 1. Private key copy 2 exists and its hash and an isolated decrypt test passed.
 2. The public key is imported on ubuntu-dev, its fingerprint matches, and `gpg --list-secret-keys` there is empty.
-3. The bucket has its lifecycle rule, and the B2 application key is restricted to the bucket without delete access.
+3. The off-server retention design is decided and written down (it must preserve the six monthly backups), any lifecycle rule matches it, and the B2 application key is restricted to the bucket without delete access.
 4. A trial upload has been downloaded, decrypted on the laptop with the USB key, unpacked, and passed section 8's verification.
 
 ## 11. Paused: next-step checklist
@@ -193,6 +193,7 @@ The location test: can you still get to the private key, its passphrase and the 
 - [ ] **Verify copy 2:** matching SHA-256 against the export (section 5), then the isolated decrypt test against copy 2.
 - [ ] **Only then** decide about the laptop export: keep the public file, delete the private export, and note it here.
 - [ ] Import the public key on ubuntu-dev (section 6); fingerprint must match and `gpg --list-secret-keys` must be empty.
-- [ ] Install `rclone` (approved), create the bucket's 90-day lifecycle rule, and create the restricted B2 application key (no delete access); enter it only into `rclone config` on the server.
+- [ ] Install `rclone` (approved), and create the restricted B2 application key (no delete access); enter it only into `rclone config` on the server.
+- [ ] Decide off-server retention together with the upload design (it must preserve the six monthly backups) and only then add any B2 lifecycle rule; until then add none.
 - [ ] Write `deploy/rto-backup-offsite.sh`, upload one trial backup with uploads still manual, and run the full recovery drill (section 8): download, decrypt on the laptop, unpack, verify.
 - [ ] Record the drill in `docs/progress.md`, update section 1, and only then enable the nightly upload.
