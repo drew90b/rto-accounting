@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the RTO Accounting backup every night at 02:30 Chicago time
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 America/Chicago
+# If the machine was off at 02:30, run once when it next starts.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

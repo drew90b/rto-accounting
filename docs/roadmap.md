@@ -113,7 +113,8 @@ Role-based access for different user types. Required before any multi-user or ex
 | 5.7 | Audit log | 🔧 | Purchases only: `purchase_events` records create, edit (old → new), receipt, review and reopen. |
 | 5.8 | Run under systemd | ✅ | `rto-web` service starts after reboot and restarts after a crash; Tailscale-only binding. Crash and reboot tests passed 2026-10-24. |
 | 5.9 | HTTPS through Tailscale Serve | 🔲 | Then set `SESSION_COOKIE_SECURE=true` and update `ALLOWED_ORIGINS`. |
-| 5.10 | Scheduled backups and an off-server copy | 🔲 | Backups are manual today (verified before the 009 deployment). |
+| 5.10 | Scheduled local backups | ✅ | Nightly `rto-backup.timer`: database, receipts and recovery config, verified by an isolated restore, with retention. See README "Backups". |
+| 5.12 | Off-server backup copy | 🔲 | Encrypted nightly copy to somewhere that is not this machine or its host. Plan: encrypted copy to Backblaze B2, public key on the server and the private key kept off it (README "Off-server copy: Backblaze B2 setup"). Nothing bought or installed yet. |
 | 5.11 | Belinda's office-computer onboarding | 🔲 | Waiting until she is available; the idle timeout already covers a computer that may be shared. |
 
 ---
@@ -195,7 +196,7 @@ Business milestones (not yet done): capture November purchases and receipts in t
 2. **Revenue by stream report** — summary view with period filter
 3. **Unit profitability view** — investment vs. collected, per unit
 4. **Lease auto-calculated financed balance** — compute from agreed amount minus down payment on form load
-5. ~~**Authentication**~~ — done 2026-10-24 (individual sign-in, admin/employee roles). Still open: HTTPS, scheduled and off-server backups, Belinda's office computer (Phase 5)
+5. ~~**Authentication**~~ — done 2026-10-24 (individual sign-in, admin/employee roles). Still open: HTTPS, an off-server backup copy, Belinda's office computer (Phase 5)
 
 ---
 

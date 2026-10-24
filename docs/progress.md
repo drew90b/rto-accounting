@@ -11,12 +11,23 @@ Update this file as work is completed.
 **As of:** 2026-10-24
 **Server:** The running instance is the systemd service `rto-web` (enabled, since 2026-10-24) on ubuntu-dev: uvicorn as `drew`, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. Manage it with `sudo systemctl restart|status rto-web` and `journalctl -u rto-web`; see README "Running as a service". Crash-restart and reboot tests passed 2026-10-24.
 **Database:** Migrations 001–009 exist in the repo and `rto_accounting_dev` is at 009 (applied 2026-10-24). Employee sign-in is live; see the 2026-10-23 "Employee Sign-In" entry.
-**Backups:** Manual only. The pre-009 database dump and receipts archive were verified (test restore, file count) and are in `~/rto-backups`. Scheduled backups and an off-server copy are not set up.
-**Open work:** Pending: Belinda's office-computer onboarding, HTTPS through Tailscale Serve, scheduled and off-server backups. Historical inventory reconciliation is paused (see 2026-10-23 entry). Immediate business milestones, not yet done: November purchase capture, then closing November's books in December.
+**Backups:** A nightly systemd timer (`rto-backup.timer`, 02:30 America/Chicago) writes verified database, receipt and configuration backups to `~/rto-backups/auto`; see README "Backups". They are on the same machine and disk as the live data, and there is **no off-server copy yet**.
+**Open work:** Pending: Belinda's office-computer onboarding, HTTPS through Tailscale Serve, an off-server backup copy. Historical inventory reconciliation is paused (see 2026-10-23 entry). Immediate business milestones, not yet done: November purchase capture, then closing November's books in December.
 
 ---
 
 ## Completed Work
+
+### 2026-10-24 — Nightly Backups (local; off-server copy pending)
+
+- **Job:** `deploy/rto-backup.sh` run by `rto-backup.service` from `rto-backup.timer` (02:30 America/Chicago, `Persistent=true`). Per run: `pg_dump -Fc`, a receipts archive, a copy of `.env` for recovery, a manifest (git commit, alembic revision, counts, packages) and checksums, in a mode-700 folder under `~/rto-backups/auto`. Credentials come from `.env` into `PG*` variables, never onto a command line or into output.
+- **Consistency:** database first, receipts second, so every document row has its file; an upload during the run only adds an unreferenced file. Overlap is prevented with `flock`.
+- **Verification on every run:** checksums, then restore into a throwaway PostgreSQL cluster (unix socket only) and a temporary receipts folder; the revision must match, restored row counts must lie between the counts taken before and after the dump, and every document row whose file exists live must be in the archive. The service-created run at 2026-10-24 13:37 UTC passed: revision 009, 963 purchases, 967 transactions, 157 units, 2 documents, 44 receipt files.
+- **Known gap, not protected:** document D-0001 (purchase 2, uploaded 2026-09-13) points to a file on the original Windows machine that was never copied here, so no backup contains it. It is reported as a note on each run and is not counted as protected.
+- **Installed:** `rto-backup.timer` is enabled and active; next run Sun 2026-10-25 02:30 CDT (07:30 UTC). The manual first-run and test backups remain in `auto/` and age out under the normal retention.
+- **Tested:** retention on synthetic folders (other names untouched, idempotent); missing env file and wrong password fail with a non-zero exit, no leftover partial folder and no password in the output; a second run is refused while one is running; a corrupted dump and a missing receipt file are both caught by the verification; the script ran as a sandboxed transient user unit with the journal capturing its output.
+- **Retention:** last 14 days of runs, the oldest run of each of the last 8 weeks and 6 months, and always the newest; only `rto_*` folders under `auto/`. The manual pre-deployment backups in `~/rto-backups` are not touched.
+- **Not done:** an off-server copy. Nothing is configured (no rclone, no remote hosts); the backups share the machine and disk with the live data. Plan prepared in README "Off-server copy: Backblaze B2 setup": encrypted with a GPG public key on the server and the private key held off it, a bucket key without delete access, and a restore drill. Nothing bought or installed; waiting for the owner's account, key ID and approval to install rclone.
 
 ### 2026-10-24 — Employee Access Deployed and Verified
 
@@ -26,7 +37,7 @@ Update this file as work is completed.
 - **Live test entry:** PO-3788 was created by Belinda's sign-in check and corrected by the admin to $0 with "VOID - TEST"; its receipt and history are kept. The app has no void feature; this was the existing reopen/edit path.
 - **systemd:** the app is managed by `rto-web` (see the entry above). A forced `kill -9` was followed by an automatic restart in about 6 seconds; after a manual reboot the service started on its own with one listener on `100.123.116.111:8000`, login 200, anonymous routes redirecting to `/login`, database at 009.
 - **Network:** unchanged. Tailscale-only on port 8000, plain HTTP.
-- **Pending:** Belinda's office-computer onboarding; HTTPS through Tailscale Serve (then `SESSION_COOKIE_SECURE=true` and a new `ALLOWED_ORIGINS`); scheduled backups and an off-server copy.
+- **Pending:** Belinda's office-computer onboarding; HTTPS through Tailscale Serve (then `SESSION_COOKIE_SECURE=true` and a new `ALLOWED_ORIGINS`); scheduled backups and an off-server copy (scheduled local backups were added later the same day; see the next entry).
 - **Immediate business milestones, not yet done:** November purchase capture, then closing November's books in December.
 
 ### 2026-10-24 — systemd Service for the Live App

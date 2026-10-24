@@ -118,6 +118,57 @@ sudo rm /etc/systemd/system/rto-web.service && sudo systemctl daemon-reload
 tmux new-window -d -t rto -n web -c /home/drew/projects/rto "source .venv/bin/activate && uvicorn app.main:app --host 100.123.116.111 --port 8000"
 ```
 
+## Backups
+
+A systemd timer backs up the live app every night at 02:30 America/Chicago (`Persistent=true`, so a run missed while the machine was off happens at the next start). Files: `deploy/rto-backup.sh`, `rto-backup-verify.sh`, `rto-backup-prune.py`, `rto-backup.service`, `rto-backup.timer`.
+
+Each run writes `/home/drew/rto-backups/auto/rto_YYYYMMDD_HHMMSS/` (UTC; folders mode 700, files 600) with `db.dump` (pg_dump custom format), `receipts.tar.gz`, `env` (a copy of `.env`; it holds secrets, so treat the folder as sensitive), `manifest.txt` (git commit, alembic revision, row counts, package list) and `SHA256SUMS`. The database is dumped before the receipts are archived, so every document row in the dump has its file in the archive; a receipt uploaded during the run may be in the archive without a row, which is harmless. The run then restores the dump into a throwaway PostgreSQL cluster (unix socket only) and a temporary receipts folder, and fails if checksums, revision, row counts or receipt files do not match. It never touches the live database or receipts.
+
+Retention applies only to `rto_*` folders under `auto/`: all runs from the last 14 days, the oldest run of each of the last 8 weeks, the oldest of each of the last 6 months, and always the newest. Other files in `~/rto-backups` (the manual pre-deployment dumps) are never touched. A second run cannot overlap the first (`flock`). A failed run exits non-zero, so systemd marks the unit failed and the reason is in the journal; nothing partial is kept.
+
+Install (once):
+
+```
+sudo install -m 644 /home/drew/projects/rto/deploy/rto-backup.service /home/drew/projects/rto/deploy/rto-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now rto-backup.timer
+```
+
+Check:
+
+```
+systemctl list-timers rto-backup.timer --no-pager      # next run
+systemctl status rto-backup.service --no-pager         # last run: "Succeeded" or "failed"
+journalctl -u rto-backup.service -n 20 --no-pager
+ls -l ~/rto-backups/auto
+sudo systemctl start rto-backup.service                # run one now
+```
+
+Restore (to a scratch place first; never over the live data without a fresh backup of it):
+
+```
+cd ~/rto-backups/auto/rto_YYYYMMDD_HHMMSS && sha256sum -c SHA256SUMS
+createdb -h 127.0.0.1 -U postgres rto_restore_test && pg_restore -h 127.0.0.1 -U postgres -d rto_restore_test --no-owner --no-privileges db.dump
+mkdir /tmp/receipts_restore && tar -xzf receipts.tar.gz -C /tmp/receipts_restore
+```
+To recover the real system, restore `db.dump` into `rto_accounting_dev` (`pg_restore --clean --if-exists --no-owner`), extract `receipts/` into `storage/`, put `env` back as `.env`, check out the `git_commit` in `manifest.txt`, and restart `rto-web`.
+
+Not covered yet: an off-server copy (plan below). All backups are on the same machine and disk as the live data, so they protect against mistakes and a bad deployment but not against losing the machine. **Known gap:** document D-0001 (purchase 2, uploaded 2026-09-13) points to a file on the original Windows machine that was never copied to this server, so no backup contains it and it is **not protected**. The verification prints a note about it each run and does not fail. If the original file can be found (for example in the old project's `storage/receipts/purchase/2/image3.jpg`), copy it into `storage/receipts/purchase/2/` and update the row deliberately; until then treat that attachment as missing.
+
+### Off-server copy: Backblaze B2 setup (planned, not installed)
+
+Nothing below has been bought, installed or configured. It protects against losing this machine, its disk or its host. Nightly cost should be small (each run is about 13 MB); check Backblaze's current pricing and free tier before relying on that.
+
+The design: the server can encrypt but cannot decrypt. It holds only a GPG **public** key. The **private** key lives off the server, so someone who gets into the server (or the bucket) cannot read the backups, and losing the server does not lose the ability to restore.
+
+1. **Backblaze:** create a B2 account (turn on two-factor sign-in) and a **private** bucket, for example `rto-backups-<something-unique>`. Under Lifecycle Settings choose a rule that keeps files about 90 days (hide after 90 days, delete 1 day after hiding). Create an **application key restricted to that one bucket** with list, read and write access but **no delete access**, so a compromised server cannot erase history; the lifecycle rule does the cleanup. Save the key ID and key in your password manager (the key is shown once).
+2. **Make the encryption key on your own computer, not on this server** (for example `drewhome`): `gpg --quick-generate-key "RTO backups" rsa4096 encr never` and note the key ID. Export the public half (`gpg --armor --export KEYID > rto-backup-public.asc`) and copy that file to this server. Export the private half (`gpg --armor --export-secret-keys KEYID`) and store it **in two separate places** that are not this server, for example your password manager and a printed or USB copy kept somewhere else, with its passphrase stored separately from the key. If every copy of the private key is lost, every off-server backup becomes unreadable; the server cannot help.
+3. **On the server (needs your approval):** `sudo apt install rclone`, `rclone config` (type `b2`, the restricted key; the config file is mode 600 and holds the B2 key, which can write but not delete), and `gpg --import rto-backup-public.asc`. Then `gpg --list-secret-keys` must print nothing: there must be no private key on the server.
+4. **What the job will do** (`deploy/rto-backup-offsite.sh`, to be written once you approve): after each local backup, `tar` the new `rto_*` folder, encrypt it to the public key (`gpg --encrypt --recipient KEYID --trust-model always`), upload it with `rclone copy` to `b2:<bucket>/rto/`, then read back its size and checksum from B2. Failure makes the unit fail (visible in `systemctl status` and the journal). The `env` file inside the backup holds secrets, which is why nothing is uploaded unencrypted.
+5. **Restore drill (do it once before relying on it):** on your own computer, download the newest `.tar.gpg` from B2, decrypt it with the private key, unpack, and run `sha256sum -c SHA256SUMS` and the restore steps above (or `deploy/rto-backup-verify.sh <folder>` on any machine with PostgreSQL). Record the date of the drill in `docs/progress.md`.
+
+You need to choose or provide: the B2 account and bucket name, the application key (never paste it into chat; it goes straight into `rclone config` on the server), the key ID of the GPG public key, and approval to install `rclone`.
+
 ## Documentation
 
 | Doc | Purpose |
@@ -137,6 +188,6 @@ tmux new-window -d -t rto -n web -c /home/drew/projects/rto "source .venv/bin/ac
 
 ## Current status
 
-MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in with admin and employee roles has been live since 2026-10-24, and systemd keeps the app running (restart after a crash, start after a reboot). Remaining before wider use: Belinda's office-computer setup, HTTPS through Tailscale Serve, and scheduled and off-server backups. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
+MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in with admin and employee roles has been live since 2026-10-24, and systemd keeps the app running (restart after a crash, start after a reboot). Remaining before wider use: Belinda's office-computer setup, HTTPS through Tailscale Serve, and an off-server backup copy (nightly local backups are scheduled). Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for what is built, in progress, and planned.

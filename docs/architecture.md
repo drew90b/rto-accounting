@@ -43,7 +43,7 @@ docs/                — Project documentation
 - The live app is the systemd service `rto-web` (`deploy/rto-web.service`) on ubuntu-dev: uvicorn as the `drew` user from `/home/drew/projects/rto`, using that checkout's `.venv`, `.env` and `storage/receipts`. It restarts 5 seconds after a crash and starts after a reboot once `tailscaled` and PostgreSQL are up, waiting up to 2 minutes for the Tailscale address.
 - It binds only to the Tailscale address `100.123.116.111` on port 8000, so it is reachable only over the tailnet and speaks plain HTTP. HTTPS through Tailscale Serve is not set up yet.
 - Deployment is manual: back up the database and `storage/receipts`, merge, install any new requirements, `alembic upgrade head`, then `sudo systemctl restart rto-web`. See README "Running as a service".
-- Backups are manual (verified dumps and a receipts archive in `~/rto-backups`). There is no scheduled backup and no off-server copy yet.
+- Backups: the `rto-backup.timer` job runs nightly (02:30 America/Chicago) and writes verified database, receipt and configuration backups to `~/rto-backups/auto` with documented retention (README "Backups"). They are on the same disk as the live data. **There is no off-server copy yet** (planned: encrypted copy to Backblaze B2; see README).
 
 ---
 

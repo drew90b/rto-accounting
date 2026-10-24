@@ -1,0 +1,16 @@
+# Nightly backup of the RTO database and receipts. Started by rto-backup.timer.
+# Details and restore steps: README.md, "Backups".
+[Unit]
+Description=RTO Accounting nightly backup (database, receipts, recovery config)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=drew
+Group=drew
+ExecStart=/home/drew/projects/rto/deploy/rto-backup.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+NoNewPrivileges=true
+PrivateTmp=true
