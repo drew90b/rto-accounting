@@ -15,7 +15,8 @@ The one place to read when something has gone wrong, or before trusting the off-
 | Encryption key "RTO Backup Recovery" created on the owner's Windows laptop | **Done** (fingerprint below) |
 | Private key exported and copied to USB copy 1; SHA-256 of the copy matched | **Verified** |
 | Isolated decrypt test: the USB copy decrypted a file encrypted with only the public key; fingerprint matched | **Verified** |
-| Second independent copy of the private key | **PENDING.** Until confirmed, there is a single recovery copy. |
+| Second independent copy of the private key | **PENDING.** There is no second USB stick and no dependable password manager yet. Today the key exists as USB copy 1 plus the retained export on the laptop; the laptop file is a convenience copy, not an independent one (section 3). |
+| Passphrase storage | **To be confirmed.** A dependable place for it has not been chosen yet. Do not rely on the key until it is recorded somewhere that survives the laptop. |
 | Public key imported on ubuntu-dev | **PENDING** |
 | `rclone` installed, restricted B2 application key configured | **PENDING** (installation approved; not done) |
 | `deploy/rto-backup-offsite.sh` (encrypt and upload) | **NOT WRITTEN.** Uploads are disabled. |
@@ -28,7 +29,7 @@ Until the pending items are done, the only backups are on the same machine and d
 
 - **Public key** (`rto-public-key.asc`): lets someone *encrypt* to us. It goes on ubuntu-dev. It cannot decrypt anything, so a stolen server or bucket reveals nothing.
 - **Private key** (`rto-private-key.asc`, protected by a passphrase): the only thing that can *decrypt* the off-server backups. It must never be on ubuntu-dev or in the bucket. Lose every copy of it and every off-server backup is unreadable for good.
-- **Passphrase:** unlocks the private key file. Keep it in the owner's password manager, separate from the key files. A key copy without the passphrase is useless, and the reverse.
+- **Passphrase:** unlocks the private key file. Keep it somewhere dependable and separate from the key files (a password manager, once one is chosen). A key copy without the passphrase is useless, and the reverse.
 - **Fingerprint** of the key (identifies it; safe to share):
 
 ```
@@ -41,10 +42,10 @@ Until the pending items are done, the only backups are on the same machine and d
 | Copy | Where | State |
 |---|---|---|
 | Private key, USB copy 1 | A USB stick kept apart from the laptop and from ubuntu-dev | Hash-verified, decrypt-tested |
-| Private key, copy 2 | Either a second USB stick kept in a different place, or an encrypted attachment in the owner's password manager (the key file is already passphrase-protected) | **PENDING** |
-| Loose export on the laptop (`C:\Users\drewb\RTO-key-recovery\`) | The laptop | Keep until copy 2 is verified and this runbook is complete; then delete the private export, keep the public one |
-| Passphrase | Password manager. A paper copy in a separate place is optional. | In place |
-| Recovery note (fingerprint, bucket name, where copies are kept; no secrets) | Password manager | Recommended |
+| Private key export on the laptop (`C:\Users\drewb\RTO-key-recovery\`) | The laptop (also in the laptop's GPG keyring) | **Retained on purpose; do not delete yet.** It shares the laptop's fate, so it does not count as the second independent copy. Delete the private export only after copy 2 is verified and recovery instructions are complete. |
+| Private key, copy 2 | A place that is still reachable if the entire Proxmox server (and ubuntu-dev with it) is lost | **PENDING.** Location not chosen (section 11). |
+| Passphrase | Not yet confirmed (section 1) | **PENDING** |
+| Recovery note (fingerprint, bucket name, where copies are kept; no secrets) | To be kept with the passphrase | Recommended once a place exists |
 
 ## 4. Verify the key fingerprint
 
@@ -180,3 +181,18 @@ All of these must be true, and recorded in `docs/progress.md`:
 2. The public key is imported on ubuntu-dev, its fingerprint matches, and `gpg --list-secret-keys` there is empty.
 3. The bucket has its lifecycle rule, and the B2 application key is restricted to the bucket without delete access.
 4. A trial upload has been downloaded, decrypted on the laptop with the USB key, unpacked, and passed section 8's verification.
+
+## 11. Paused: next-step checklist
+
+Off-server setup is **not complete**. Work stopped here on purpose until a recovery location is chosen. Nothing has been uploaded, and no copy of the key has been deleted.
+
+The location test: can you still get to the private key, its passphrase and the B2 login if the whole Proxmox host, ubuntu-dev and its backups are gone? A folder, disk or VM on that host does not count.
+
+- [ ] **Choose where the second private-key copy lives.** Options: a second USB stick kept in another place (home versus workplace); a password manager's file attachment once you have one you trust; or another service you control that is not on the Proxmox host. The key file is passphrase-protected, but still keep it under your control.
+- [ ] **Choose where the passphrase lives**, separately from the key copies, and record the fingerprint, bucket name and copy locations in a short note kept with it (no secrets in the note).
+- [ ] **Verify copy 2:** matching SHA-256 against the export (section 5), then the isolated decrypt test against copy 2.
+- [ ] **Only then** decide about the laptop export: keep the public file, delete the private export, and note it here.
+- [ ] Import the public key on ubuntu-dev (section 6); fingerprint must match and `gpg --list-secret-keys` must be empty.
+- [ ] Install `rclone` (approved), create the bucket's 90-day lifecycle rule, and create the restricted B2 application key (no delete access); enter it only into `rclone config` on the server.
+- [ ] Write `deploy/rto-backup-offsite.sh`, upload one trial backup with uploads still manual, and run the full recovery drill (section 8): download, decrypt on the laptop, unpack, verify.
+- [ ] Record the drill in `docs/progress.md`, update section 1, and only then enable the nightly upload.

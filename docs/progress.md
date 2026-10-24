@@ -22,7 +22,9 @@ Update this file as work is completed.
 
 - **Done:** Backblaze account and private bucket `rto-backups-drew` (Object Lock off). A GPG key "RTO Backup Recovery" (fingerprint `288D0C359BDE2DCA218D5F94A251C38DF361E451`) was created on the owner's Windows laptop. The private key was exported to USB copy 1; its SHA-256 matched the export. An isolated GPG-home test showed the USB copy decrypts a file encrypted with only the public key, and the fingerprint matched.
 - **Runbook:** `docs/backup_recovery.md` is the single recovery document (status table, public vs private key, recovery-copy locations without secrets, separated Windows and Ubuntu commands, replacement-computer recovery, pre-replacement verification, D-0001, and the conditions for enabling uploads). The README links to it. No keys, passphrases or credentials are in Git.
-- **Pending:** a second independent private-key copy (not yet confirmed); public key on ubuntu-dev; `rclone` install; restricted B2 application key; the bucket lifecycle rule (not added yet); `deploy/rto-backup-offsite.sh` (not written). **Uploads are disabled.**
+- **Recovery copies today:** USB copy 1 (hash- and decrypt-tested) plus the private export retained on the laptop, which is not independent of the laptop. Nothing was deleted. There is no second USB stick or dependable password manager yet, so the passphrase's storage is also unconfirmed.
+- **Paused:** work stops until a recovery location is chosen that stays reachable if the entire Proxmox host is lost; the checklist is in `docs/backup_recovery.md` section 11.
+- **Pending:** a second independent private-key copy (not yet created); public key on ubuntu-dev; `rclone` install; restricted B2 application key; the bucket lifecycle rule (not added yet); `deploy/rto-backup-offsite.sh` (not written). **Uploads are disabled.**
 - **Untested:** download from B2, decrypt and restore from a cloud backup. The off-server copy does not count as protection until that drill has passed once.
 - **Known missing attachment:** D-0001 is not in any backup (see the runbook).
 
