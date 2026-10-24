@@ -8,14 +8,21 @@ Update this file as work is completed.
 ## Current State
 
 **Phase:** 1.5 — Workflow Hardening (in progress)
-**As of:** 2026-10-23
-**Server:** The running instance is uvicorn in tmux session `rto` on ubuntu-dev, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. It is not a systemd service. (An earlier note said "Deployed on Render"; nothing in the repo supports that.)
-**Database:** Migrations 001–009 exist in the repo. `rto_accounting_dev` is at 008 (applied 2026-10-23). **Migration 009 (sign-in) is on branch `feature/employee-access` and is not applied.** The deployed app has no sign-in until that branch is merged and deployed; see the 2026-10-23 "Employee Sign-In" entry.
+**As of:** 2026-10-24
+**Server:** The running instance is uvicorn in tmux session `rto` (window `web`) on ubuntu-dev, bound to its Tailscale address on port 8000, against `rto_accounting_dev`. A systemd unit (`deploy/rto-web.service`) is prepared for reboot/crash recovery but not yet installed; see README "Running as a service".
+**Database:** Migrations 001–009 exist in the repo and `rto_accounting_dev` is at 009 (applied 2026-10-24). Employee sign-in is live; see the 2026-10-23 "Employee Sign-In" entry.
 **Open work:** Historical inventory reconciliation is paused (see 2026-10-23 entry). Priority is November purchase entry and December close.
 
 ---
 
 ## Completed Work
+
+### 2026-10-24 — systemd Unit Prepared (not installed)
+
+- `deploy/rto-web.service` runs uvicorn as `drew` from the existing checkout and `.venv`, bound to `100.123.116.111:8000`, `Restart=always` (5 s), no start limit. It starts after `tailscaled` and `postgresql`, and an `ExecStartPre` waits up to 2 minutes for the Tailscale address before binding.
+- Install, verification (including a kill -9 restart test and a reboot) and rollback to tmux are in README "Running as a service". The tmux app must be stopped before the service starts.
+- Not installed yet; the live app is still the tmux process. Belinda's office-computer setup waits until she is available.
+- PO-3788 (test entry) was corrected to $0 as "VOID - TEST" with its receipt and history kept.
 
 ### 2026-10-24 — Purchases List Paging and Mobile Menu Startup (branch `feature/employee-access`, not deployed)
 

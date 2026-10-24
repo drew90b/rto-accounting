@@ -1,0 +1,26 @@
+# RTO Accounting web app. Install steps and rollback: README.md, "Running as a service".
+[Unit]
+Description=RTO Accounting web app (uvicorn, Tailscale address only)
+Wants=tailscaled.service postgresql.service
+After=tailscaled.service postgresql.service network-online.target
+# Keep retrying after crashes instead of giving up.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=drew
+Group=drew
+WorkingDirectory=/home/drew/projects/rto
+# Settings come from /home/drew/projects/rto/.env, read by the app itself.
+# The Tailscale address appears a little after boot; wait for it (up to 2 minutes)
+# so uvicorn does not fail to bind. Restart=always covers anything slower.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do ip -4 addr show dev tailscale0 | grep -q "inet 100.123.116.111/" && exit 0; sleep 2; done; echo "tailscale0 has no 100.123.116.111" >&2; exit 1'
+ExecStart=/home/drew/projects/rto/.venv/bin/uvicorn app.main:app --host 100.123.116.111 --port 8000
+Restart=always
+RestartSec=5
+TimeoutStartSec=150
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

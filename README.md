@@ -83,6 +83,41 @@ python -m app.scripts.users create --username drew --display-name "Drew" --role 
 
 ---
 
+## Running as a service (ubuntu-dev)
+
+`deploy/rto-web.service` runs the app under systemd so it starts after a reboot and restarts after a crash. It uses the same checkout, `.venv`, `.env` and `storage/receipts` as the tmux setup, binds only to the Tailscale address `100.123.116.111:8000`, and waits up to two minutes at boot for that address to exist. Only one process may use port 8000, so stop the tmux app before starting the service.
+
+Install and switch over (once):
+
+```
+sudo install -m 644 /home/drew/projects/rto/deploy/rto-web.service /etc/systemd/system/rto-web.service
+sudo systemctl daemon-reload
+sudo systemctl enable rto-web            # starts at boot; does not start it now
+tmux kill-window -t rto:web              # stop the tmux app first
+sudo systemctl start rto-web
+```
+
+Verify:
+
+```
+systemctl status rto-web --no-pager
+curl -s -o /dev/null -w "%{http_code}\n" http://100.123.116.111:8000/login        # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://100.123.116.111:8000/purchases/   # 303 to /login
+sudo kill -9 "$(systemctl show -p MainPID --value rto-web)"; sleep 8; systemctl is-active rto-web   # active again
+journalctl -u rto-web -n 30 --no-pager
+sudo reboot                               # then repeat the first two checks
+```
+
+Day to day: `sudo systemctl restart rto-web` after a deploy, `journalctl -u rto-web -f` for the log. Back up first, as before.
+
+Roll back to tmux:
+
+```
+sudo systemctl disable --now rto-web
+sudo rm /etc/systemd/system/rto-web.service && sudo systemctl daemon-reload
+tmux new-window -d -t rto -n web -c /home/drew/projects/rto "source .venv/bin/activate && uvicorn app.main:app --host 100.123.116.111 --port 8000"
+```
+
 ## Documentation
 
 | Doc | Purpose |
