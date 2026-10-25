@@ -15,22 +15,23 @@ The one place to read when something has gone wrong, or before trusting the off-
 | Encryption key "RTO Backup Recovery" created on the owner's Windows laptop | **Done** (fingerprint below) |
 | Private key exported and copied to USB copy 1; SHA-256 of the copy matched | **Verified** |
 | Isolated decrypt test: the USB copy decrypted a file encrypted with only the public key; fingerprint matched | **Verified** |
-| Second independent copy of the private key | **PENDING (follow-up, not a prerequisite for uploads).** No second USB stick or dependable password manager yet. Today the key exists as USB copy 1 plus the retained export on the laptop; the laptop file is a convenience copy, not an independent one (section 3). The owner authorized encrypted uploads on this basis, knowing a single place can still be lost. |
-| Passphrase storage | **Recorded** by the owner on paper at home (2026-10-24). A second place for it is still advisable. |
+| Key recovery copies | **Two copies exist and both were verified:** USB copy 1 (SHA-256 matched the export; decrypted a test file in an isolated GPG home) and the copy on the owner's laptop (the export file the USB copy was hashed against, and the key in the laptop's GPG keyring, which decrypted the cloud backup on 2026-10-25). **PENDING:** a second, *geographically separate* recovery location, so the key survives losing the laptop, the USB stick and the server's site together. Not a prerequisite for uploads; the owner authorized them on this basis. |
+| Passphrase storage | **Recorded** by the owner on paper (2026-10-24); where is deliberately not written here. A second, separate record is advisable and is part of the pending recovery-location item. |
 | Public key imported on ubuntu-dev | **Done 2026-10-24.** Primary fingerprint matched; `gpg --list-secret-keys` there lists 0 keys; a test file encrypted on the server could not be decrypted there. |
 | `rclone` (1.60.1) installed on ubuntu-dev; remote `b2rto` configured with a B2 application key limited to the bucket | **Done 2026-10-24.** Listing the bucket works (it is empty); any other bucket name is refused. The config file is mode 600. **The key is Read and Write and therefore *can delete* files in the bucket** (section 7). |
 | `deploy/rto-backup-offsite.sh` and `rto-backup-offsite.service` (encrypt, upload with `rclone copyto`, verify the checksum) | **Done and ENABLED 2026-10-25.** `rto-backup.service` starts it after each successful, restore-verified local backup (`OnSuccess=`). Uploads only the newest run each night; a night whose upload fails is not backfilled by the next one. |
 | Trial encrypted upload, download, laptop decryption, isolated database and receipt restore (section 8) | **PASSED 2026-10-25** for the 2026-10-24 13:37 UTC backup: uploaded (12,967,710 bytes), downloaded by browser, size and SHA-1 matched B2's, decrypted on the laptop with the USB key, all four SHA256SUMS entries OK, then restored on ubuntu-dev into a throwaway cluster: revision 009, 963 purchases, 967 transactions, 157 units, 2 documents, 44 receipt files (D-0001 noted as missing). The live database and app were not touched. |
-| First automatic upload | **Verified 2026-10-25:** starting `rto-backup.service` made `rto_20261025_005138.tar.gpg` upload itself (12,967,711 bytes) and pass the script's checksum comparison with B2. That one was not downloaded or restored. The first run from the 02:30 Chicago timer has not happened yet. |
+| First automatic upload | **Verified 2026-10-25:** starting `rto-backup.service` by hand made `rto_20261025_005138.tar.gpg` upload itself (12,967,711 bytes) and pass the script's SHA-1 comparison with B2. That backup was not downloaded or restored. |
+| First unattended nightly run (02:30 America/Chicago timer) | **Not yet occurred** as of 2026-10-25 00:56 UTC (19:56 CDT 2026-10-24): `rto-backup.timer` had not fired (`LastTrigger` empty, no timer-started run in the journal); next elapse 2026-10-25 07:30 UTC. Check the journal after it and record the result. |
 | Document D-0001 attachment | **Known missing** (section 9) |
 
-Until the pending items are done, the only backups are on the same machine and disk as the live data.
+The local backups are on the same machine and disk as the live data. The encrypted B2 copy is the off-server protection. Both are **application and data backups only**, not a Proxmox-host or VM-image backup (section 13).
 
 ## 2. Keys: what each one is for
 
 - **Public key** (`rto-public-key.asc`): lets someone *encrypt* to us. It goes on ubuntu-dev. It cannot decrypt anything, so a stolen server or bucket reveals nothing.
 - **Private key** (`rto-private-key.asc`, protected by a passphrase): the only thing that can *decrypt* the off-server backups. It must never be on ubuntu-dev or in the bucket. Lose every copy of it and every off-server backup is unreadable for good.
-- **Passphrase:** unlocks the private key file. Keep it somewhere dependable and separate from the key files (a password manager, once one is chosen). A key copy without the passphrase is useless, and the reverse.
+- **Passphrase:** unlocks the private key file. Keep it on its own record, separate from the key files. A key copy without the passphrase is useless, and the reverse.
 - **Fingerprint** of the key (identifies it; safe to share):
 
 ```
@@ -42,11 +43,11 @@ Until the pending items are done, the only backups are on the same machine and d
 
 | Copy | Where | State |
 |---|---|---|
-| Private key, USB copy 1 | A USB stick kept apart from the laptop and from ubuntu-dev | Hash-verified, decrypt-tested |
-| Private key export on the laptop (`C:\Users\drewb\RTO-key-recovery\`) | The laptop (also in the laptop's GPG keyring) | **Retained on purpose; do not delete yet.** It shares the laptop's fate, so it does not count as the second independent copy. Delete the private export only after copy 2 is verified and recovery instructions are complete. |
-| Private key, copy 2 | A place that is still reachable if the entire Proxmox server (and ubuntu-dev with it) is lost | **PENDING.** Location not chosen (section 11). |
-| Passphrase | Not yet confirmed (section 1) | **PENDING** |
-| Recovery note (fingerprint, bucket name, where copies are kept; no secrets) | To be kept with the passphrase | Recommended once a place exists |
+| Private key, USB copy 1 | A USB stick kept apart from the laptop and from ubuntu-dev | Hash-verified and decrypt-tested |
+| Private key, laptop (`C:\Users\drewb\RTO-key-recovery\` export, and the key in the laptop's GPG keyring) | The owner's laptop | Verified: the keyring key decrypted the cloud backup; the export file is the one the USB copy was hashed against. Retained on purpose; do not delete it until a geographically separate copy is verified. |
+| Private key, geographically separate location | A place still reachable if the laptop, the USB stick and the server's site are all lost | **PENDING.** Not chosen. |
+| Passphrase | The owner's own paper record (location not documented here) | Recorded; a second, separate record is pending |
+| Recovery note (fingerprint, bucket name, where copies are kept; no secrets) | Kept with the passphrase record | Recommended |
 
 ## 4. Verify the key fingerprint
 
@@ -88,7 +89,7 @@ Remove-Item -Recurse -Force $t
 ```
 Type the passphrase only at the prompt. Run the same test against copy 2 before relying on it.
 
-## 6. Put the public key on ubuntu-dev (pending)
+## 6. Put the public key on ubuntu-dev (done 2026-10-24; kept for rebuilding the server)
 
 **Windows PowerShell** (copy only the public file; confirm the name says `public`):
 ```
@@ -105,7 +106,7 @@ If `--list-secret-keys` shows anything, remove it (`gpg --delete-secret-keys <fi
 
 ## 7. Backup contents and off-server layout
 
-Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The off-server job (`deploy/rto-backup-offsite.sh`) tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. Retention is **keep everything**: no lifecycle rule, no pruning, no automatic deletion. Storage will grow by about one encrypted backup per night (about 13 MB each at today's size, more as receipts accumulate); review the cost in Backblaze periodically and revisit pruning later, as a deliberate decision that keeps at least the six monthly backups the local policy keeps.
+Each nightly run is a folder `rto_YYYYMMDD_HHMMSS/` (UTC) holding `db.dump`, `receipts.tar.gz`, `env` (a copy of `.env`, which is why anything off-server is encrypted first), `manifest.txt` and `SHA256SUMS`. The off-server job (`deploy/rto-backup-offsite.sh`) tars the new folder, encrypts it to the public key, and uploads `rto_YYYYMMDD_HHMMSS.tar.gpg` to `b2:rto-backups-drew/rto/`. **Retention, local versus cloud.** Locally, `rto-backup-prune.py` keeps all runs from the last 14 days, the oldest run of each of the last 8 weeks and each of the last 6 months, and the newest; it only touches `rto_*` folders under `~/rto-backups/auto`. In the cloud, retention is **keep everything**: no lifecycle rule, no pruning, no automatic deletion, so the cloud currently holds every upload even after the local copy has been pruned. Storage will grow by about one encrypted backup per night (about 13 MB each at today's size, more as receipts accumulate); review the cost in Backblaze periodically and revisit pruning later, as a deliberate decision that keeps at least the six monthly backups the local policy keeps.
 
 **Delete access, stated plainly.** Backblaze's key form offers only Read and Write, Read Only or Write Only. The key `rto-ubuntu-dev-upload` is limited to the one bucket but is **Read and Write, which includes deleting files**. Anyone who gets onto ubuntu-dev (the key is in `~/.config/rclone/rclone.conf`, mode 600) could delete or overwrite the cloud backups. Rules that follow from this: the upload job uses `rclone copy` only, never `sync`, `move`, `delete` or `purge`; `hard_delete` stays off; nothing schedules a deletion; each upload has a new unique name so nothing is overwritten. Possible later hardening, not done: a Write Only key for the nightly job (check that it can still list and copy), keeping the Read key only on the laptop, or Object Lock. Setup steps: README "Off-server copy: Backblaze B2 setup".
 
@@ -187,17 +188,39 @@ Document D-0001 (purchase 2, uploaded 2026-09-13 as `image3.jpg`) records a path
 
 Be accurate about what the off-server copy does and does not give you:
 
-- **Single key location.** The private key exists as USB copy 1 and the retained export on the laptop, and the passphrase is on paper at home. There is no second independent copy and no second place for the passphrase. If those are lost, every off-server backup is unreadable. This is the biggest remaining risk.
+- **Key recovery location.** Two verified copies of the private key exist (USB copy 1 and the laptop), and the passphrase is recorded on paper. A geographically separate recovery location is still pending. If every copy and the passphrase record were lost together, every off-server backup would be unreadable.
 - **The upload key can delete.** It is limited to the bucket but Read and Write. Someone with access to ubuntu-dev could delete or overwrite the cloud backups; the scripts never do, but the key could. Possible hardening: a Write Only upload key, or Object Lock.
 - **Only the newest run is uploaded each night.** If a night's upload fails, that night is not backfilled automatically. Failures show as a failed `rto-backup-offsite.service` in systemd and the journal; **there is no email or other alert**, so check `systemctl status rto-backup-offsite.service` now and then.
 - **Restore-tested once.** Only the 2026-10-24 backup has been downloaded, decrypted and restored. Repeat the drill (section 8) periodically, and rehearse a full rebuild on a replacement machine.
 - **Storage grows.** Everything is kept and nothing is pruned; revisit pruning later (keep at least six monthly backups).
 - **Not protected:** document D-0001 (section 9).
-- **First timer run** (02:30 America/Chicago) not yet observed with the upload hook; check the journal after it.
+- **First unattended run not yet seen.** The 02:30 America/Chicago timer had not fired as of 2026-10-25 00:56 UTC. Check `journalctl -u rto-backup.service -u rto-backup-offsite.service` after it and record the result.
 
 Follow-up checklist:
 
-- [ ] Create a second independent copy of the private key and a second place for the passphrase; verify by hash and an isolated decrypt test; then decide about the laptop's private export.
+- [ ] Choose a geographically separate recovery location for the private key and a second record of the passphrase; verify by hash and an isolated decrypt test; then decide about the laptop's private export.
 - [ ] Look at the first unattended nightly run (`journalctl -u rto-backup.service -u rto-backup-offsite.service`).
 - [ ] Decide off-server pruning; consider a Write Only key or Object Lock.
 - [ ] Decide on an alert for a failed backup or upload.
+
+## 12. Planned server move: before and after checklist
+
+A move of the application to another server (or a rebuild) is planned. These backups make it recoverable; this list makes it checkable. Write the numbers down before, and compare after.
+
+**Before the move (on the old server):**
+- [ ] `sudo systemctl start rto-backup.service`, then confirm the local run, its restore check and the automatic upload all succeeded (`journalctl -u rto-backup.service -u rto-backup-offsite.service -n 40`).
+- [ ] Record: `git rev-parse HEAD`, `alembic current`, and row counts for purchases, transactions, units and documents (also in the newest `manifest.txt`); the receipt file count.
+- [ ] Download that newest cloud backup and confirm it decrypts on the laptop (section 8) so the move does not depend on the old server's disk.
+- [ ] Note what is *not* in the backups (section 13): Tailscale identity and settings, the exact address people bookmark (`ALLOWED_ORIGINS` must list it), PostgreSQL version and roles, systemd unit files (they are in `deploy/`), and OS packages.
+- [ ] Stop `rto-web` before the final backup so nothing is entered after it, if a clean cut-over is wanted.
+
+**After the move (on the new server):**
+- [ ] Rebuild per section 8: clone the repository, install PostgreSQL and the Python requirements, restore the database and `storage/receipts` to the same absolute path, restore `.env`, check out the commit, `alembic current` equals the recorded revision.
+- [ ] Set `ALLOWED_ORIGINS` to the address people will really use, bind to the right Tailscale address, install `rto-web.service` and the backup units from `deploy/`, import the **public** key only and confirm `gpg --list-secret-keys` is empty, and configure `rclone` with a new restricted B2 key (revoke the old one).
+- [ ] Compare counts with the "before" numbers; open a few receipts; sign in as an admin and an employee; confirm anonymous routes redirect to `/login`.
+- [ ] Run `rto-backup.service` once and confirm the local backup, its restore check and the cloud upload; check that the 02:30 timer is enabled and reboot once to confirm the app starts by itself.
+- [ ] Only then retire the old server (keep its last backup and the cloud copies).
+
+## 13. What these backups are not
+
+They back up the **application and its data**: the database, the receipt files, a copy of `.env`, and a manifest. They are **not** a Proxmox-host backup and **not** a VM image: they do not contain the operating system, installed packages, Tailscale's node identity or settings, PostgreSQL's installation and roles, the systemd unit files (those are in Git under `deploy/`), or anything else on the machine. To come back from losing the server you rebuild a machine and restore into it (section 8); if you also want a quick whole-machine restore, take Proxmox/VM snapshots or image backups separately. Those are not set up and are not covered here.

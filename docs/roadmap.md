@@ -114,7 +114,12 @@ Role-based access for different user types. Required before any multi-user or ex
 | 5.8 | Run under systemd | ✅ | `rto-web` service starts after reboot and restarts after a crash; Tailscale-only binding. Crash and reboot tests passed 2026-10-24. |
 | 5.9 | HTTPS through Tailscale Serve | 🔲 | Then set `SESSION_COOKIE_SECURE=true` and update `ALLOWED_ORIGINS`. |
 | 5.10 | Scheduled local backups | ✅ | Nightly `rto-backup.timer`: database, receipts and recovery config, verified by an isolated restore, with retention. See README "Backups". |
-| 5.12 | Off-server backup copy | ✅ | Nightly encrypted copy to Backblaze B2 (GPG public key on the server, private key off it); cloud download, laptop decryption and isolated restore tested once on 2026-10-25. Keeps everything. Limits: one place for the private key, the upload key can delete, no failure alert. See `docs/backup_recovery.md`. |
+| 5.12 | Off-server backup copy | ✅ | Nightly encrypted copy to Backblaze B2 (GPG public key on the server, private key off it); cloud download, laptop decryption and isolated restore tested once on 2026-10-25. Keeps everything. Cloud retention keeps everything; local retention is 14 days plus weekly/monthly. Application and data only, not a VM image. See `docs/backup_recovery.md`. |
+| 5.13 | Failed-backup / failed-upload alert | 🔲 | Failures show only in systemd and the journal today. |
+| 5.14 | Backfill of a missed upload | 🔲 | Only the newest run is uploaded each night. |
+| 5.15 | Geographically separate private-key recovery location | 🔲 | USB and laptop copies exist and are verified; a separate location and a second passphrase record are pending. |
+| 5.16 | Server move | 🔲 | Planned. Before/after checklist: runbook section 12. |
+| 5.17 | Tighter B2 key / Object Lock, cloud pruning policy | 🔲 | The upload key can delete; cloud keeps everything for now. |
 | 5.11 | Belinda's office-computer onboarding | 🔲 | Waiting until she is available; the idle timeout already covers a computer that may be shared. |
 
 ---
