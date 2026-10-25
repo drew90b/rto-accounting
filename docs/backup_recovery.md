@@ -211,6 +211,7 @@ A move of the application to another server (or a rebuild) is planned. These bac
 - [ ] `sudo systemctl start rto-backup.service`, then confirm the local run, its restore check and the automatic upload all succeeded (`journalctl -u rto-backup.service -u rto-backup-offsite.service -n 40`).
 - [ ] Record: `git rev-parse HEAD`, `alembic current`, and row counts for purchases, transactions, units and documents (also in the newest `manifest.txt`); the receipt file count.
 - [ ] Download that newest cloud backup and confirm it decrypts on the laptop (section 8) so the move does not depend on the old server's disk.
+- [ ] Re-read the host NVMe error-log count and SMART summary (see the host checks above) and note any change.
 - [ ] Note what is *not* in the backups (section 13): Tailscale identity and settings, the exact address people bookmark (`ALLOWED_ORIGINS` must list it), PostgreSQL version and roles, systemd unit files (they are in `deploy/`), and OS packages.
 - [ ] Stop `rto-web` before the final backup so nothing is entered after it, if a clean cut-over is wanted.
 
@@ -220,6 +221,13 @@ A move of the application to another server (or a rebuild) is planned. These bac
 - [ ] Compare counts with the "before" numbers; open a few receipts; sign in as an admin and an employee; confirm anonymous routes redirect to `/login`.
 - [ ] Run `rto-backup.service` once and confirm the local backup, its restore check and the cloud upload; check that the 02:30 timer is enabled and reboot once to confirm the app starts by itself.
 - [ ] Only then retire the old server (keep its last backup and the cloud copies).
+
+### Host checks recorded before the move (reported by the owner from the Proxmox host, 2026-10-25)
+
+- **VM 100, Start at boot: enabled.** This is host-level autostart. The earlier Ubuntu reboot test proved only that the guest restarts its services; it did not prove host recovery.
+- **`/dev/nvme0n1` SMART:** overall health PASSED; critical warning 0; temperature 27 °C; available spare 100%; endurance used 19%; media and data-integrity errors 0. No settings were changed during the check.
+- **NVMe error-log count: 5,566.** The latest 16 entries show invalid command fields, namespace/format, or log-page errors. **The cause is unconfirmed.** These entries are not evidence of media failure (media errors are 0 and SMART passed); treat them as unexplained until looked at, and re-read the count before and after the move to see whether it keeps growing.
+- **Not yet checked:** VM 100 Start/Shutdown order; whether Datacenter → Backup has VM-image backups; the host BIOS power-loss setting; SMART for any other physical drive.
 
 ## 13. What these backups are not
 

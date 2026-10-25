@@ -18,6 +18,12 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-10-25 — Pre-Move Checks (read-only)
+
+- **From the VM:** latest local backup `rto_20261025_005138` passed its restore check and its upload passed the checksum comparison; B2 holds two backups. The virtual disk had 66 GB free of 79 GB. The VM is a QEMU/KVM guest, so it shows no SMART data or temperatures, and it has no access to Proxmox (`/etc/pve` and `qm` are absent). The first unattended nightly run had still not fired (next 07:30 UTC).
+- **From the Proxmox host (reported by the owner):** VM 100 Start at boot is enabled. `/dev/nvme0n1`: SMART PASSED, critical warning 0, 27 °C, available spare 100%, 19% endurance used, 0 media and data-integrity errors. The error-log count is 5,566; the latest 16 entries are invalid command field, namespace/format or log-page errors. **Cause unconfirmed**, and not described as media failure. No settings were changed.
+- **Still unchecked:** VM 100 Start/Shutdown order; VM-image backups under Datacenter → Backup; the host BIOS power-loss setting; other drives. The Ubuntu reboot test (2026-10-24) proved guest recovery only. Checklist: `docs/backup_recovery.md` section 12.
+
 ### 2026-10-25 — Documentation Reconciliation
 
 Checked against the live system and logs, then aligned README, roadmap, architecture, this log, the recovery runbook and the deployment note.
