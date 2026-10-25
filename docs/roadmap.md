@@ -114,7 +114,7 @@ Role-based access for different user types. Required before any multi-user or ex
 | 5.8 | Run under systemd | ✅ | `rto-web` service starts after reboot and restarts after a crash; Tailscale-only binding. Crash and reboot tests passed 2026-10-24. |
 | 5.9 | HTTPS through Tailscale Serve | 🔲 | Then set `SESSION_COOKIE_SECURE=true` and update `ALLOWED_ORIGINS`. |
 | 5.10 | Scheduled local backups | ✅ | Nightly `rto-backup.timer`: database, receipts and recovery config, verified by an isolated restore, with retention. See README "Backups". |
-| 5.12 | Off-server backup copy | 🔲 | Encrypted nightly copy to somewhere that is not this machine or its host. Plan: encrypted copy to Backblaze B2, public key on the server and the private key kept off it (README "Off-server copy: Backblaze B2 setup"). Account, bucket, encryption key, public key on the server and rclone remote done; upload script not written, nothing uploaded, nightly upload disabled, cloud recovery untested. Initial retention: keep everything. Status and recovery steps: `docs/backup_recovery.md`. |
+| 5.12 | Off-server backup copy | ✅ | Nightly encrypted copy to Backblaze B2 (GPG public key on the server, private key off it); cloud download, laptop decryption and isolated restore tested once on 2026-10-25. Keeps everything. Limits: one place for the private key, the upload key can delete, no failure alert. See `docs/backup_recovery.md`. |
 | 5.11 | Belinda's office-computer onboarding | 🔲 | Waiting until she is available; the idle timeout already covers a computer that may be shared. |
 
 ---

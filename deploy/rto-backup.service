@@ -3,6 +3,8 @@
 [Unit]
 Description=RTO Accounting nightly backup (database, receipts, recovery config)
 After=postgresql.service
+# After a successful, restore-verified local backup, copy it encrypted to Backblaze B2.
+OnSuccess=rto-backup-offsite.service
 
 [Service]
 Type=oneshot

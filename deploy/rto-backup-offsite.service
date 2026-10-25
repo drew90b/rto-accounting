@@ -1,0 +1,17 @@
+# Encrypts the newest local backup and COPIES it to Backblaze B2 (never sync/delete).
+# Started by rto-backup.service (OnSuccess=); can also be started by hand.
+# Runbook: docs/backup_recovery.md
+[Unit]
+Description=RTO Accounting off-server backup copy (encrypted, Backblaze B2)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=drew
+Group=drew
+ExecStart=/home/drew/projects/rto/deploy/rto-backup-offsite.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+NoNewPrivileges=true
+PrivateTmp=true

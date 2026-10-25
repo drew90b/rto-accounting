@@ -153,9 +153,9 @@ mkdir /tmp/receipts_restore && tar -xzf receipts.tar.gz -C /tmp/receipts_restore
 ```
 To recover the real system, restore `db.dump` into `rto_accounting_dev` (`pg_restore --clean --if-exists --no-owner`), extract `receipts/` into `storage/`, put `env` back as `.env`, check out the `git_commit` in `manifest.txt`, and restart `rto-web`.
 
-Not covered yet: an off-server copy (plan below). All backups are on the same machine and disk as the live data, so they protect against mistakes and a bad deployment but not against losing the machine. **Known gap:** document D-0001 (purchase 2, uploaded 2026-09-13) points to a file on the original Windows machine that was never copied to this server, so no backup contains it and it is **not protected**. The verification prints a note about it each run and does not fail. If the original file can be found (for example in the old project's `storage/receipts/purchase/2/image3.jpg`), copy it into `storage/receipts/purchase/2/` and update the row deliberately; until then treat that attachment as missing.
+Off-server copy: after each successful local backup, `rto-backup-offsite.service` encrypts it to a GPG public key (the private key is not on this server) and copies it to a private Backblaze B2 bucket with `rclone copy`; nothing is ever pruned. Setup and the plan are below, and the recovery runbook is [`docs/backup_recovery.md`](docs/backup_recovery.md). Limits: the upload key can delete, there is one place for the private key, and a failed upload only shows in systemd/journal. All backups are on the same machine and disk as the live data, so they protect against mistakes and a bad deployment but not against losing the machine. **Known gap:** document D-0001 (purchase 2, uploaded 2026-09-13) points to a file on the original Windows machine that was never copied to this server, so no backup contains it and it is **not protected**. The verification prints a note about it each run and does not fail. If the original file can be found (for example in the old project's `storage/receipts/purchase/2/image3.jpg`), copy it into `storage/receipts/purchase/2/` and update the row deliberately; until then treat that attachment as missing.
 
-### Off-server copy: Backblaze B2 setup (planned, not installed)
+### Off-server copy: Backblaze B2 setup (done 2026-10-25; kept as the reference for rebuilding it)
 
 The canonical key and recovery runbook, with current status, is [`docs/backup_recovery.md`](docs/backup_recovery.md). Read it before enabling uploads.
 
@@ -191,6 +191,6 @@ You need to choose or provide: the B2 account and bucket name, the application k
 
 ## Current status
 
-MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in with admin and employee roles has been live since 2026-10-24, and systemd keeps the app running (restart after a crash, start after a reboot). Remaining before wider use: Belinda's office-computer setup, HTTPS through Tailscale Serve, and an off-server backup copy (nightly local backups are scheduled). Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
+MVP complete and operational as of March 2026; the running instance is on ubuntu-dev, reached over Tailscale. Individual sign-in with admin and employee roles has been live since 2026-10-24, and systemd keeps the app running (restart after a crash, start after a reboot). Remaining before wider use: Belinda's office-computer setup, HTTPS through Tailscale Serve, and a second copy of the backup encryption key and a failed-backup alert. Nightly local and encrypted off-server backups are running. Phase 1.5 (workflow hardening) is in progress. Phase 2 (reporting and exports) is next.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for what is built, in progress, and planned.
