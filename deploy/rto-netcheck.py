@@ -335,7 +335,9 @@ def explain(o, interval=INTERVAL):
     out = []
     if "gateway" in c:
         out.append("Gateway unreachable from this VM. The extender's Wi-Fi link, the router, "
-                   "or the Proxmox host's network could each do this; the logger can't tell which.")
+                   "or the Proxmox host's network could each do this; the logger can't tell which. "
+                   "Simultaneous failures on another device would suggest a shared or server-side "
+                   "problem, not prove one.")
     elif "internet_ip" in c:
         out.append("Gateway answered but public IPs did not: points past the local network "
                    "(router uplink or ISP), not at the extender link itself.")

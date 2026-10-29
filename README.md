@@ -152,7 +152,7 @@ Smallest independent check, from the Windows laptop (PowerShell), while it is on
 while ($true) { $t = Get-Date -Format s; try { $r = Invoke-WebRequest http://100.123.116.111:8000/login -UseBasicParsing -TimeoutSec 5; "$t $($r.StatusCode)" } catch { "$t FAIL" }; Start-Sleep 30 }
 ```
 
-Line it up with `rto-netcheck.py report`. FAIL on the laptop while the server logged all checks passing points at the path between them (extender, router, Tailscale); FAIL at the same time as server-side failures points at the server's own network. `tailscale status` on the laptop must show `ubuntu-dev` as online; it showed the laptop (`drewhome`) offline on 2026-10-29.
+Line it up with `rto-netcheck.py report`. FAIL on the laptop while the server logged all checks passing suggests the problem is somewhere between them, or on the laptop's side. FAIL on both at the same time suggests a shared or server-side problem. Neither proves the cause; it narrows where to look next. A Tailscale device showing offline says only that it is not currently connected, not why it disconnected (sleep, no network, Tailscale stopped and a lost route are all possible).
 
 Remove:
 
