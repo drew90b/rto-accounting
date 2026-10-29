@@ -118,6 +118,50 @@ sudo rm /etc/systemd/system/rto-web.service && sudo systemctl daemon-reload
 tmux new-window -d -t rto -n web -c /home/drew/projects/rto "source .venv/bin/activate && uvicorn app.main:app --host 100.123.116.111 --port 8000"
 ```
 
+## Outage diagnostics
+
+`deploy/rto-netcheck.py` is a small read-only logger, separate from the app, for chasing intermittent interruptions. It restarts and changes nothing. Every 30 seconds it records: the app's `/login` (HTTP status and time, on the address uvicorn is actually bound to), reachability of the default gateway, internet by IP (1.1.1.1, then 8.8.8.8) and by DNS (a random name under example.com via the system resolver), Tailscale state, and the `rto-web` unit (state, restart counter) with system uptime. Every probe has a timeout of at most 6 seconds. It stores statuses, timings, addresses and error class names only: no cookies, headers, response bodies or business records. Each probe is a plain `GET /login`, so it adds one line per sample to the `rto-web` journal.
+
+Files: `deploy/rto-netcheck.py`, `rto-netcheck.service`, `rto-netcheck.logrotate`, tests in `tests/test_netcheck.py`. Logs are in `/var/log/rto-netcheck/` (they survive reboots): `samples.jsonl` (one line per sample, about 1.5 MB a day) and `events.jsonl` (start/stop, each check failing or recovering with its duration, and when an outage ends, which checks were involved). Logrotate keeps 14 days, compressed.
+
+Install (once):
+
+```
+sudo install -m 644 /home/drew/projects/rto/deploy/rto-netcheck.service /etc/systemd/system/rto-netcheck.service
+sudo install -m 644 /home/drew/projects/rto/deploy/rto-netcheck.logrotate /etc/logrotate.d/rto-netcheck
+sudo systemctl daemon-reload
+sudo systemctl enable --now rto-netcheck
+systemctl status rto-netcheck --no-pager
+```
+
+View (no sudo needed):
+
+```
+/home/drew/projects/rto/deploy/rto-netcheck.py report            # last 24 h, times in America/Chicago
+/home/drew/projects/rto/deploy/rto-netcheck.py report --hours 6 --utc
+tail -n 5 /var/log/rto-netcheck/events.jsonl
+```
+
+The report lists each outage (start, end, duration, which checks failed, and which failed together), periods with no samples, rto-web restarts and unit messages, DHCP/carrier events from systemd-networkd, and a closing split of what was observed from what is only a possible explanation. Times and durations are accurate to one 30-second sample, and a single failed sample is labelled a blip, not an outage.
+
+Limits: the logger runs on this server, so it cannot see this server losing power. That shows up only as a gap with no samples and no clean-stop record, which looks the same as a frozen VM, a hung host or a stopped service. It also cannot prove the app is reachable from another device: the `/login` check goes to a local socket, so it passes even when the extender, router or Tailscale path to the outside is down. It cannot see the Proxmox host, the extender or the router.
+
+Smallest independent check, from the Windows laptop (PowerShell), while it is on Tailscale and not on this server's network:
+
+```
+while ($true) { $t = Get-Date -Format s; try { $r = Invoke-WebRequest http://100.123.116.111:8000/login -UseBasicParsing -TimeoutSec 5; "$t $($r.StatusCode)" } catch { "$t FAIL" }; Start-Sleep 30 }
+```
+
+Line it up with `rto-netcheck.py report`. FAIL on the laptop while the server logged all checks passing points at the path between them (extender, router, Tailscale); FAIL at the same time as server-side failures points at the server's own network. `tailscale status` on the laptop must show `ubuntu-dev` as online; it showed the laptop (`drewhome`) offline on 2026-10-29.
+
+Remove:
+
+```
+sudo systemctl disable --now rto-netcheck
+sudo rm /etc/systemd/system/rto-netcheck.service /etc/logrotate.d/rto-netcheck && sudo systemctl daemon-reload
+sudo rm -r /var/log/rto-netcheck        # optional: deletes the collected logs
+```
+
 ## Backups
 
 A systemd timer backs up the live app every night at 02:30 America/Chicago (`Persistent=true`, so a run missed while the machine was off happens at the next start). Files: `deploy/rto-backup.sh`, `rto-backup-verify.sh`, `rto-backup-prune.py`, `rto-backup.service`, `rto-backup.timer`.

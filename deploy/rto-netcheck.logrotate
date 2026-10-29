@@ -1,0 +1,11 @@
+# Daily, keep 14 days, compressed. The logger reopens the file for every write, so no restart is needed.
+/var/log/rto-netcheck/*.jsonl {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    su drew drew
+    create 0640 drew drew
+}

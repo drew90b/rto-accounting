@@ -1,0 +1,22 @@
+# Outage diagnostics logger: observes only, restarts nothing. Install and removal: README.md, "Outage diagnostics".
+[Unit]
+Description=RTO outage diagnostics logger (one sample every 30 s; read-only)
+After=network.target
+
+[Service]
+Type=simple
+User=drew
+Group=drew
+ExecStart=/usr/bin/python3 -I /home/drew/projects/rto/deploy/rto-netcheck.py run
+Restart=always
+RestartSec=10
+# Creates /var/log/rto-netcheck owned by drew; /var/log survives reboots.
+LogsDirectory=rto-netcheck
+LogsDirectoryMode=0750
+Nice=10
+PrivateTmp=true
+ProtectHome=read-only
+# No NoNewPrivileges: ping needs its file capability here (net.ipv4.ping_group_range is off).
+
+[Install]
+WantedBy=multi-user.target

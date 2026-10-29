@@ -18,6 +18,20 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-10-29 — Outage Diagnostics Logger (read-only investigation; not yet installed)
+
+The app was reported to be intermittently unreachable after the server was reconnected through a TP-Link RE315 extender. Nothing was restarted and no network, Tailscale, router or application setting was changed.
+
+- **Added:** `deploy/rto-netcheck.py` with a systemd unit and logrotate config (30-second samples; report command). Usage, limits, the laptop-side check and removal: README "Outage diagnostics". Validated by a live `once` probe, a 100-second run into a scratch directory, and unit tests of the outage grouping; the unit file passed `systemd-analyze verify` and the logrotate config a dry run. Installing it needs sudo and was **not done**; the commands are in the README.
+- **Observed, from the VM's logs (the VM is a Proxmox guest; ens18 is a virtual NIC):**
+  - At the 2026-10-28 01:59 UTC boot the VM got `192.168.0.100/24` via gateway `192.168.0.254`. At 02:09:44 UTC, after "DHCP lease lost", it got `192.168.1.205/24` via `192.168.1.254`, which it still has. It was therefore on a different subnet for about 10 minutes.
+  - `tailscaled` started with no usable route and could not resolve its log server. `rto-web` failed to start four times (02:01 to 02:07 UTC: the pre-start wait for the Tailscale address ran out) and started at 02:07:54 UTC, which is why its restart counter reads 4. It has run continuously since.
+  - The clock was stepped at 02:07:48 UTC ("Clock change detected").
+  - From 02:10 UTC to the time of this check there are no gateway, link-carrier, DHCP or `rto-web` errors in the journal, no reboots, and `/login` on the bound address answered 200 in about 1 ms. Tailscale was Running; the laptop `drewhome` showed offline (last seen about 1 day earlier), the iPhone active with a direct connection.
+  - `tailscaled` logged a peer with a changing key and "derp-9 does not know about peer" at 00:33 to 00:40 UTC; the peer is most likely a client reconnecting, which is unconfirmed.
+- **Unconfirmed:** whether the extender, the router, the Proxmox host's link, or the client side caused the interruptions the owner saw. The server's own logs show no outage after 02:10 UTC on 2026-10-28, so this server cannot confirm any; they may sit on the path between the server and the client, which the logger cannot see (README "Outage diagnostics").
+- **Still unknown:** how the Proxmox host connects to the extender (Wi-Fi or Ethernet), and why the address changed from 192.168.0.x to 192.168.1.x.
+
 ### 2026-10-25 — Pre-Move Checks (read-only)
 
 - **From the VM:** latest local backup `rto_20261025_005138` passed its restore check and its upload passed the checksum comparison; B2 holds two backups. The virtual disk had 66 GB free of 79 GB. The VM is a QEMU/KVM guest, so it shows no SMART data or temperatures, and it has no access to Proxmox (`/etc/pve` and `qm` are absent). The first unattended nightly run had still not fired (next 07:30 UTC).
