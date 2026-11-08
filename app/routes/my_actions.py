@@ -19,6 +19,7 @@ from app.models.user import User
 from app.routes.monthly_review import _day, _local
 from app.services import monthly_review_service as svc
 from app.services import my_actions_service as ma
+from app.services import vehicle_recon_service as vrsvc      # vehicle reconciliation: assigned_items() is its integration point
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -48,6 +49,8 @@ def index(request: Request, db: Session = Depends(get_db), user: User = Depends(
     return templates.TemplateResponse("my_actions/index.html", {
         "request": request, "issues": issues, "STATUS_LABEL": svc.STATUS_LABEL, "base": BASE, "today": bc.chicago_today(), "is_admin": user.is_admin,
         "open_count": sum(1 for i in issues if i.status != "resolved"),
+        # Vehicle reconciliation questions assigned to this user (restricted evidence; answered on their own page)
+        "vehicle_items": vrsvc.assigned_items(db, user),
     })
 
 

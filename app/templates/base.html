@@ -30,6 +30,7 @@
 
       <div class="sidebar-section">Inventory</div>
       <a href="/units/" class="{% if '/units' in request.url.path %}active{% endif %}">Units</a>
+      <a href="/vehicles/" class="{% if request.url.path.startswith('/vehicles') %}active{% endif %}">Vehicle Reconciliation</a>
 
       <div class="sidebar-section">People</div>
       <a href="/customers/" class="{% if '/customers' in request.url.path %}active{% endif %}">Customers</a>

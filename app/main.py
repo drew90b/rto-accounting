@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models.user import User
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth, frazer_intake, opening_snapshot, monthly_review, my_actions
+from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth, frazer_intake, opening_snapshot, monthly_review, my_actions, vehicles, vehicle_questions
 
 if len(config.SESSION_SECRET) < 32:
     raise RuntimeError(
@@ -68,6 +68,11 @@ app.include_router(frazer_intake.router, prefix="/finance/frazer", tags=["frazer
 app.include_router(monthly_review.router, prefix="/finance/review", tags=["monthly_review"], dependencies=_ADMIN)
 app.include_router(my_actions.router, prefix="/my-actions", tags=["my_actions"], dependencies=_USER)
 app.include_router(opening_snapshot.router, prefix="/finance/opening", tags=["opening_snapshot"], dependencies=_ADMIN)
+
+# Vehicle reconciliation (docs/specs/vehicle-reconciliation-spec.md): the list, detail and full queue are administrator-only;
+# /vehicle-questions is open to any signed-in user but shows only the questions assigned to them, with restricted evidence.
+app.include_router(vehicles.router, prefix="/vehicles", tags=["vehicles"], dependencies=_ADMIN)
+app.include_router(vehicle_questions.router, prefix="/vehicle-questions", tags=["vehicle_questions"], dependencies=_USER)
 
 templates = Jinja2Templates(directory="app/templates")
 

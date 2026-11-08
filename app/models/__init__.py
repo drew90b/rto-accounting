@@ -17,6 +17,7 @@ from app.models.frazer_intake import FrazerUpload, FrazerSourceRow, FrazerUpload
 from app.models.opening_snapshot import (
     OpeningSnapshot, OpeningFigure, OpeningFigureEntry, OpeningFigureEvidence,
 )
+from app.models.vehicle_recon import VrSnapshot, VrSourceRecord, VrQuestion, VrDecision, VrEvent
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
@@ -24,4 +25,5 @@ __all__ = [
     "Invoice", "InvoiceItem", "Purchase", "User", "PurchaseEvent",
     "FrazerUpload", "FrazerSourceRow", "FrazerUploadException", "FrazerUploadNote",
     "OpeningSnapshot", "OpeningFigure", "OpeningFigureEntry", "OpeningFigureEvidence",
+    "VrSnapshot", "VrSourceRecord", "VrQuestion", "VrDecision", "VrEvent",
 ]

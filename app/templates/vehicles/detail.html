@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}{{ row.stocks|join(' / ') if row.stocks else 'Unit' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">{{ row.stocks|join(' / ') if row.stocks else 'Unit without a stock number' }}</h1>
+  <div class="page-header-actions"><a href="/vehicles/" class="btn btn-secondary">Vehicle list</a></div>
+</div>
+
+<div class="card">
+  <p><strong>{{ row.ymm or 'Description not reported' }}</strong><br><span class="vr-vin">{{ row.vin or 'VIN not reported' }}</span></p>
+  <p>{{ m.state_badge(row.state) }} {{ row.state_note }}</p>
+  <p><strong>Next action:</strong> {{ row.next_action }}
+    {% if row.owner_name %}<br><span class="form-hint">Responsible: {{ row.owner_name }}</span>{% endif %}
+    {% if row.next_question %}<br><a class="btn btn-primary btn-sm" href="/vehicles/q/{{ row.next_question.ref }}">Open question {{ row.next_question.ref }}</a>{% endif %}</p>
+  {% for d in row.differences %}<div class="alert alert-error">{{ d }}</div>{% endfor %}
+  {% for f in row.flags %}<div class="alert alert-error">{{ f }}</div>{% endfor %}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Confirmed by a person</h2>
+  {% if row.relation_note %}<p>✔ {{ row.relation_note }}.</p>{% endif %}
+  {% for c in row.confirmations %}<p>✔ {{ c.text }} <span class="form-hint">({{ names.get(c.by) }}, {{ c.at.strftime('%b %-d, %Y') }})</span></p>{% endfor %}
+  {% if not row.relation_note and not row.confirmations %}<p class="form-hint">Nothing here has been confirmed by a person yet. Everything below is what sources reported.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Reported by sources</h2>
+  {% for l in row.source_lines %}
+    <div class="vr-src {{ 'vr-missing' if l.kind == 'missing' }}"><strong>{{ l.source }}</strong>: {{ l.text }}{% if l.as_of %} <span class="vr-date">as of {{ l.as_of }}</span>{% endif %}
+    {% if l.note %}<div class="form-hint">{{ l.note }}</div>{% endif %}</div>
+  {% endfor %}
+  <p class="form-hint">A source report is not the car's confirmed status or physical location, and the true cutoff time of an export is unknown unless recorded.</p>
+</div>
+
+{% if row.stocks %}
+<div class="card vr-identity">
+  <h2 class="card-title">Identity: vehicle, stock numbers, contracts</h2>
+  <p class="form-hint">Three different things, kept apart. The physical car is only as confirmed by a person; each stock number is its own episode with its own records; a contract belongs to the stock number that carried it.</p>
+  <div class="vr-level"><strong>Physical vehicle</strong>
+    {% if row.stocks|length > 1 %}— {{ row.relation_note or 'grouped' }}. Listed as one row only because of that decision.
+    {% else %}— no grouping has been decided. This row is one stock number.{% endif %}
+    <div class="vr-vin">VIN as reported: {{ row.vin or 'not reported' }}</div></div>
+  {% for s in row.stocks %}{% set ep = row.episodes[s] %}
+  <div class="vr-level vr-episode"><strong>Stock-number episode {{ s }}</strong>
+    {% if ep.vehicle %}— purchased {{ ep.vehicle.fields_json.purchase_date or 'date not reported' }}, vehicle source "{{ ep.vehicle.fields_json.vehicle_source or 'not reported' }}"{% else %}— not in the vehicle list{% endif %}
+    {% if ep.contract %}<div class="vr-level vr-contract"><strong>Contract</strong> on stock {{ s }}: listed{% if ep.contract.fields_json.sale_date %}, sale date {{ ep.contract.fields_json.sale_date }}{% endif %}{% if ep.contract.fields_json.account_label %} · {{ ep.contract.fields_json.account_label }}{% endif %}</div>
+    {% else %}<div class="vr-level vr-contract form-hint">No contract listed on stock {{ s }}.</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<details class="card">
+  <summary class="card-title">Source records</summary>
+  <p class="form-hint">Immutable copies of what each source said. Original identifiers are shown exactly as written.</p>
+  <div class="table-container"><table>
+    <thead><tr><th>Source</th><th>Key</th><th>Stock</th><th>VIN</th><th>Description</th><th>Snapshot date</th><th>Reported cost</th></tr></thead>
+    <tbody>
+    {% for s in row.stocks %}{% set ep = row.episodes[s] %}
+      {% for rec in [ep.vehicle, ep.contract] %}{% if rec %}
+      <tr><td>{{ 'Frazer vehicle list' if rec.source_type == 'frazer_vehicles' else 'Frazer customer-balance list' }}</td><td>{{ rec.source_key }}</td><td>{{ rec.stock_number }}</td>
+          <td class="vr-vin">{{ rec.vin or '—' }}</td><td>{{ rec.year }} {{ rec.make }} {{ rec.model }}</td><td>{{ snap_dates.get(rec.snapshot_id) }}</td>
+          <td>{% if rec.source_type == 'frazer_vehicles' %}{{ vr_cost_label(rec) }}{% else %}—{% endif %}</td></tr>
+      {% endif %}{% endfor %}
+    {% endfor %}
+    {% if row.unit %}<tr><td>App unit</td><td>{{ row.unit.source_key }}</td><td>—</td><td class="vr-vin">{{ row.unit.vin or '—' }}</td>
+      <td>{{ row.unit.year }} {{ row.unit.make }} {{ row.unit.model }}</td><td>{{ snap_dates.get(row.unit.snapshot_id) }}</td><td>{{ vr_cost_label(row.unit) }}</td></tr>{% endif %}
+    </tbody></table></div>
+</details>
+
+<div class="card">
+  <h2 class="card-title">Cost, as each source reports it</h2>
+  <p class="form-hint">These are separate reports and may overlap. They are <strong>not</strong> added together: no combining rule has been decided (DEC-VR-04). A reported $0.00 means zero reported by that source, not a free car; "Not reported" is unknown, not zero.</p>
+  {% for s in row.stocks %}{% set ep = row.episodes[s] %}{% if ep.vehicle %}<div class="vr-src">Frazer vehicle list, stock {{ s }}: {{ vr_cost_label(ep.vehicle) }}</div>{% endif %}{% endfor %}
+  {% if row.unit %}<div class="vr-src">App unit acquisition cost: {{ vr_cost_label(row.unit) }}</div>{% endif %}
+  {% for p in row.purchases if p.status in ('attached','confirmed') %}
+    <div class="vr-src">App purchase {{ p.rec.fields_json.purchase_ref or p.rec.source_key }} ({{ p.rec.fields_json.purchase_date }}): {{ vr_cost_label(p.rec) }}
+      <span class="form-hint">linked: {{ p.basis }}</span></div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Purchases</h2>
+  {% for p in row.purchases %}
+    <div class="vr-src"><strong>{{ p.rec.fields_json.purchase_ref or ('Purchase ' ~ p.rec.source_key) }}</strong> — stock "{{ p.rec.stock_number or '—' }}"
+      {% if p.status == 'attached' %}<span class="badge badge-green">Linked</span> {{ p.basis }}
+      {% elif p.status == 'confirmed' %}<span class="badge badge-green">Confirmed by a person</span>
+      {% elif p.status == 'unresolved' %}<span class="badge badge-orange">Unresolved</span> {{ p.basis }}
+      {% else %}<span class="badge badge-gray">{{ p.status|replace('_',' ') }}</span> {{ p.basis }}{% endif %}
+      {% if p.question_key %}{% for q in row.questions if q.question_key == p.question_key %} <a href="/vehicles/q/{{ q.ref }}">{{ q.ref }}</a>{% endfor %}{% endif %}</div>
+  {% else %}<p class="form-hint">No purchases are linked or waiting. A purchase appears here only when its stock number or its unit's VIN matches this car.</p>{% endfor %}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Questions and history</h2>
+  {% for q in row.questions %}
+    <details {% if q.status in ('open','proposed','review_needed') %}open{% endif %}>
+      <summary><a href="/vehicles/q/{{ q.ref }}">{{ q.ref }}</a> {{ m.qstatus(q.status) }} {{ q.title }}</summary>
+      {% for h in histories[q.ref] %}
+        <div class="vr-event"><strong>{{ h.type|replace('_',' ')|title }}</strong> · {{ h.who }} · <span class="vr-date">{{ h.at.strftime('%b %-d, %Y %-I:%M %p') }} UTC</span>
+          {% if h.data.effect %}<div>{{ h.data.effect }}</div>{% endif %}{% if h.body %}<div class="form-hint">{{ h.body }}</div>{% endif %}</div>
+      {% endfor %}
+    </details>
+  {% else %}<p class="form-hint">No questions have been raised for this vehicle.</p>{% endfor %}
+</div>
+{% endblock %}

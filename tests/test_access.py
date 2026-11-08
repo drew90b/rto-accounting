@@ -25,6 +25,10 @@ EMPLOYEE_ALLOWED = {
     ("GET", "/purchases/{purchase_id}/edit"),
     ("POST", "/purchases/{purchase_id}/edit"),
     ("GET", "/documents/{doc_id}/download"),         # purchase receipts only (checked per document)
+    # Vehicle reconciliation: only the user's own assigned questions (404 for anything else); see test_vehicle_recon_access.py
+    ("GET", "/vehicle-questions/mine"),
+    ("GET", "/vehicle-questions/mine/{ref}"),
+    ("POST", "/vehicle-questions/mine/{ref}/answer"),
     ("GET", "/account/password"),
     ("POST", "/account/password"),
     ("POST", "/logout"),

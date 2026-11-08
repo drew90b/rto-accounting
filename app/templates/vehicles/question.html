@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}{{ q.ref }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">{{ q.ref }}</h1>
+  <div class="page-header-actions"><a href="/vehicles/queue" class="btn btn-secondary">All questions</a></div>
+</div>
+{% if saved %}<div class="alert alert-success">Saved.</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2 class="card-title">{{ q.title }}</h2>
+  <p>{{ m.qstatus(q.status) }} <span class="badge badge-gray">{{ m.kind_label(q.kind) }}</span>
+     {% if q.needs_someone_else %}<span class="badge badge-purple">Marked: needs someone else</span>{% endif %}</p>
+  <p><strong>Why this was raised.</strong> {{ q.why }}</p>
+  <p class="form-hint">Responsible: {{ names.get(q.owner_user_id) if q.owner_user_id else 'Unassigned (administrators)' }}</p>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Evidence</h2>
+  {% set ev = q.evidence_json %}
+  {% for e in ev.episodes %}
+  <div class="vr-evidence">
+    <strong>Stock {{ e.stock }}</strong> — {{ e.ymm or 'description not reported' }}<br>
+    <span class="vr-vin">{{ e.vin or 'VIN not reported' }}</span><br>
+    {% if e.in_vehicle_list %}Frazer vehicle list: listed{% if e.purchase_date %}, purchased {{ e.purchase_date }}{% endif %}{% if e.vehicle_source %}, source "{{ e.vehicle_source }}"{% endif %}.{% endif %}
+    {% if e.has_contract %}<br>Frazer customer-balance list: contract listed{% if e.contract_sale_date %}, sale date {{ e.contract_sale_date }}{% endif %}.{% endif %}
+    <br><a href="/vehicles/v/{{ e.stock }}">Open this vehicle</a>
+  </div>
+  {% endfor %}
+  {% if q.kind == 'status_conflict' %}
+  <div class="vr-evidence">App unit: <strong>{{ (ev.unit_status or '')|replace('_',' ') }}</strong> (unit last updated {{ ev.unit_updated or 'unknown' }}).</div>
+  {% endif %}
+  {% if q.kind == 'purchase_match' %}
+  <div class="vr-evidence">Purchase stock number as written: "<strong>{{ ev.purchase_stock }}</strong>"; its unit's VIN: <span class="vr-vin">{{ ev.unit_vin or 'none' }}</span>; dated {{ ev.purchase_date }}.</div>
+  {% endif %}
+  <p class="form-hint">Evidence as of the last refresh. The answer you give is saved with exactly this evidence.</p>
+</div>
+
+{% if live %}
+<div class="card">
+  <h2 class="card-title">Current answer</h2>
+  <p><strong>{{ live.effect_json.text }}</strong></p>
+  <p class="form-hint">Answered by {{ names.get(live.answered_by_user_id) }} on {{ live.answered_at.strftime('%b %-d, %Y %-I:%M %p') }} (UTC).
+    {% if live.state == 'accepted' %}Accepted by {{ names.get(live.decided_by_user_id) }}{% if live.decided_by_user_id == live.answered_by_user_id and live.needs_approval %} (the same person answered and accepted){% endif %}.
+    {% elif live.state == 'proposed' %}<strong>Not in effect yet:</strong> waiting for an administrator to approve.{% endif %}
+    {% if live.note %}<br>Note: {{ live.note }}{% endif %}</p>
+  {% if q.status == 'review_needed' %}<div class="alert alert-error">New evidence arrived after this answer. The decision stays in force until it is reviewed. Re-answer below (keep it, or change it) with a reason.</div>{% endif %}
+  {% if live.state == 'proposed' %}
+  <form method="post" action="/vehicles/q/{{ q.ref }}/accept" style="display:inline">
+    <input type="hidden" name="expected_version" value="{{ q.version }}"><input type="hidden" name="expected_fp" value="{{ q.evidence_fingerprint }}">
+    <button class="btn btn-success" type="submit">Accept this answer</button></form>
+  <form method="post" action="/vehicles/q/{{ q.ref }}/reject" class="vr-answer">
+    <input type="hidden" name="expected_version" value="{{ q.version }}"><input type="hidden" name="expected_fp" value="{{ q.evidence_fingerprint }}">
+    <div class="form-group"><label>Reject — why?</label><input type="text" name="reason" required></div>
+    <button class="btn btn-secondary" type="submit">Reject answer</button></form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if q.status != 'withdrawn' %}
+<div class="card">
+  <h2 class="card-title">{{ 'Correct the decision' if (live and live.state == 'accepted') else 'Answer' }}</h2>
+  <p class="form-hint vr-hint">{% if kind_class[q.kind] == 'operational' %}An operational answer takes effect as soon as it is saved.{% else %}As an administrator your answer is accepted at once and recorded as answered and accepted by you.{% endif %}
+  What each choice does: re-entry or duplicate groups the stock numbers in the list; wrong VIN keeps them separate; a purchase answer links the purchase for reconciliation only; a status answer is shown beside what the sources reported. Nothing changes a unit, purchase or ledger.</p>
+  {{ m.answer_form('/vehicles/q/' ~ q.ref ~ '/answer', q, today, true, correcting=(live is not none and live.state == 'accepted')) }}
+</div>
+
+<div class="card">
+  <h2 class="card-title">Assign</h2>
+  <form method="post" action="/vehicles/q/{{ q.ref }}/assign" class="filter-bar">
+    <select name="owner_user_id">
+      <option value="">Unassigned (administrators)</option>
+      {% for u in users %}{% if assignable_to_employee or u.is_admin %}<option value="{{ u.id }}" {% if q.owner_user_id == u.id %}selected{% endif %}>{{ u.display_name }}{{ ' (admin)' if u.is_admin }}</option>{% endif %}{% endfor %}
+    </select>
+    <button class="btn btn-secondary" type="submit">Save</button>
+  </form>
+  {% if not assignable_to_employee %}<p class="form-hint">Purchase questions show purchase amounts and can only go to an administrator.</p>{% endif %}
+</div>
+{% endif %}
+
+<details class="card" open>
+  <summary class="card-title">History</summary>
+  {% for h in history %}
+    <div class="vr-event"><strong>{{ h.type|replace('_',' ')|title }}</strong> · {{ h.who }} · <span class="vr-date">{{ h.at.strftime('%b %-d, %Y %-I:%M %p') }} UTC</span>
+      {% if h.data.effect %}<div>{{ h.data.effect }}</div>{% endif %}{% if h.body %}<div class="form-hint">{{ h.body }}</div>{% endif %}</div>
+  {% endfor %}
+  {% if decisions|length > 1 or (decisions and decisions[0].state in ('superseded','rejected')) %}
+  <h3>Decisions on record</h3>
+  {% for d in decisions %}<div class="vr-event">Decision #{{ d.id }} — <strong>{{ d.state }}</strong>: {{ d.effect_json.text }}{% if d.reason %} <em>Reason: {{ d.reason }}</em>{% endif %}{% if d.superseded_by_id %} (replaced by #{{ d.superseded_by_id }}){% endif %}</div>{% endfor %}
+  {% endif %}
+</details>
+{% endblock %}

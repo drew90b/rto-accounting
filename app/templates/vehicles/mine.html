@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}My vehicle questions{% endblock %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">My vehicle questions</h1></div>
+{% if not items %}<div class="card"><p>Nothing is assigned to you right now.</p></div>{% endif %}
+{% for q in items %}
+<a class="review-card vr-qcard" href="/vehicle-questions/mine/{{ q.ref }}">
+  <div class="review-card-title">{{ q.title }}</div>
+  <div class="review-card-sub">{{ q.ref }}</div>
+  <div class="review-flags">{{ m.qstatus(q.status) }}</div>
+</a>
+{% endfor %}
+{% endblock %}
