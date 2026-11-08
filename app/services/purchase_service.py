@@ -88,6 +88,18 @@ def business_line_for_category(category: PurchaseCategory) -> str:
     return "golf_cart" if category in _GOLF_CART_CATEGORIES else "car"
 
 
+# entered_by stamped on the 959 purchases created by the one-time historical import
+# (source_reference "historical-import:<sheet row>"). Later catch-up imports reuse the same
+# source_reference scheme but stamp their own entered_by, so they can be told apart.
+HISTORICAL_IMPORT_ENTERED_BY = "Historical Import"
+
+
+def is_original_historical_import(purchase) -> bool:
+    """True only for the original historical import, whose payment source and receipt were
+    never recorded and so are never flagged. Catch-up imports are not exempt."""
+    return purchase.source_reference is not None and purchase.entered_by == HISTORICAL_IMPORT_ENTERED_BY
+
+
 def is_vehicle_purchase(category: PurchaseCategory) -> bool:
     return category in _VEHICLE_CATEGORIES
 

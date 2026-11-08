@@ -25,7 +25,8 @@ from app.models.enums import PurchaseCategory, ReviewStatus, TransactionType
 from app.auth import require_admin
 from app.models.user import User
 from app.services.purchase_service import (
-    is_vehicle_purchase, is_payment_source_unknown, mark_reviewed, purchase_total, unit_cost_disagrees,
+    is_vehicle_purchase, is_original_historical_import, is_payment_source_unknown, mark_reviewed, purchase_total,
+    unit_cost_disagrees,
 )
 
 router = APIRouter()
@@ -89,9 +90,9 @@ def _purchase_flags(purchase: Purchase) -> list:
     if purchase.category == PurchaseCategory.general_expense_unsure:
         flags.append("Classification uncertain: decide car, golf cart, or shared")
     # Shared is a valid classification, not a warning; it is not flagged.
-    # Historical imports (source_reference set) never had a payment source or
-    # receipt recorded; don't flag what can't be known.
-    if purchase.source_reference is None:
+    # The original historical import never had a payment source or receipt recorded;
+    # don't flag what can't be known. Catch-up imports and everything else are flagged.
+    if not is_original_historical_import(purchase):
         source = purchase.transaction.payment_source if purchase.transaction else None
         if not source:
             flags.append("Missing payment source")

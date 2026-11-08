@@ -404,3 +404,142 @@ def test_malformed_mileage_does_not_block_an_otherwise_valid_financial_purchase(
     assert purchase is not None
     assert float(purchase.amount) == 250.00
     assert purchase.mileage is None
+
+
+# ---------------------------------------------------------------------------
+# Catch-up imports (rows missing from the earlier import; same identity scheme)
+# ---------------------------------------------------------------------------
+
+CATCHUP = "Historical Import (catch-up 2026-11-08)"
+AUCTION = "AUCTION - Purchased Cars (RTO)"
+
+
+def run_catchup(db, rows, dry_run=False, **kw):
+    summary = Summary()
+    run_import(rows, db, summary, dry_run=dry_run, entered_by=CATCHUP, allow_new_vehicles=False, **kw)
+    return summary
+
+
+def get(db, source_row):
+    from app.models.purchase import Purchase
+    return db.query(Purchase).filter(Purchase.source_reference == f"historical-import:{source_row}").first()
+
+
+def test_catchup_rows_stay_pending_and_are_attributed_to_the_batch(db):
+    from app.models.enums import ReviewStatus
+    run_catchup(db, [row(source_row="1100", review_status="pending", payment_source="Unknown - needs review")])
+    p = get(db, "1100")
+    assert p.source_reference == "historical-import:1100"          # same identity scheme, no new prefix
+    assert p.review_status == ReviewStatus.pending
+    assert p.transaction.review_status == ReviewStatus.pending
+    assert p.entered_by == CATCHUP
+    assert p.transaction.payment_source == "Unknown - needs review"
+
+
+def test_review_status_must_be_stated_never_assumed(db):
+    for bad in ("", "approved", "REVIEWED?"):
+        summary = run_catchup(db, [row(source_row="1101", review_status=bad)])
+        assert summary.failed == 1 and summary.purchases_created == 0
+        assert "review_status" in summary.failures[0][-1]
+    assert get(db, "1101") is None
+    rows = [row(source_row="1102")]
+    del rows[0]["review_status"]
+    assert run_catchup(db, rows).failed == 1
+
+
+def test_original_behaviour_is_unchanged_when_the_csv_says_reviewed(db):
+    from app.models.enums import ReviewStatus
+    run(db, [row(source_row="1103")], dry_run=False)
+    p = get(db, "1103")
+    assert p.review_status == ReviewStatus.reviewed and p.entered_by == "Historical Import"
+    assert p.transaction.payment_source is None                    # never backfilled
+
+
+def test_no_new_vehicles_refuses_a_row_that_would_create_a_unit(db):
+    from app.models.unit import Unit
+    before = db.query(Unit).count()
+    summary = run_catchup(db, [row(source_row="1104", category=AUCTION, vendor="Amazon", amount="19.00",
+                                   stock_number="520743", review_status="pending")])
+    assert summary.failed == 1 and summary.purchases_created == 0
+    assert "would create a new unit" in summary.failures[0][-1]
+    assert get(db, "1104") is None and db.query(Unit).count() == before
+
+
+def test_no_new_vehicles_leaves_parts_rows_alone_and_does_not_link_by_tag(db):
+    from app.models.unit import Unit
+    # A vehicle already exists in the app from the earlier import, with this tag on its purchase.
+    run(db, [row(source_row="1105", category=AUCTION, vendor="iaa", amount="3000", stock_number="F36140")], dry_run=False)
+    units = db.query(Unit).count()
+    summary = run_catchup(db, [row(source_row="1106", stock_number="F36140", review_status="pending")])
+    p = get(db, "1106")
+    assert summary.failed == 0 and p is not None
+    assert p.unit_id is None                       # no vehicle match is invented from a stock tag
+    assert p.stock_number == "F36140"
+    assert db.query(Unit).count() == units
+
+
+def test_stock_identifiers_keep_leading_zeros_and_letter_prefixes(db):
+    run_catchup(db, [row(source_row="1107", stock_number="002813", review_status="pending"),
+                     row(source_row="1108", stock_number="F36140", review_status="pending"),
+                     row(source_row="1109", stock_number="08843", review_status="pending")])
+    assert [get(db, r).stock_number for r in ("1107", "1108", "1109")] == ["002813", "F36140", "08843"]
+    assert all(get(db, r).transaction is not None for r in ("1107", "1108", "1109"))
+
+
+def test_second_run_creates_nothing(db):
+    from app.models.purchase import Purchase
+    from app.models.transaction import Transaction
+    rows = [row(source_row="1110", review_status="pending", payment_source="Unknown - needs review"),
+            row(source_row="1111", review_status="pending", payment_source="Unknown - needs review", amount="9.49")]
+    first = run_catchup(db, rows)
+    p_count, t_count = db.query(Purchase).count(), db.query(Transaction).count()
+    second = run_catchup(db, rows)
+    assert first.purchases_created == 2 and second.purchases_created == 0 and second.duplicate_skipped == 2
+    assert (db.query(Purchase).count(), db.query(Transaction).count()) == (p_count, t_count)
+
+
+def test_receipt_links_are_not_imported_and_not_printed(db):
+    from app.models.document import Document
+    url = "https://drive.google.com/open?id=SECRETFILEID123"
+    summary = run_catchup(db, [row(source_row="1112", review_status="pending", receipt_urls=url)])
+    assert db.query(Document).count() == 0
+    assert get(db, "1112").receipt_attached is False
+    joined = " ".join(summary.warnings)
+    assert "1112" in joined and "no Document created" in joined
+    assert "SECRETFILEID123" not in joined and "drive.google.com" not in joined
+
+
+def test_review_queue_flags_catchup_rows_but_not_the_original_import(db):
+    from app.routes.review import _purchase_flags
+    run(db, [row(source_row="1113")], dry_run=False)                                     # original-style import
+    run_catchup(db, [row(source_row="1114", review_status="pending", payment_source="Unknown - needs review"),
+                     row(source_row="1115", review_status="pending")])
+    assert _purchase_flags(get(db, "1113")) == []
+    flags_unknown = _purchase_flags(get(db, "1114"))
+    assert "Payment source unknown" in flags_unknown and "Missing receipt" in flags_unknown
+    assert "Missing payment source" in _purchase_flags(get(db, "1115"))
+
+
+def test_editing_a_catchup_purchase_keeps_its_batch_identity_and_flags_stay_honest(client, db):
+    """Resolving a flag through the app must not turn a catch-up row into an 'original import' row."""
+    from app.models.enums import PurchaseCategory
+    from app.routes.review import _purchase_flags
+    run_catchup(db, [row(source_row="1200", vendor="AutoZone", amount="35.49", review_status="pending",
+                         stock_number="002813", payment_source="Unknown - needs review",
+                         category='PARTS - "RTO" - Car parTs (WIP)')])
+    p = get(db, "1200")
+    assert set(_purchase_flags(p)) == {"Payment source unknown", "Missing receipt"}
+
+    r = client.post(f"/purchases/{p.id}/edit", data={
+        "purchaser": "Steve", "purchase_date": "2025-10-06", "vendor": "AutoZone", "amount": "35.49",
+        "category": PurchaseCategory.parts_rto_car_wip.value, "site_location": "Eunice",
+        "stock_number": "002813", "mileage": "", "description": "", "entered_by": "",
+        "payment_source": "Visa 1234",
+    }, follow_redirects=False)
+    assert r.status_code == 303 and "Purchase+updated" in r.headers["location"]
+    db.expire_all()
+    p = get(db, "1200")
+    assert p.entered_by == CATCHUP and p.source_reference == "historical-import:1200"   # identity unchanged by an edit
+    assert p.transaction.payment_source == "Visa 1234"
+    assert p.review_status.value == "pending"                                          # editing never reviews it
+    assert _purchase_flags(p) == ["Missing receipt"]                                    # source resolved; receipt still missing

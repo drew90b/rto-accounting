@@ -255,6 +255,7 @@ def test_historical_purchase_is_not_flagged_for_missing_payment_source_or_receip
     post_expense(client, "Flag Vendor Historical")
     p = purchase_for(db, "Flag Vendor Historical")
     p.source_reference = "historical-import:99999"
+    p.entered_by = "Historical Import"      # what the original import stamps; catch-up batches differ and ARE flagged
     p.transaction.payment_source = None
     db.commit()
 
