@@ -656,7 +656,7 @@ Routes (`app/routes/purchases.py`):
 
 
 
-This is data-quality review, not an approval workflow — keep it that simple. The Review Queue (`/review/`) flags: vehicle purchase with no unit, missing VIN or stock number, uncertain classification ("Not sure"), missing or unknown payment source, and missing receipt. "Shared" is a valid classification and is not flagged. Marking a purchase reviewed is a separate action from resolving its flags: it never changes the data, and a reviewed purchase keeps any unresolved flags visible. Purchases imported from history (`source\_reference` set) are not flagged for payment source or receipt, because those were never recorded.
+This is data-quality review, not an approval workflow — keep it that simple. The Review Queue (`/review/`) flags: vehicle purchase with no unit, missing VIN or stock number, uncertain classification ("Not sure"), missing or unknown payment source, and missing receipt. "Shared" is a valid classification and is not flagged. Marking a purchase reviewed is a separate action from resolving its flags: it never changes the data, and a reviewed purchase keeps any unresolved flags visible. Purchases created by the original historical import (`source\_reference` set and entered by "Historical Import") are not flagged for payment source or receipt, because those were never recorded. Later catch-up imports use the same `source\_reference` scheme but a different `entered\_by` (for example "Historical Import (catch-up 2026-11-08)"), stay Pending, and are flagged.
 
 
 

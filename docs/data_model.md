@@ -264,7 +264,7 @@ Employee-facing purchase submission. Every purchase has one linked `transactions
 | entered_by_user_id | integer | YES | — | FK → users.id. The signed-in user who entered it. NULL on historical rows. Added in migration 009. |
 | reviewed_by_user_id | integer | YES | — | FK → users.id. Set when marked reviewed; cleared on reopen. NULL on historical rows. |
 | reviewed_at | timestamp | YES | — | When it was marked reviewed; cleared on reopen. |
-| source_reference | varchar(100) | YES | — | Unique. `historical-import:<source_row>` for rows created by `app/scripts/import_historical_purchases.py`; NULL for purchases entered in the app. |
+| source_reference | varchar(100) | YES | — | Unique. `historical-import:<source_row>` (sheet row number, header = row 1) for rows created by `app/scripts/import_historical_purchases.py`, including later catch-up batches (told apart by `entered_by`); NULL for purchases entered in the app. |
 
 `purchaser` (who made the purchase) is separate from `entered_by_user_id` and `reviewed_by_user_id`.
 

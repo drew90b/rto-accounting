@@ -11,6 +11,15 @@ Usage:
     python -m app.scripts.import_historical_purchases <csv_path> --dry-run
     python -m app.scripts.import_historical_purchases <csv_path> --commit
 
+Catch-up imports (rows missing from an earlier import) use the same identity scheme,
+source_reference = "historical-import:<sheet row>", and these options:
+    --entered-by "Historical Import (catch-up YYYY-MM-DD)"   tell the batch apart from the original
+    --no-new-vehicles                                        fail any row that would create a Unit
+and these CSV columns: review_status (required: pending or reviewed, never assumed) and
+payment_source (optional; "Unknown - needs review" is the app's own wording for unknown).
+Never run --dry-run against the live database: it executes the write paths before rolling
+back. Rehearse on a restored copy or a disposable database instead.
+
 Neither flag: refuses to run. Both flags: refuses to run. This is
 deliberately hard to fire by accident.
 
@@ -60,10 +69,12 @@ from app.models.purchase import Purchase
 from app.models.unit import Unit
 from app.models.vendor import Vendor
 from app.models.enums import PurchaseCategory, ReviewStatus
-from app.services.purchase_service import record_purchase, is_vehicle_purchase
+from app.services.purchase_service import (
+    HISTORICAL_IMPORT_ENTERED_BY, is_vehicle_purchase, record_purchase, resolve_vehicle_unit,
+)
 
 SOURCE_REFERENCE_PREFIX = "historical-import"
-ENTERED_BY = "Historical Import"
+ENTERED_BY = HISTORICAL_IMPORT_ENTERED_BY
 
 # Explicit historical-only category remaps. NOT enum normalization — these
 # two legacy strings don't match any current PurchaseCategory at all, and
@@ -106,6 +117,8 @@ class ParsedRow:
     mileage: Optional[int]
     notes: str
     receipt_urls: str
+    review_status: ReviewStatus
+    payment_source: str
 
 
 def _parse_date(raw: str, source_row: str) -> date:
@@ -186,6 +199,10 @@ def parse_row(raw: dict) -> tuple:
         raise RowError(f"row {source_row}: vendor is blank")
 
     try:
+        # Never assume: the old import marked everything Reviewed regardless of the CSV.
+        status_raw = (raw.get("review_status") or "").strip().lower()
+        if status_raw not in ("pending", "reviewed"):
+            raise RowError(f"review_status must be 'pending' or 'reviewed', got {status_raw!r}")
         category, legacy_raw = _parse_category(raw["category"])
         mileage, mileage_warning = _parse_mileage(raw.get("mileage") or "")
         if mileage_warning:
@@ -210,6 +227,8 @@ def parse_row(raw: dict) -> tuple:
             mileage=mileage,
             notes=(raw.get("notes") or "").strip(),
             receipt_urls=(raw.get("receipt_urls") or "").strip(),
+            review_status=ReviewStatus(status_raw),
+            payment_source=(raw.get("payment_source") or "").strip(),
         )
         return parsed, warnings, legacy_raw
     except RowError as e:
@@ -316,13 +335,16 @@ def _already_imported(row: ParsedRow, db: Session) -> bool:
 
 def _finalize(purchase: Purchase, row: ParsedRow, db: Session) -> None:
     purchase.source_reference = row.source_reference
-    purchase.review_status = ReviewStatus.reviewed
+    purchase.review_status = row.review_status
     if purchase.transaction:
-        purchase.transaction.review_status = ReviewStatus.reviewed
+        purchase.transaction.review_status = row.review_status
     db.flush()
 
 
-def process_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summary: Summary) -> None:
+def process_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summary: Summary,
+                        entered_by: str = ENTERED_BY, allow_new_vehicles: bool = True) -> None:
+    if not allow_new_vehicles and resolve_vehicle_unit(row.stock_number, row.vin, db) is None:
+        raise RowError("vehicle-category row would create a new unit; held for classification review (--no-new-vehicles)")
     vendor_count_before = db.query(Vendor.id).count()
     unit_count_before = db.query(Unit.id).count()
 
@@ -336,7 +358,8 @@ def process_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summar
         stock_number=row.stock_number,
         mileage=row.mileage,
         description=row.notes,
-        entered_by=ENTERED_BY,
+        entered_by=entered_by,
+        payment_source=row.payment_source,
         shipping_cost=row.shipping_cost,
         other_fees=row.other_fees,
         vin=row.vin,
@@ -367,7 +390,8 @@ def process_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summar
         stock_to_unit[row.stock_number] = purchase.unit
 
 
-def process_non_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summary: Summary) -> None:
+def process_non_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, summary: Summary,
+                            entered_by: str = ENTERED_BY) -> None:
     vendor_count_before = db.query(Vendor.id).count()
 
     purchase = record_purchase(
@@ -380,7 +404,8 @@ def process_non_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, su
         stock_number=row.stock_number,
         mileage=row.mileage,
         description=row.notes,
-        entered_by=ENTERED_BY,
+        entered_by=entered_by,
+        payment_source=row.payment_source,
         shipping_cost=row.shipping_cost,
         other_fees=row.other_fees,
         db=db,
@@ -409,20 +434,22 @@ def process_non_vehicle_row(row: ParsedRow, db: Session, stock_to_unit: dict, su
         summary.unmatched_stock_numbers += 1
 
 
-def run_import(rows: list, db: Session, summary: Summary, dry_run: bool) -> None:
+def run_import(rows: list, db: Session, summary: Summary, dry_run: bool,
+               entered_by: str = ENTERED_BY, allow_new_vehicles: bool = True) -> None:
     """
     dry_run=True is a complete, self-contained guarantee: nothing this call
     does survives it, including the final db.rollback() below. Callers
     (main(), tests) never need to remember to roll back afterward.
     """
     try:
-        _run_import(rows, db, summary, dry_run)
+        _run_import(rows, db, summary, dry_run, entered_by, allow_new_vehicles)
     finally:
         if dry_run:
             db.rollback()
 
 
-def _run_import(rows: list, db: Session, summary: Summary, dry_run: bool) -> None:
+def _run_import(rows: list, db: Session, summary: Summary, dry_run: bool,
+                entered_by: str = ENTERED_BY, allow_new_vehicles: bool = True) -> None:
     parsed = []
     for raw in rows:
         summary.rows_read += 1
@@ -464,14 +491,14 @@ def _run_import(rows: list, db: Session, summary: Summary, dry_run: bool) -> Non
                 # way nothing survives run_import()'s own final db.rollback().
                 with db.begin_nested():
                     if is_vehicle:
-                        process_vehicle_row(row, db, stock_to_unit, summary)
+                        process_vehicle_row(row, db, stock_to_unit, summary, entered_by, allow_new_vehicles)
                     else:
-                        process_non_vehicle_row(row, db, stock_to_unit, summary)
+                        process_non_vehicle_row(row, db, stock_to_unit, summary, entered_by)
             else:
                 if is_vehicle:
-                    process_vehicle_row(row, db, stock_to_unit, summary)
+                    process_vehicle_row(row, db, stock_to_unit, summary, entered_by, allow_new_vehicles)
                 else:
-                    process_non_vehicle_row(row, db, stock_to_unit, summary)
+                    process_non_vehicle_row(row, db, stock_to_unit, summary, entered_by)
                 db.commit()
         except Exception as e:
             if not dry_run:
@@ -484,9 +511,11 @@ def _run_import(rows: list, db: Session, summary: Summary, dry_run: bool) -> Non
             continue
 
         if row.receipt_urls:
+            # No attachment importer exists: the links are not fetched, stored or attached.
+            # The URLs themselves are not printed (they are private); keep the source file.
             summary.warnings.append(
-                f"row {row.source_row}: has receipt_urls but no document import path exists yet "
-                f"({row.receipt_urls}) — logged only, no Document created"
+                f"row {row.source_row}: has receipt link(s) but no document import path exists yet "
+                f"— no Document created, receipts not attached"
             )
 
 
@@ -502,6 +531,9 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Parse and report; write nothing")
     parser.add_argument("--commit", action="store_true", help="Perform the real import")
     parser.add_argument("--verbose", action="store_true", help="Show every warning/failure, not just the first 20")
+    parser.add_argument("--entered-by", default=ENTERED_BY, help="entered_by stamped on each purchase (max 50 chars)")
+    parser.add_argument("--no-new-vehicles", action="store_true",
+                        help="Fail any vehicle-category row that would create a new Unit (catch-up imports)")
     args = parser.parse_args(argv)
 
     if args.dry_run and args.commit:
@@ -509,6 +541,9 @@ def main(argv=None) -> int:
         return 2
     if not args.dry_run and not args.commit:
         print("Error: pass --dry-run or --commit explicitly. Refusing to guess.", file=sys.stderr)
+        return 2
+    if len(args.entered_by) > 50 or not args.entered_by.strip():
+        print("Error: --entered-by must be 1-50 characters.", file=sys.stderr)
         return 2
     if not args.csv_path.exists():
         print(f"Error: file not found: {args.csv_path}", file=sys.stderr)
@@ -518,7 +553,8 @@ def main(argv=None) -> int:
     summary = Summary()
     db = SessionLocal()
     try:
-        run_import(rows, db, summary, dry_run=args.dry_run)
+        run_import(rows, db, summary, dry_run=args.dry_run, entered_by=args.entered_by,
+                   allow_new_vehicles=not args.no_new_vehicles)
     finally:
         db.close()
 
