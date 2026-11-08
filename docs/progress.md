@@ -18,6 +18,18 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-11-08 — Google Form Purchase Catch-Up Import (52 purchases)
+
+Applied the reviewed catch-up of purchases that were in the old Google Form register but not in the app. Source data, reports and the import file are kept outside Git (`/home/drew/rto-reviews/2026-11-08-purchase-catchup/`).
+
+- **Identity:** `source_reference = historical-import:<sheet row>` (header = row 1), the same scheme as the original import; checked against all 959 existing imported purchases (dates agree on all).
+- **Applied to the live database:** 52 purchases totalling $4,626.92 (PO-3791 to PO-3842), one purchase and one transaction each. All **Pending**, payment source `Unknown - needs review`, no receipts attached, `entered_by = "Historical Import (catch-up 2026-11-08)"`. 0 units and 0 vendors created. A second run skipped all 52.
+- **Code (deployed, merge 23044f7):** the importer now requires a `review_status` column and honors it (the old importer forced Reviewed), passes `payment_source` through, and takes `--entered-by` and `--no-new-vehicles`; receipt links are no longer printed. The review queue exempts from the missing-payment-source and missing-receipt flags only purchases with a `source_reference` **and** `entered_by = "Historical Import"` (all 959 original rows), so the new rows show both flags. `docs/historical_import_catchup.md` records the rules.
+- **Held, not imported (59 rows; a row can have more than one reason, so the counts below overlap):** 10 text amounts and 2 mismatched amounts; 40 AUCTION-labelled rows that read as parts and 7 with category `Parts`; 10 IAA vehicle purchases (text amounts, and one stock tag on two vehicles); 1 row skipped by the earlier import for an unknown reason; 1 stock tag that looks like an amount. The four existing rows whose amounts differ from the corrected sheet (rows 119, 160, 167, 210) were left unchanged.
+- **Receipts:** the sheet's Google Drive links are inventoried only. No attachment importer exists and none was built; nothing was downloaded or attached.
+- **Safeguards:** fresh backup before the import (`rto_20261108_134440`, restore-checked); target database verified before running; the importer's `--dry-run` was not used against the live database; read-only verification of all 52 rows afterwards.
+- **To do next:** review the 52 Pending purchases in the Review Queue (resolve the payment source and attach the receipt on each), then decide the held rows.
+
 ### 2026-10-29 — Outage Diagnostics Logger (read-only investigation; not yet installed)
 
 The app was reported to be intermittently unreachable after the server was reconnected through a TP-Link RE315 extender. Nothing was restarted and no network, Tailscale, router or application setting was changed.
