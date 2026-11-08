@@ -1,0 +1,45 @@
+{% macro state_badge(state) -%}
+  {% if state == 'agree' %}<span class="badge badge-green">Agrees</span>
+  {% elif state == 'needs_review' %}<span class="badge badge-orange">Needs review</span>
+  {% elif state == 'resolved' %}<span class="badge badge-blue">Resolved by a person</span>
+  {% else %}<span class="badge badge-gray">Lacks evidence</span>{% endif %}
+{%- endmacro %}
+
+{% macro qstatus(s) -%}
+  {% if s == 'open' %}<span class="badge badge-blue">Open</span>
+  {% elif s == 'proposed' %}<span class="badge badge-yellow">Answer waiting for approval</span>
+  {% elif s == 'review_needed' %}<span class="badge badge-orange">Review: new evidence</span>
+  {% elif s == 'decided' %}<span class="badge badge-green">Decided</span>
+  {% else %}<span class="badge badge-gray">Withdrawn</span>{% endif %}
+{%- endmacro %}
+
+{% macro kind_label(kind) -%}
+  {% if kind == 'shared_vin' %}Identity: shared VIN{% elif kind == 'purchase_match' %}Financial: purchase match{% else %}Operational: status{% endif %}
+{%- endmacro %}
+
+{# The form that answers a question. Radio choices, plus whatever extra input a choice needs. Same markup for admin and employee. #}
+{% macro answer_form(action, q, today, is_admin, correcting=false) -%}
+<form method="post" action="{{ action }}" class="vr-answer" style="margin-top:12px">
+  <input type="hidden" name="expected_version" value="{{ q.version }}">
+  <input type="hidden" name="expected_fp" value="{{ q.evidence_fingerprint }}">
+  <div class="vr-choices">
+    {% for c in q.choices_json %}
+    <label class="vr-choice"><input type="radio" name="choice" value="{{ c.key }}" required> <span>{{ c.label }}</span></label>
+    {% endfor %}
+  </div>
+  {% if q.kind == 'status_conflict' %}
+  <div class="form-group"><label>As of (date you are confirming it for)</label>
+    <input type="date" name="as_of" max="{{ today }}" value="{{ today }}"></div>
+  {% endif %}
+  {% if q.kind == 'purchase_match' %}
+  <div class="form-group"><label>Only for "a different vehicle": its stock number, exactly as written</label>
+    <input type="text" name="other_stock" autocomplete="off"></div>
+  {% endif %}
+  <div class="form-group"><label>Note (optional; required for "Something else")</label><textarea name="note" rows="2"></textarea></div>
+  {% if correcting %}
+  <div class="form-group"><label>Why are you changing the earlier decision? (required; the earlier decision stays on record)</label>
+    <textarea name="reason" rows="2" required></textarea></div>
+  {% endif %}
+  <div class="form-actions"><button class="btn btn-primary" type="submit">{{ 'Record correction' if correcting else 'Submit answer' }}</button></div>
+</form>
+{%- endmacro %}

@@ -12,9 +12,11 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.models.purchase import Purchase
 from app.models.user import User
 from app.models.purchase_event import PurchaseEvent
+from app.models.vehicle_recon import VrSnapshot, VrSourceRecord, VrQuestion, VrDecision, VrEvent
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
     "LeaseAccount", "Payment", "Transaction", "Document", "ExceptionRecord",
     "Invoice", "InvoiceItem", "Purchase", "User", "PurchaseEvent",
+    "VrSnapshot", "VrSourceRecord", "VrQuestion", "VrDecision", "VrEvent",
 ]

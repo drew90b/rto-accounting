@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}RTO Accounting{% endblock %} — RTO Accounting</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=3">
+  <link rel="stylesheet" href="/static/css/style.css?v=4">
 </head>
 <body>
 <div class="mobile-header">
@@ -30,6 +30,7 @@
 
       <div class="sidebar-section">Inventory</div>
       <a href="/units/" class="{% if '/units' in request.url.path %}active{% endif %}">Units</a>
+      <a href="/vehicles/" class="{% if request.url.path.startswith('/vehicles') %}active{% endif %}">Vehicle Reconciliation</a>
 
       <div class="sidebar-section">People</div>
       <a href="/customers/" class="{% if '/customers' in request.url.path %}active{% endif %}">Customers</a>
@@ -50,6 +51,7 @@
       <div class="sidebar-section">Purchases</div>
       <a href="/purchases/new" class="{% if request.url.path == '/purchases/new' %}active{% endif %}">New Purchase</a>
       <a href="/purchases/" class="{% if request.url.path == '/purchases/' %}active{% endif %}">Purchases</a>
+      <a href="/vehicle-questions/mine" class="{% if '/vehicle-questions' in request.url.path %}active{% endif %}">My vehicle questions</a>
       {% endif %}
       {% if user %}
       <div class="sidebar-section">{{ user.display_name }}</div>

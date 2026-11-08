@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}Vehicles{% endblock %}
+{% macro sources(r) %}
+  {% for l in r.source_lines %}
+    <div class="vr-src {{ 'vr-missing' if l.kind == 'missing' }}"><span>{{ l.source|replace('Frazer customer-balance list','Frazer contracts')|replace('Frazer vehicle list','Frazer vehicles') }}</span>: {{ l.text }}{% if l.as_of %} <span class="vr-date">as of {{ l.as_of }}</span>{% endif %}</div>
+  {% endfor %}
+  {% for c in r.confirmations %}<div class="vr-src vr-confirmed">✔ Confirmed by a person: {{ c.status_label }} as of {{ c.as_of }}</div>{% endfor %}
+  {% if r.purchases %}<div class="vr-src">Purchases: {{ r.purchases|selectattr('status', 'in', ['attached','confirmed'])|list|length }} linked{% set un = r.purchases|selectattr('status','equalto','unresolved')|list|length %}{% if un %}, <strong>{{ un }} unresolved</strong>{% endif %}</div>{% endif %}
+{% endmacro %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Vehicles</h1>
+  <div class="page-header-actions">
+    <a href="/vehicles/queue" class="btn btn-primary">Questions{% if open_questions %} ({{ open_questions }}){% endif %}</a>
+    <form method="post" action="/vehicles/refresh" style="display:inline"><button class="btn btn-secondary" type="submit">Refresh</button></form>
+  </div>
+</div>
+
+<div class="vr-summary card">
+  <strong>{{ total }} vehicle{{ '' if total == 1 else 's' }}</strong>
+  <span class="badge badge-green">{{ counts.agree }} agree</span>
+  <span class="badge badge-orange">{{ counts.needs_review }} need review</span>
+  <span class="badge badge-blue">{{ counts.resolved }} resolved by a person</span>
+  <span class="badge badge-gray">{{ counts.lack_evidence }} lack evidence</span>
+  <p class="form-hint">"Reported" is what a source said on its date. "Confirmed" is what a person decided here. A Frazer listing does not say where a car physically is.
+  {% if not loaded.frazer_vehicles %}<br><strong>No Frazer vehicle list is loaded yet.</strong>{% endif %}
+  {% if not loaded.frazer_contracts %}<br>Frazer customer-balance list: not loaded.{% endif %}</p>
+</div>
+
+<form class="filter-bar" method="get">
+  <input type="text" name="search" placeholder="Stock, VIN, make, model…" value="{{ search }}">
+  <select name="state">
+    <option value="">Any state</option>
+    <option value="needs_review" {% if state == 'needs_review' %}selected{% endif %}>Needs review</option>
+    <option value="resolved" {% if state == 'resolved' %}selected{% endif %}>Resolved by a person</option>
+    <option value="agree" {% if state == 'agree' %}selected{% endif %}>Agrees</option>
+    <option value="lack_evidence" {% if state == 'lack_evidence' %}selected{% endif %}>Lacks evidence</option>
+  </select>
+  <select name="has_question">
+    <option value="">Questions: any</option>
+    <option value="yes" {% if has_question == 'yes' %}selected{% endif %}>Has an open question</option>
+    <option value="no" {% if has_question == 'no' %}selected{% endif %}>No open question</option>
+  </select>
+  <select name="kind">
+    <option value="">Any kind</option>
+    <option value="shared_vin" {% if kind == 'shared_vin' %}selected{% endif %}>Shared VIN</option>
+    <option value="purchase_match" {% if kind == 'purchase_match' %}selected{% endif %}>Purchase match</option>
+    <option value="status_conflict" {% if kind == 'status_conflict' %}selected{% endif %}>Status</option>
+  </select>
+  <select name="owner">
+    <option value="">Anyone responsible</option>
+    <option value="unassigned" {% if owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
+    {% for u in users %}<option value="{{ u.id }}" {% if owner == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/vehicles/" class="btn btn-secondary">Clear</a>
+</form>
+
+{% if not rows %}
+<div class="card"><p>{% if total_all == 0 %}No vehicles yet. Load a Frazer vehicle list first (see docs/vehicle_reconciliation.md).{% else %}Nothing matches those filters.{% endif %}</p></div>
+{% else %}
+<div class="table-container">
+  <table class="vr-table">
+    <thead><tr>
+      <th>Stock</th><th>Vehicle</th><th class="vr-col-secondary">Sources</th><th>State</th><th>Next action</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td data-label="Stock"><a href="/vehicles/v/{{ r.key }}"><strong>{{ r.stocks|join(' / ') if r.stocks else 'No stock no.' }}</strong></a>
+          {% if r.relation_note %}<div class="form-hint">Related stock numbers confirmed by a person</div>{% endif %}</td>
+        <td>{{ r.ymm or '—' }}<div class="vr-vin">{{ r.vin or 'VIN not reported' }}</div></td>
+        <td class="vr-col-secondary">{{ sources(r) }}</td>
+        <td>{{ m.state_badge(r.state) }}<div class="form-hint">{{ r.state_note }}</div></td>
+        <td>{{ r.next_action }}{% if r.owner_name %}<div class="form-hint">Responsible: {{ r.owner_name }}</div>{% elif r.state == 'needs_review' and r.next_question is defined and r.next_question %}<div class="form-hint">Responsible: unassigned</div>{% endif %}
+          {% if r.next_question is defined and r.next_question %}<a class="btn btn-sm btn-secondary" href="/vehicles/q/{{ r.next_question.ref }}">Open question</a>{% endif %}
+          <details class="vr-mobile-only vr-more"><summary>What each source says</summary>{{ sources(r) }}
+            <a href="/vehicles/v/{{ r.key }}">Full detail</a></details></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<p class="form-hint">Page {{ page }} of {{ pages }}
+  {% if page > 1 %}<a href="?search={{ search|urlencode }}&state={{ state }}&owner={{ owner }}&has_question={{ has_question }}&kind={{ kind }}&page={{ page - 1 }}">‹ Previous</a>{% endif %}
+  {% if page < pages %}<a href="?search={{ search|urlencode }}&state={{ state }}&owner={{ owner }}&has_question={{ has_question }}&kind={{ kind }}&page={{ page + 1 }}">Next ›</a>{% endif %}</p>
+{% endif %}
+{% endif %}
+{% endblock %}
