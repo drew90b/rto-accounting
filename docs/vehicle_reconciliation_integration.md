@@ -5,7 +5,7 @@ Branch `integration/vehicle-recon-stack` (worktree `/home/drew/projects/rto-inte
 ## The base, and why it is a snapshot
 Nothing from the other sessions is committed. Opening Snapshot (010), Frazer intake (011) and Monthly Review (012-013) all live as uncommitted files in the `rto-monthly-review` working tree. Commit `393f485` copies that tree byte-for-byte onto main (manifest with SHA-256 of every file: `docs/INTEGRATION_BASE.md`). No other worktree, branch or database was touched. If the owners later commit differently, **re-do the snapshot or rebase onto their commits**; compare against the manifest to see what drifted. Baseline of the snapshot alone: 523 passed, 4 skipped.
 
-## What the integration adds on top (three commits)
+## What the integration adds on top (one merge commit `e49d3cc`: the snapshot plus the feature branch, plus the connections)
 1. Merge of `feature/vehicle-reconciliation` (commit `d78374c`): conflicts in `app/main.py`, `app/models/__init__.py`, `app/templates/base.html`, `app/static/css/style.css`, all additive. The employee nav link for vehicle questions was dropped: Belinda reaches them through My actions.
 2. Migration: `vr01` now has `down_revision = "013"`. Chain 009 > 010 > 011 > 012 > 013 > vr01, one head, upgrade/downgrade verified on PostgreSQL. It claims no number.
 3. Connections: `app/services/vr_intake_bridge.py` (Frazer uploads -> reconciliation), `my_actions` route/template (vehicle questions group), identity layers on the detail page, tests, demo seeder.
