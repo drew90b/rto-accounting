@@ -212,4 +212,11 @@ def client(admin_client):
 def _receipt_storage(tmp_path, monkeypatch):
     """Tests must never write into the real storage/receipts folder."""
     import app.services.document_service as document_service
+    import app.services.frazer_intake_service as frazer_intake_service
     monkeypatch.setattr(document_service, "STORAGE_DIR", str(tmp_path / "receipts"))
+    monkeypatch.setattr(frazer_intake_service, "STORAGE_DIR", str(tmp_path / "receipts"))
+    import app.services.opening_snapshot_service as opening_snapshot_service
+    monkeypatch.setattr(document_service, "STORAGE_DIR", str(tmp_path / "receipts"))
+    monkeypatch.setattr(opening_snapshot_service, "STORAGE_DIR", str(tmp_path / "receipts"))
+    import app.services.my_actions_service as my_actions_service
+    monkeypatch.setattr(my_actions_service, "STORAGE_DIR", str(tmp_path / "receipts"))

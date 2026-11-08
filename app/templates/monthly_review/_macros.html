@@ -1,0 +1,7 @@
+{% macro step_badge(status) -%}
+<span class="badge {{ {'complete': 'badge-green', 'in_progress': 'badge-blue', 'blocked': 'badge-red', 'not_started': 'badge-gray', 'not_applicable': 'badge-gray'}.get(status, 'badge-gray') }}">{{ STEP_LABEL.get(status, status) }}</span>
+{%- endmacro %}
+{% macro rec_badge(status) -%}
+<span class="badge {{ {'received': 'badge-green', 'partial': 'badge-yellow', 'missing': 'badge-red', 'not_required': 'badge-gray', 'info': 'badge-gray', 'not_due': 'badge-gray'}.get(status, 'badge-gray') }}">{{ {'received': 'Received', 'partial': 'Partial', 'missing': 'Missing', 'not_required': 'Not required', 'info': 'Info', 'not_due': 'Not due yet'}.get(status, status) }}</span>
+{%- endmacro %}
+{% macro mark(c) -%}{% if c.met %}<span aria-label="satisfied" style="color:#166534;">&#10003;</span>{% elif c.blocker %}<span aria-label="blocked" style="color:#b91c1c;">&#10007;</span>{% else %}<span aria-label="not yet" style="color:#92400e;">&#9675;</span>{% endif %}{%- endmacro %}

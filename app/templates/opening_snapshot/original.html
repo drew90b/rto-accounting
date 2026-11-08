@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Original report{% endblock %}
+{% from "opening_snapshot/_macros.html" import reported_value %}
+{% block content %}
+<style>@media print { .sidebar, .mobile-header, .no-print { display: none !important; } .main { margin: 0 !important; } }</style>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Original report</h1>
+    <div class="form-hint">{{ snapshot.name }} · {{ snapshot.as_of_date | osday }} · {{ snapshot.label }}</div>
+  </div>
+  <a href="/finance/opening/" class="btn btn-secondary no-print">← Back</a>
+</div>
+<div class="form-hint" style="margin-bottom:12px;max-width:680px;">
+  Every figure exactly as first recorded. Clarifications, corrections and evidence are not applied here.
+</div>
+{% for f in figures %}
+<div class="review-card" style="max-width:680px;">
+  <div class="review-card-title"><a href="/finance/opening/figures/{{ f.id }}">{{ f.label }}</a>
+    {% if f.is_withdrawn %}<span class="badge badge-red">Withdrawn</span>{% endif %}</div>
+  <div class="review-card-sub">{{ f.figure_id }} · recorded by {{ f.recorded_by.display_name }}, {{ f.recorded_at | oslocal }}</div>
+  <div class="review-facts">
+    <div><div class="review-fact-label">Status</div><div class="review-fact-value">{{ f.status.value.capitalize() }}</div></div>
+    <div><div class="review-fact-label">Reported</div><div class="review-fact-value">{{ reported_value(f) }}</div></div>
+    <div><div class="review-fact-label">Reported by</div><div class="review-fact-value">{{ f.reported_by_name }}</div></div>
+    <div><div class="review-fact-label">How</div><div class="review-fact-value">{{ f.reported_via }}</div></div>
+    <div><div class="review-fact-label">Date reported</div><div class="review-fact-value">{{ (f.reported_on | osday) or 'Not recorded' }}{% if f.reported_time_note %} · {{ f.reported_time_note }}{% endif %}</div></div>
+    <div><div class="review-fact-label">Cutoff as reported</div><div class="review-fact-value">{{ f.reported_cutoff }}</div></div>
+    {% if f.basis_note %}<div><div class="review-fact-label">Basis as reported</div><div class="review-fact-value">{{ f.basis_note }}</div></div>{% endif %}
+    {% if f.due_note %}<div><div class="review-fact-label">Due</div><div class="review-fact-value">{{ f.due_note }}</div></div>{% endif %}
+  </div>
+  {% if f.reported_statement %}<div class="form-hint figure-statement" style="overflow-wrap:anywhere;">"{{ f.reported_statement }}"</div>{% endif %}
+  {% if f.is_withdrawn %}<div class="form-hint" style="margin-top:6px;">Withdrawn {{ f.withdrawn_at | oslocal }}: {{ f.withdrawn_reason }}</div>{% endif %}
+</div>
+{% else %}
+<div class="form-hint">No figures recorded.</div>
+{% endfor %}
+{% endblock %}

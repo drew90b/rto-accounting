@@ -28,6 +28,14 @@ EMPLOYEE_ALLOWED = {
     ("GET", "/account/password"),
     ("POST", "/account/password"),
     ("POST", "/logout"),
+    # My actions (spec section 20, REQ-MR-23..25): open to any signed-in user, but every handler narrows to issues ASSIGNED to the
+    # caller and not restricted; see tests/test_my_actions.py for the per-issue and per-file checks.
+    ("GET", "/my-actions/"),
+    ("GET", "/my-actions/files/{file_id}"),
+    ("GET", "/my-actions/{ref}"),
+    ("POST", "/my-actions/{ref}/reply"),
+    ("POST", "/my-actions/{ref}/files"),
+    ("POST", "/my-actions/{ref}/record"),
 }
 PUBLIC = {("GET", "/login"), ("POST", "/login"), ("POST", "/logout")}
 

@@ -162,6 +162,32 @@ sudo rm /etc/systemd/system/rto-netcheck.service /etc/logrotate.d/rto-netcheck &
 sudo rm -r /var/log/rto-netcheck        # optional: deletes the collected logs
 ```
 
+## Monthly Review
+
+One page per month under **Finance → Monthly Review** (`/finance/review/`, administrators only): close workday and progress at the top, then month status, records received and missing, issues with owners and history, supported figures, reconciliation status, and owner review notes. It reviews a month; it never reconciles, verifies or closes one (in-app close is later work). The percentage counts only steps whose full completion criteria are met, with separate **Preparation** and **Close readiness** bars (readiness stays 0% until the gated features are built and decisions confirmed). Assignees such as Belinda use a restricted **My actions** view (`/my-actions/`) instead. A closing schedule page derives dated activities from the same steps. See [`docs/monthly_review.md`](docs/monthly_review.md) and spec section 20. The business calendar is **provisional** (`app/services/business_calendar.py`, optional `BUSINESS_CALENDAR_FILE`).
+
+## Opening Snapshot
+
+A management view of what was reported for a starting date (Workday 1), kept exactly as reported. It lives under **Finance → Opening Snapshot** (`/finance/opening/`) and is for **administrators only**; employees and signed-out visitors are refused, including for evidence downloads.
+
+- **Originals are never edited.** Each figure's original report (amount, who said it, how, when, cutoff, basis) is written once. What is learned later is added as a dated **clarification** or **correction** beside it, and files as **evidence**. A figure entered by mistake is **withdrawn** with a reason, and its history stays. The **Original report** page always shows every figure as first recorded.
+- **Reported, not verified.** A text message is evidence of what was reported, not of the balance. There is no Verified status in this release, and the page never shows totals, available cash, projected cash, equity or individual pay.
+- **Evidence files** are stored under `storage/receipts/opening_snapshot/<figure id>/` (outside Git; included in the nightly backup) in their own store, not in the shared Documents list. Each upload records its SHA-256 and requires confirming that it contains no individual employee pay.
+- Spec: `docs/specs/cash-financial-control-spec.md`, section 18. Tests: `tests/test_opening_snapshot.py`.
+
+Deploying (manual, on ubuntu-dev):
+
+```
+# 1. back up first (nightly backup, or on demand): sudo systemctl start rto-backup
+# 2. apply migration 010 (adds four tables; nothing else changes)
+cd /home/drew/projects/rto && source .venv/bin/activate && alembic upgrade head
+# 3. restart the app
+sudo systemctl restart rto-web
+# 4. then enter the real figures through the screen (never seed them from code)
+```
+
+Rolling back after real figures were entered: restore from backup rather than `alembic downgrade -1`, which drops the four tables and everything in them. The old code runs fine against the new tables.
+
 ## Backups
 
 A systemd timer backs up the live app every night at 02:30 America/Chicago (`Persistent=true`, so a run missed while the machine was off happens at the next start). Files: `deploy/rto-backup.sh`, `rto-backup-verify.sh`, `rto-backup-prune.py`, `rto-backup.service`, `rto-backup.timer`.
@@ -229,6 +255,8 @@ You need to choose or provide: the B2 account and bucket name, the application k
 | [`docs/architecture.md`](docs/architecture.md) | Technical architecture, service layer, and test design |
 | [`docs/roadmap.md`](docs/roadmap.md) | Development phases and current status |
 | [`docs/releases.md`](docs/releases.md) | How versions are labelled, and the release notes |
+| [`docs/frazer_intake.md`](docs/frazer_intake.md) | Frazer CSV intake and import preview (unmerged branch): what it does, rules, merge notes |
+| [`docs/monthly_review.md`](docs/monthly_review.md) | Monthly Review workspace (unmerged branch): close progress, workday indicator, closing schedule, issues, notes |
 | [`docs/progress.md`](docs/progress.md) | Development log — what was built and when |
 | [`docs/backup_recovery.md`](docs/backup_recovery.md) | Backup encryption keys, recovery copies, and how to recover from an off-server backup |
 

@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models.user import User
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth
+from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth, frazer_intake, opening_snapshot, monthly_review, my_actions
 
 if len(config.SESSION_SECRET) < 32:
     raise RuntimeError(
@@ -36,7 +36,7 @@ app.add_middleware(OriginCheckMiddleware, allowed_origins=config.ALLOWED_ORIGINS
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.SESSION_SECRET,
-    session_cookie="__Host-rto_session" if config.SESSION_COOKIE_SECURE else "rto_session",
+    session_cookie="__Host-rto_session" if config.SESSION_COOKIE_SECURE else config.SESSION_COOKIE_NAME,
     max_age=config.SESSION_MAX_HOURS * 3600,
     same_site="lax",
     https_only=config.SESSION_COOKIE_SECURE,
@@ -64,6 +64,10 @@ app.include_router(transactions.router, prefix="/transactions", tags=["transacti
 app.include_router(documents.router, prefix="/documents", tags=["documents"], dependencies=_USER)
 app.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"], dependencies=_ADMIN)
 app.include_router(invoices.router, prefix="/invoices", tags=["invoices"], dependencies=_ADMIN)
+app.include_router(frazer_intake.router, prefix="/finance/frazer", tags=["frazer_intake"], dependencies=_ADMIN)
+app.include_router(monthly_review.router, prefix="/finance/review", tags=["monthly_review"], dependencies=_ADMIN)
+app.include_router(my_actions.router, prefix="/my-actions", tags=["my_actions"], dependencies=_USER)
+app.include_router(opening_snapshot.router, prefix="/finance/opening", tags=["opening_snapshot"], dependencies=_ADMIN)
 
 templates = Jinja2Templates(directory="app/templates")
 

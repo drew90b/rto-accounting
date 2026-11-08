@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}My actions{% endblock %}
+{% block content %}
+<div class="mr-page">
+<div class="page-header"><div><h1 class="page-title">My actions</h1>
+  <div class="form-hint">Questions assigned to you. {{ open_count }} open.</div></div></div>
+{% if is_admin %}<p class="form-hint" style="max-width:720px;">You are an administrator: the full picture is on <a href="/finance/review/">Monthly Review</a>.</p>{% endif %}
+{% if not issues %}<div class="card" style="max-width:720px;"><p>Nothing is assigned to you right now.</p></div>
+{% else %}
+<div style="max-width:720px;display:grid;gap:8px;">
+  {% for i in issues %}
+  <a href="{{ base }}/{{ i.issue_id }}" class="card" style="display:block;text-decoration:none;color:inherit;padding:10px 12px;{% if i.status == 'resolved' %}opacity:.65;{% endif %}">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap;">
+      <strong>{{ i.title }}</strong>
+      <span class="badge {{ 'badge-green' if i.status == 'resolved' else ('badge-blue' if i.status == 'in_progress' else ('badge-yellow' if i.status == 'waiting' else 'badge-gray')) }}">{{ STATUS_LABEL[i.status] }}</span>
+    </div>
+    <div class="form-hint">{{ i.issue_id }} · {{ i.month.strftime('%B %Y') }}{% if i.due_date %} · due {{ i.due_date.strftime('%a %b %-d') }}{% if i.due_date < today and i.status != 'resolved' %} <strong style="color:#b91c1c;">overdue</strong>{% endif %}{% endif %}</div>
+  </a>
+  {% endfor %}
+</div>{% endif %}
+</div>
+{% endblock %}

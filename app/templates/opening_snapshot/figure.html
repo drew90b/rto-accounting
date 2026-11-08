@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ figure.label }}{% endblock %}
+{% from "opening_snapshot/_macros.html" import flash, status_badge, reported_value %}
+{% block content %}
+{% set superseded = [] %}
+{% for e in figure.entries %}{% if e.corrects_entry_id %}{% set _ = superseded.append(e.corrects_entry_id) %}{% endif %}{% endfor %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ figure.label }}</h1>
+    <div class="form-hint">{{ figure.figure_id }}</div>
+  </div>
+  <a href="/finance/opening/" class="btn btn-secondary">← Back</a>
+</div>
+{{ flash(request, error) }}
+{% if figure.is_withdrawn %}
+<div class="alert alert-error" style="max-width:680px;">
+  Withdrawn {{ figure.withdrawn_at | oslocal }} by {{ figure.withdrawn_by.display_name }}: {{ figure.withdrawn_reason }}
+  <div class="form-hint">Its history is kept. It is not shown on the overview.</div>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:680px;margin-bottom:14px;">
+  <div class="card-title">Original report</div>
+  <div class="form-hint" style="margin-bottom:8px;">As first recorded by {{ figure.recorded_by.display_name }} on {{ figure.recorded_at | oslocal }}; never changed.</div>
+  <div class="review-facts">
+    <div><div class="review-fact-label">Status</div><div class="review-fact-value">{{ status_badge(figure) }}</div></div>
+    <div><div class="review-fact-label">Reported</div><div class="review-fact-value">{{ reported_value(figure) }}</div></div>
+    <div><div class="review-fact-label">Reported by</div><div class="review-fact-value">{{ figure.reported_by_name }}</div></div>
+    <div><div class="review-fact-label">How</div><div class="review-fact-value">{{ figure.reported_via }}</div></div>
+    <div><div class="review-fact-label">Date reported</div><div class="review-fact-value">{{ (figure.reported_on | osday) or 'Not recorded' }}{% if figure.reported_time_note %} · {{ figure.reported_time_note }}{% endif %}</div></div>
+    <div><div class="review-fact-label">Cutoff as reported</div><div class="review-fact-value">{{ figure.reported_cutoff }}</div></div>
+    {% if figure.basis_note %}<div><div class="review-fact-label">Basis as reported</div><div class="review-fact-value">{{ figure.basis_note }}</div></div>{% endif %}
+    {% if figure.due_note %}<div><div class="review-fact-label">Due</div><div class="review-fact-value">{{ figure.due_note }}</div></div>{% endif %}
+  </div>
+  {% if figure.reported_statement %}<div class="figure-statement" style="margin-top:10px;font-size:13px;overflow-wrap:anywhere;">"{{ figure.reported_statement }}"</div>{% endif %}
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:14px;">
+  <div class="card-title">Current understanding</div>
+  <div class="form-hint" style="margin-bottom:8px;">Built from the history below. The original report above does not change.</div>
+  <div class="review-facts">
+    <div><div class="review-fact-label">Cutoff</div><div class="review-fact-value">
+      {% if understanding.cutoff %}{{ understanding.cutoff.value }}<div class="form-hint">{{ understanding.cutoff.by.display_name }}, {{ understanding.cutoff.at | oslocal }}</div>
+      {% else %}{{ figure.reported_cutoff }}<div class="form-hint">as originally reported</div>{% endif %}</div></div>
+    <div><div class="review-fact-label">Basis</div><div class="review-fact-value">
+      {% if understanding.basis %}{{ understanding.basis.value }}<div class="form-hint">{{ understanding.basis.by.display_name }}, {{ understanding.basis.at | oslocal }}</div>
+      {% else %}{{ figure.basis_note or 'Not stated' }}<div class="form-hint">as originally reported</div>{% endif %}</div></div>
+    <div><div class="review-fact-label">Basis confirmed</div><div class="review-fact-value">
+      {% if understanding.basis_confirmed %}{{ 'Yes' if understanding.basis_confirmed.value else 'No' }}<div class="form-hint">{{ understanding.basis_confirmed.by.display_name }}, {{ understanding.basis_confirmed.at | oslocal }}</div>
+      {% else %}Not confirmed{% endif %}</div></div>
+  </div>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:14px;">
+  <div class="card-title">History</div>
+  <ol style="margin:8px 0 0 18px;font-size:13px;line-height:1.5;overflow-wrap:anywhere;">
+    <li><strong>Original report</strong> · {{ figure.recorded_at | oslocal }} · {{ figure.recorded_by.display_name }}</li>
+    {% for e in figure.entries %}
+    <li id="entry-{{ e.id }}" style="margin-top:6px;">
+      <strong>{{ e.entry_type.value.replace('_', ' ').capitalize() }}</strong> · {{ e.created_at | oslocal }} · {{ e.created_by.display_name }}
+      {% if e.id in superseded %}<span class="badge badge-gray">Corrected by a later entry</span>{% endif %}
+      <div>{{ e.body }}</div>
+      {% if e.refers_to_date %}<div class="form-hint">About {{ e.refers_to_date | osday }}</div>{% endif %}
+      {% if e.cutoff_update %}<div class="form-hint">New cutoff: {{ e.cutoff_update }}</div>{% endif %}
+      {% if e.basis_update %}<div class="form-hint">Basis: {{ e.basis_update }}</div>{% endif %}
+      {% if e.basis_confirmed is not none %}<div class="form-hint">Basis confirmed: {{ 'yes' if e.basis_confirmed else 'no' }}</div>{% endif %}
+      {% if e.corrects_entry_id %}<div class="form-hint">Corrects <a href="#entry-{{ e.corrects_entry_id }}">the earlier entry</a></div>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:14px;">
+  <div class="card-title">Evidence</div>
+  {% if not figure.evidence %}<div class="form-hint" style="margin-top:6px;">No files attached yet.</div>{% endif %}
+  {% for ev in figure.evidence %}
+  <div style="margin-top:10px;font-size:13px;overflow-wrap:anywhere;">
+    <strong>{{ ev.kind.value.replace('_', ' ').capitalize() }}</strong> · {{ ev.original_filename }}
+    · {{ (ev.size_bytes / 1024) | round(1) }} KB<br>
+    {{ ev.description }}<br>
+    <span class="form-hint">{{ ev.uploaded_by.display_name }}, {{ ev.uploaded_at | oslocal }} · SHA-256 {{ ev.sha256[:12] }}…</span><br>
+    <a href="/finance/opening/evidence/{{ ev.id }}/download">Download</a>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not figure.is_withdrawn %}
+<div style="display:flex;gap:8px;flex-wrap:wrap;max-width:680px;margin-bottom:14px;">
+  <a href="/finance/opening/figures/{{ figure.id }}/clarify" class="btn btn-primary">Add clarification</a>
+  <a href="/finance/opening/figures/{{ figure.id }}/evidence" class="btn btn-secondary">Add evidence</a>
+</div>
+<div class="card" style="max-width:680px;">
+  <div class="card-title">Withdraw this figure</div>
+  <div class="form-hint" style="margin:6px 0 8px;">Use this for an entry made by mistake. It leaves the overview, but its history and original report are kept.</div>
+  <form method="post" action="/finance/opening/figures/{{ figure.id }}/withdraw">
+    <div class="form-group"><label for="reason">Reason *</label>
+      <input id="reason" type="text" name="reason" required></div>
+    <button type="submit" class="btn btn-secondary">Withdraw</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

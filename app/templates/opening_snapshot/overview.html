@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Opening Snapshot{% endblock %}
+{% from "opening_snapshot/_macros.html" import flash, status_badge, reported_value %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Starting position</h1>
+    <div class="form-hint">{{ snapshot.as_of_date | osday }} · {{ snapshot.label }}</div>
+  </div>
+</div>
+{{ flash(request) }}
+<div class="alert" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;max-width:680px;">
+  Reported figures — not verified
+</div>
+<div class="form-hint" style="margin:0 0 14px;max-width:680px;">
+  Cutoff for the balances: {{ snapshot.cutoff_note }}. This is what was reported, not today's position.
+</div>
+<div class="page-header-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+  <a href="/finance/opening/figures/new" class="btn btn-primary">+ Add figure</a>
+  <a href="/finance/opening/original" class="btn btn-secondary">Original report</a>
+  <a href="/finance/opening/withdrawn" class="btn btn-secondary">Withdrawn ({{ withdrawn_count }})</a>
+</div>
+
+{% for title, cards in sections %}
+<h2 class="card-title" style="margin:18px 0 8px;font-size:15px;">{{ title }}</h2>
+{% if not cards %}
+  <div class="form-hint" style="margin-bottom:8px;">Nothing recorded here yet.</div>
+{% endif %}
+{% for c in cards %}{% set f = c.figure %}
+<div class="review-card" style="max-width:680px;">
+  <div class="review-card-title"><a href="/finance/opening/figures/{{ f.id }}">{{ f.label }}</a></div>
+  <div class="review-card-sub">
+    Reported by {{ f.reported_by_name }} · {{ f.reported_via }}{% if f.reported_on %} · {{ f.reported_on.strftime('%b %-d') }}{% endif %}
+  </div>
+  <div class="review-flags">
+    {{ status_badge(f) }}
+    {% if c.basis_needed %}<span class="badge badge-orange">Basis needed</span>{% endif %}
+  </div>
+  <div class="review-facts">
+    <div><div class="review-fact-label">Reported</div><div class="review-fact-value">{{ reported_value(f) }}</div></div>
+    <div><div class="review-fact-label">Cutoff</div><div class="review-fact-value">{{ c.cutoff }}</div></div>
+    {% if f.due_note %}<div><div class="review-fact-label">Due</div><div class="review-fact-value">{{ f.due_note }}</div></div>{% endif %}
+    <div><div class="review-fact-label">Clarifications</div><div class="review-fact-value">{{ c.clarifications }}</div></div>
+    <div><div class="review-fact-label">Evidence files</div><div class="review-fact-value">{{ c.evidence_count }}</div></div>
+  </div>
+  {% if f.reported_statement %}
+  <div class="form-hint figure-statement" style="overflow-wrap:anywhere;">"{{ f.reported_statement }}"</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endfor %}
+{% endblock %}

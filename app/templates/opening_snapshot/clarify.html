@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Add clarification{% endblock %}
+{% from "opening_snapshot/_macros.html" import flash, pay_warning %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Add clarification</h1>
+  <a href="/finance/opening/figures/{{ figure.id }}" class="btn btn-secondary">← Back</a>
+</div>
+<div class="form-hint" style="margin-bottom:8px;">{{ figure.label }}</div>
+{{ flash(request, error) }}
+<div class="alert" style="background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;max-width:680px;">
+  This adds to the history. The original report is not changed.
+</div>
+<div class="card" style="max-width:680px;">
+  <form method="post" action="/finance/opening/figures/{{ figure.id }}/clarify">
+    <div class="form-group"><label for="body">What did you learn? *</label>
+      <textarea id="body" name="body" rows="4" required>{{ form.get('body', '') }}</textarea></div>
+    {{ pay_warning() }}
+    <div class="form-group"><label for="refers_to_date">About what date?</label>
+      <input id="refers_to_date" type="date" name="refers_to_date" value="{{ form.get('refers_to_date', '') }}"></div>
+    <div class="form-group"><label for="cutoff_update">New cutoff, if learned</label>
+      <input id="cutoff_update" type="text" name="cutoff_update" maxlength="200" value="{{ form.get('cutoff_update', '') }}">
+      <div class="form-hint">For example: Nov 2, about 8:00 AM, from the bank app</div></div>
+    <div class="form-group"><label for="basis_update">What does this figure mean (basis)?</label>
+      <select id="basis_update" name="basis_update">
+        <option value="">No change</option>
+        {% for value, label in basis_choices %}<option value="{{ value }}" {{ 'selected' if form.get('basis_update') == value }}>{{ label }}</option>{% endfor %}
+        <option value="other" {{ 'selected' if form.get('basis_update') == 'other' }}>Other (type below)</option>
+      </select>
+      <input type="text" name="basis_other" maxlength="200" placeholder="If other" style="margin-top:6px;" value="{{ form.get('basis_other', '') }}"></div>
+    <div class="form-group"><label for="basis_confirmed">Is the basis confirmed?</label>
+      <select id="basis_confirmed" name="basis_confirmed">
+        <option value="">Unchanged</option>
+        <option value="yes" {{ 'selected' if form.get('basis_confirmed') == 'yes' }}>Yes</option>
+        <option value="no" {{ 'selected' if form.get('basis_confirmed') == 'no' }}>No</option>
+      </select></div>
+    {% if correctable %}
+    <div class="form-group"><label for="corrects_entry_id">This corrects an earlier entry</label>
+      <select id="corrects_entry_id" name="corrects_entry_id">
+        <option value="">Not a correction</option>
+        {% for e in correctable %}<option value="{{ e.id }}" {{ 'selected' if form.get('corrects_entry_id') == e.id|string }}>{{ e.created_at | oslocal }} — {{ e.body[:60] }}</option>{% endfor %}
+      </select>
+      <div class="form-hint">The earlier entry stays in the history; this one replaces its cutoff and basis updates.</div></div>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save clarification</button>
+  </form>
+</div>
+{% endblock %}

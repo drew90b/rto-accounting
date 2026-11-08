@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% from "monthly_review/_macros.html" import rec_badge, step_badge %}
+{% block title %}Monthly Review {{ p.label }}{% endblock %}
+{% block content %}
+<div class="mr-page">
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Monthly Review · {{ p.label }}</h1>
+    <div class="form-hint">Reporting period: {{ p.window }}{% if p.is_stub %} · the stub period from the Workday 1 snapshot (spec §6.1), not the whole month{% endif %}</div>
+  </div>
+  <form method="get" action="{{ base }}/" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+    <a class="btn btn-secondary btn-sm" href="{{ base }}/?month={{ prev_month }}">← {{ prev_month }}</a>
+    <input type="month" name="month" value="{{ month_key }}" aria-label="Month" required>
+    <button class="btn btn-secondary btn-sm" type="submit">Go</button>
+    <a class="btn btn-secondary btn-sm" href="{{ base }}/?month={{ next_month }}">{{ next_month }} →</a>
+  </form>
+</div>
+{% if msg %}<div class="alert alert-success" style="max-width:980px;">{{ msg }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" style="max-width:980px;">{{ error }}{% if duplicate %} <a href="#issue-{{ duplicate.issue_id }}">Open {{ duplicate.issue_id }}</a>{% endif %}</div>{% endif %}
+
+<style>
+.mr-sec>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline;justify-content:space-between;}
+.mr-sec>summary::-webkit-details-marker{display:none;}
+.mr-sec>summary::before{content:"\25B8";margin-right:6px;}
+.mr-sec[open]>summary::before{content:"\25BE";}
+.mr-sum-t{font-weight:700;font-size:15px;}
+.mr-issue-sum{display:grid;grid-template-columns:3fr 1fr 1fr 1fr;gap:8px;padding:8px;cursor:pointer;align-items:center;}
+@media (max-width:700px){.mr-issue-sum{grid-template-columns:1fr 1fr;}.mr-issue-sum>span:first-child{grid-column:1 / -1;}}
+</style>
+{% set st = d.status %}{% set f = d.figures %}
+{% include "monthly_review/_top.html" %}
+<p class="form-hint" style="max-width:980px;margin:0 0 6px;">Sections below are collapsed to one line each; open any of them for the full tables and forms. <a href="{{ base }}/?month={{ month_key }}&all=1">Open all</a> · <a href="{{ base }}/?month={{ month_key }}">Collapse</a></p>
+
+<details class="card mr-sec" id="status" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">1 · Month status</span><span class="form-hint">{{ d.status.headline }} · Not reconciled · Formal close not available</span></summary>
+
+  <div class="review-facts">
+    <div><div class="review-fact-label">Review status</div><div class="review-fact-value">{{ st.headline }}</div></div>
+    <div><div class="review-fact-label">Reporting coverage</div><div class="review-fact-value">{{ p.window }}</div></div>
+    <div><div class="review-fact-label">Records in place</div><div class="review-fact-value">{{ st.records_complete }} of {{ st.records_expected }} expected</div></div>
+    <div><div class="review-fact-label">Open issues</div><div class="review-fact-value">{{ st.open_issues }}{% if st.overdue %} ({{ st.overdue }} overdue){% endif %}</div></div>
+    <div><div class="review-fact-label">Reconciliation</div><div class="review-fact-value">{{ st.reconciliation }}</div></div>
+    <div><div class="review-fact-label">Formal close</div><div class="review-fact-value">{{ st.close }}</div></div>
+    <div><div class="review-fact-label">Last owner review</div><div class="review-fact-value">{% if st.last_review %}{{ st.last_review.review_date | mrday }}, {{ st.last_review.user.display_name or st.last_review.user.username }}{% else %}None yet{% endif %}</div></div>
+    <div><div class="review-fact-label">Last update</div><div class="review-fact-value">{{ (st.last_update | mrlocal) or 'Nothing yet' }}</div></div>
+  </div>
+  <p class="form-hint" style="margin:8px 0 0;">Uploading files, resolving actions and saving review notes do not reconcile or verify anything. {{ st.close_reason }}</p>
+
+</details>
+<details class="card mr-sec" id="records" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') or request.query_params.get('attest') or (error and form.get('source_key')) %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">2 · Records received and missing</span><span class="form-hint">{{ d.summaries.records }}</span></summary>
+
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Record</th><th>Status</th><th>Coverage</th><th>Still needed</th><th>Next action</th></tr></thead>
+    <tbody>
+    {% for r in d.records %}
+      <tr>
+        <td data-label="Record"><strong>{{ r.label }}</strong><div class="form-hint">{{ r.spec }}{% if r.manual %} · recorded by hand{% endif %}</div></td>
+        <td data-label="Status">{{ rec_badge(r.status) }}</td>
+        <td data-label="Coverage" style="font-size:13px;">{{ r.coverage }}{% if r.links %}<div>{% for l, u in r.links %}<a href="{{ u }}">{{ l }}</a>{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}</td>
+        <td data-label="Still needed" style="font-size:13px;">{{ r.outstanding }}</td>
+        <td data-label="Next action" style="font-size:13px;">{{ r.action }}{% if r.confirm_id %}<form method="post" action="{{ base }}/records/{{ r.confirm_id }}/confirm" style="margin-top:4px;"><input type="hidden" name="month" value="{{ month_key }}"><button class="btn btn-secondary btn-sm" type="submit">Confirm not required (a different administrator)</button></form>{% endif %}{% if r.manual and r.status in ('missing', 'partial') %} <a href="{{ base }}/?month={{ month_key }}&attest={{ r.key }}#attest">Record it</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="form-hint">A snapshot date does not establish transaction coverage, and a declared export range is what the exporter labelled, not proof of content.</p>
+  <details id="attest" {% if attest or (error and form.get('source_key')) %}open{% endif %} style="margin-top:6px;">
+    <summary><strong>Record a source the app cannot hold</strong> (bank statement, Square, cash counts, floor-plan statement, weekly payroll)</summary>
+    <form method="post" action="{{ base }}/records" class="form-grid" style="margin-top:8px;">
+      <input type="hidden" name="month" value="{{ month_key }}">
+      <div class="form-group"><label for="source_key">Record</label>
+        <select id="source_key" name="source_key">{% for k, l in SOURCES.items() %}<option value="{{ k }}" {{ 'selected' if (form.get('source_key') or attest) == k }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="form-group"><label for="rstatus">Status</label>
+        <select id="rstatus" name="status"><option value="received">Received / kept</option><option value="not_required" {{ 'selected' if form.get('status') == 'not_required' }}>Propose: not required this month</option></select></div>
+      <div class="form-group"><label for="cs">Covers from</label><input id="cs" type="date" name="coverage_start" value="{{ form.get('coverage_start', '') }}"></div>
+      <div class="form-group"><label for="ce">Covers to</label><input id="ce" type="date" name="coverage_end" value="{{ form.get('coverage_end', '') }}"></div>
+      <div class="form-group"><label for="pd">Pay date (weekly payroll only)</label><input id="pd" type="date" name="pay_date" value="{{ form.get('pay_date', '') }}"></div>
+      <div class="form-group"><label for="wk">Where it is kept (outside this app)</label><input id="wk" type="text" name="where_kept" maxlength="200" value="{{ form.get('where_kept', '') }}" placeholder="e.g. locked drawer, bank portal, business drive folder"></div>
+      <div class="form-group form-full"><label for="rn">Note / reason</label><input id="rn" type="text" name="note" maxlength="300" value="{{ form.get('note', '') }}"></div>
+      <div class="form-group form-full form-hint"><strong>Not required</strong> is accepted only for Square (not used) and the floor-plan statement (no loan); it needs a reason, where the evidence is kept, and a <em>different administrator's</em> confirmation, and counts as missing until then. Bank statements, cash counts and payroll are mandatory.</div>
+      <div class="form-group form-full form-hint">This only notes that the record exists and where it is. The file is not stored here and nothing is compared. For payroll write no amounts or names (restricted).</div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Record</button></div>
+    </form>
+  </details>
+
+</details>
+<details class="card mr-sec" id="attention" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') or (error and form.get('title')) %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">3 · Needs attention</span><span class="form-hint">{{ d.summaries.attention }}</span></summary>
+
+  {% if not d.issues %}<p>No issues yet for this month.</p>{% else %}
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table>
+    <thead><tr><th>Issue</th><th>Owner</th><th>Status</th><th>Due</th></tr></thead>
+    <tbody>
+    {% for i in d.issues %}
+      <tr id="issue-{{ i.issue_id }}">
+        <td colspan="4" style="padding:0;">
+          <details {% if request.query_params.get('msg') and request.url.fragment == i.issue_id %}open{% endif %}>
+            <summary class="mr-issue-sum">
+              <span><strong>{{ i.issue_id }}</strong> {{ i.title }}
+                <span class="form-hint">{% if i in d.answered %}<strong style="color:#1e40af;">reply from owner · </strong>{% endif %}{{ CATEGORIES.get(i.category) }}{% if i.checklist_ref %} · {{ i.checklist_ref }}{% endif %}{% if i.kind == 'auto' %} · detected automatically{% endif %}{% if i.kind == 'auto' and not i.auto_active %} · <strong>condition no longer detected</strong>{% endif %}</span></span>
+              <span>{{ i.owner.display_name or i.owner.username if i.owner_user_id else 'Nobody' }}</span>
+              <span><span class="badge {{ 'badge-green' if i.status == 'resolved' else ('badge-blue' if i.status == 'in_progress' else ('badge-yellow' if i.status == 'waiting' else 'badge-gray')) }}">{{ STATUS_LABEL[i.status] }}</span></span>
+              <span {% if i.due_date and i.due_date < today and i.status != 'resolved' %}style="color:#b91c1c;font-weight:600;"{% endif %}>{{ i.due_date.strftime('%b %-d') if i.due_date else '—' }}{% if i.due_is_proposed and i.due_date %} <span class="form-hint">proposed</span>{% endif %}{% if i.due_date and i.due_date < today and i.status != 'resolved' %} overdue{% endif %}</span>
+            </summary>
+            <div style="padding:6px 10px 12px;">
+              <p style="margin:0 0 6px;">{{ i.description }}</p>
+              {% if i.links_json %}<div style="margin-bottom:6px;font-size:13px;">Sources: {% for l in i.links_json %}<a href="{{ l.url }}">{{ l.label }}</a>{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+              {% if i.evidence_json %}<div class="form-hint" style="border-left:3px solid #d1d5db;padding-left:8px;margin-bottom:6px;"><strong>Automatic evidence</strong> (not a decision; updated {{ i.evidence_updated_at | mrlocal }}): {% for k, v in i.evidence_json.items() %}{{ k }}: {{ v }}{{ '; ' if not loop.last }}{% endfor %}</div>{% endif %}
+              <form method="post" action="{{ base }}/issues/{{ i.id }}/update" class="form-grid">
+                <input type="hidden" name="month" value="{{ month_key }}">
+                <div class="form-group"><label>Owner</label><select name="owner_id"><option value="">Nobody</option>{% for u in d.owners %}<option value="{{ u.id }}" {{ 'selected' if i.owner_user_id == u.id }}>{{ u.display_name or u.username }}{{ '' if u.is_admin else ' (no access to this page)' }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label>Status</label><select name="status">{% for k, l in STATUS_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if i.status == k }}>{{ l }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label>Due date</label><input type="date" name="due_date" value="{{ i.due_date.isoformat() if i.due_date else '' }}"></div>
+                <div class="form-group form-full"><label>Internal note {% if i.status != 'resolved' %}(required to resolve){% else %}(required to reopen){% endif %}</label><input type="text" name="note" maxlength="500" placeholder="What was decided or done? Only administrators see this."></div>
+                {% if i.owner_user_id and not i.restricted %}<div class="form-group form-full"><label>Message to the owner (they will see this)</label><input type="text" name="message_to_owner" maxlength="500" placeholder="A question or instruction for {{ i.owner.display_name or i.owner.username }}"></div>{% endif %}
+                <div class="form-group form-full form-hint">{% if i.restricted %}Restricted (payroll): write no amounts or names. {% endif %}Resolving records a decision. It does not change a source record, verify a balance or complete a close step.</div>
+                <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+              </form>
+              {% if d.files.get(i.id) %}<div style="margin-top:6px;font-size:13px;"><strong>Files:</strong> {% for f in d.files[i.id] %}<a href="/my-actions/files/{{ f.id }}">{{ f.original_filename }}</a> <span class="form-hint">({{ f.user.display_name or f.user.username }}, {{ f.created_at | mrlocal }})</span>{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+              <div style="margin-top:8px;"><strong style="font-size:13px;">History</strong>
+                <ul style="margin:4px 0 0 18px;font-size:12.5px;line-height:1.5;">
+                {% for e in i.events %}<li>{{ e.created_at | mrlocal }} · {{ e.user.display_name or e.user.username if e.user_id else 'System' }} · {{ e.event_type }}{% if e.from_value or e.to_value %}: {{ e.from_value or '' }} → {{ e.to_value or '' }}{% endif %}{% if e.body %} — {{ e.body }}{% endif %}</li>{% endfor %}
+                </ul></div>
+            </div>
+          </details>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>{% endif %}
+  <details {% if error and form.get('title') %}open{% endif %} style="margin-top:8px;">
+    <summary><strong>Add an issue or follow-up action</strong></summary>
+    <form method="post" action="{{ base }}/issues" class="form-grid" style="margin-top:8px;">
+      <input type="hidden" name="month" value="{{ month_key }}">
+      <div class="form-group form-full"><label for="t">Title</label><input id="t" type="text" name="title" maxlength="200" required value="{{ form.get('title', '') }}"></div>
+      <div class="form-group form-full"><label for="ds">Description</label><textarea id="ds" name="description" rows="2">{{ form.get('description', '') }}</textarea></div>
+      <div class="form-group"><label for="cat">Category</label><select id="cat" name="category">{% for k, l in CATEGORIES.items() %}<option value="{{ k }}" {{ 'selected' if form.get('category') == k }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="form-group"><label for="cl">Checklist item</label><select id="cl" name="checklist_ref"><option value="">None</option>{% for k, l in CHECKLIST.items() %}<option value="{{ k }}" {{ 'selected' if form.get('checklist_ref') == k }}>{{ k }} {{ l }}</option>{% endfor %}</select></div>
+      <div class="form-group"><label for="ow">Owner</label><select id="ow" name="owner_id"><option value="">Nobody yet</option>{% for u in d.owners %}<option value="{{ u.id }}" {{ 'selected' if form.get('owner_id') == u.id|string }}>{{ u.display_name or u.username }}{{ '' if u.is_admin else ' (no access to this page)' }}</option>{% endfor %}</select></div>
+      <div class="form-group"><label for="du">Due date</label><input id="du" type="date" name="due_date" value="{{ form.get('due_date', '') }}"></div>
+      <div class="form-group form-full"><label for="mo">Question for the owner (they will see this and the title, nothing else)</label><input id="mo" type="text" name="message_to_owner" maxlength="500" value="{{ form.get('message_to_owner', '') }}" placeholder="e.g. Do you have the Nov 1-8 count sheets? Where are they?"></div>
+      <div class="form-group form-full"><label for="lk">Source link (administrators only)</label><select id="lk" name="link"><option value="">None</option>{% for u, l in d.links.items() %}<option value="{{ u }}" {{ 'selected' if form.get('link') == u }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="form-group form-full form-hint">An owner who is not an administrator sees only <a href="/my-actions/">My actions</a>: the title, your question, their replies and files. They cannot open this page. Payroll items are restricted, stay with administrators, and take no amounts or names.</div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Add</button></div>
+    </form>
+  </details>
+
+</details>
+<details class="card mr-sec" id="figures" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">4 · Collections and spending</span><span class="form-hint">{{ d.summaries.figures }}</span></summary>
+
+  <h3 style="font-size:14px;margin:6px 0;">Frazer transactions in the period</h3>
+  {% if f.tx_missing %}<p><strong>Not available.</strong> {{ f.tx_missing }}</p>
+  {% else %}{% set t = f.transactions %}
+  {% if t.partial %}<div class="alert" style="background:#fef9c3;border:1px solid #fde047;color:#854d0e;padding:6px 10px;">Partial coverage: these totals cover only {{ t.present or 'the dates uploaded' }}, not the whole period.</div>{% endif %}
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Group</th><th>Entries</th><th>Total</th><th>Label</th></tr></thead>
+    <tbody>{% for r in t.rows %}{% if r.present or loop.index <= 2 %}<tr><td data-label="Group">{{ r.label }}</td><td data-label="Entries">{{ r.count }}</td><td data-label="Total">{{ r.sum if r.present else '—' }}</td><td data-label="Label" class="form-hint">{{ r.basis }}</td></tr>{% endif %}{% endfor %}</tbody>
+  </table></div>
+  <p class="form-hint">Fee assessments are an amount owed, not money received, and are never added to receipts. These are source totals from Frazer's own wording: not reconciled, not revenue and not profit.
+    {{ t.rows_seen }} row(s) in {{ t.uploads }} upload(s) are {{ t.distinct }} distinct entr{{ 'y' if t.distinct == 1 else 'ies' }} by Sequential ID; each counts once. {{ t.in_period }} fall in the period{% if t.outside %}, {{ t.outside }} outside it{% endif %}.</p>
+  {% if t.revised or t.errored or t.undated %}<p class="form-hint"><strong>Left out of the totals:</strong>
+    {% if t.revised %}{{ t.revised | length }} entr{{ 'y' if t.revised | length == 1 else 'ies' }} with different content in different uploads (IDs {{ t.revised[:8] | join(', ') }}); {% endif %}
+    {% if t.errored %}{{ t.errored | length }} with errors (IDs {{ t.errored[:8] | join(', ') }}); {% endif %}{% if t.undated %}{{ t.undated }} without a readable date.{% endif %}</p>{% endif %}
+  <details><summary>By Frazer description and method code</summary><ul style="margin:4px 0 0 18px;font-size:13px;">{% for x in t.pairs %}<li>{{ x.key }}: {{ x.count }} · {{ x.sum }}</li>{% endfor %}</ul></details>
+  {% endif %}
+
+  <h3 style="font-size:14px;margin:14px 0 6px;">Customer-balance snapshots (each date stands alone)</h3>
+  {% if not f.snapshots %}<p>Not available: no customer-balance snapshot has been uploaded.</p>{% else %}
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Snapshot</th><th>Accounts</th><th>Balance as reported</th><th>Month end?</th></tr></thead>
+    <tbody>{% for s in f.snapshots %}<tr><td data-label="Snapshot"><a href="/finance/frazer/uploads/{{ s.upload.id }}">{{ s.upload.upload_id }}</a> · {{ s.date | mrday if s.date else 'no export date' }}</td><td data-label="Accounts">{{ s.records }}</td><td data-label="Balance as reported">{{ s.total or '—' }}</td><td data-label="Month end?">{{ 'Yes' if s.month_end else 'No, not month end' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="form-hint">Snapshots are not added together and are not month movement. The Nov 8 exports are snapshots of Nov 8; they are not Nov 1 opening balances.</p>{% endif %}
+
+  <h3 style="font-size:14px;margin:14px 0 6px;">Spending entered (Purchases)</h3>
+  {% set sp = f.spending %}
+  {% if sp.count == 0 %}<p>Not available: no purchases are entered for the period (this does not show that none were made).</p>
+  {% else %}<p>{{ sp.count }} purchase(s) entered, <strong>{{ sp.total }}</strong> including shipping and fees; {{ sp.with_receipt }} with a receipt; {{ sp.pending }} pending review.
+    <span class="form-hint">Source total as entered. Not reconciled to bank or card statements, and not matched to Paid In, transfers or deposits.</span></p>{% endif %}
+
+  <details style="margin-top:10px;"><summary><strong>Not available, and why</strong></summary>
+    <ul style="margin:4px 0 0 18px;font-size:13px;">{% for a, b in f.unavailable %}<li><strong>{{ a }}:</strong> {{ b }}</li>{% endfor %}</ul></details>
+
+</details>
+<details class="card mr-sec" id="reconciliation" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">5 · Reconciliation status</span><span class="form-hint">{{ d.summaries.recon }}</span></summary>
+
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Requirement</th><th>Status</th><th>What stands in the way</th><th>Available now</th></tr></thead>
+    <tbody>{% for r in d.recon %}
+      <tr><td data-label="Requirement"><strong>{{ r.id }}</strong> {{ r.name }}<div class="form-hint">{{ r.spec }}{% if r.open_issues %} · {{ r.open_issues }} open action{{ '' if r.open_issues == 1 else 's' }}{% endif %}</div></td>
+        <td data-label="Status" style="font-size:13px;">{{ r.status }}</td><td data-label="What stands in the way" style="font-size:13px;">{{ r.dependency }}</td>
+        <td data-label="Available now" style="font-size:13px;">{{ r.available }}{% for l, u in r.links %} <a href="{{ u }}">{{ l }}</a>{% endfor %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="form-hint">Nothing here is compared by the app. "Inputs received" means a record exists; it does not mean anything was reconciled or verified.</p>
+
+</details>
+<details class="card mr-sec" id="owner-review" style="max-width:980px;margin-bottom:10px;" {% if request.query_params.get('all') or (error and form.get('body')) %}open{% endif %}>
+  <summary class="mr-sum"><span class="mr-sum-t">6 · Owner review and actions</span><span class="form-hint">{{ d.summaries.review }}</span></summary>
+
+  <form method="post" action="{{ base }}/notes" class="form-grid">
+    <input type="hidden" name="month" value="{{ month_key }}">
+    <div class="form-group"><label for="nt">Type</label><select id="nt" name="note_type"><option value="review">Review note</option><option value="decision" {{ 'selected' if form.get('note_type') == 'decision' }}>Decision</option></select></div>
+    <div class="form-group"><label for="rd">Review date</label><input id="rd" type="date" name="review_date" value="{{ form.get('review_date') or today.isoformat() }}"></div>
+    <div class="form-group form-full"><label for="nb">What did we review or decide?</label><textarea id="nb" name="body" rows="3" required>{{ form.get('body', '') }}</textarea></div>
+    <div class="form-group form-full form-hint">A review note records that we looked. It does not verify, reconcile or close the month. Follow-up work belongs in <a href="#attention">Needs attention</a>. No individual pay amounts or names.</div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Save note</button></div>
+  </form>
+  {% if d.notes %}<div class="table-container" style="margin-top:10px;"><table class="mr-stack">
+    <thead><tr><th>Review date</th><th>Type</th><th>Note</th><th>By</th></tr></thead>
+    <tbody>{% for n in d.notes %}<tr id="note-{{ n.id }}"><td data-label="Review date">{{ n.review_date | mrday }}<div class="form-hint">entered {{ n.created_at | mrlocal }}</div></td>
+      <td data-label="Type">{{ 'Decision' if n.note_type == 'decision' else 'Review note' }}{% if n.corrects_note_id %}<div class="form-hint">corrects <a href="#note-{{ n.corrects_note_id }}">#{{ n.corrects_note_id }}</a></div>{% endif %}</td>
+      <td data-label="Note" style="white-space:pre-wrap;">{{ n.body }}
+        <details><summary class="form-hint">Correct this note</summary>
+          <form method="post" action="{{ base }}/notes" style="margin-top:4px;"><input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="note_type" value="{{ n.note_type }}"><input type="hidden" name="corrects_note_id" value="{{ n.id }}">
+            <textarea name="body" rows="2" required placeholder="The corrected wording (the original stays)"></textarea><button class="btn btn-secondary btn-sm" type="submit">Save correction</button></form></details></td>
+      <td data-label="By">{{ n.user.display_name or n.user.username }}</td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<p class="form-hint" style="margin-top:8px;">No notes yet for this month.</p>{% endif %}
+
+</details>
+</div>
+{% endblock %}

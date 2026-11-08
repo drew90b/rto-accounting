@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "monthly_review/_macros.html" import step_badge %}
+{% block title %}Closing schedule {{ p.label }}{% endblock %}
+{% block content %}
+<div class="mr-page">
+<div class="page-header">
+  <div><h1 class="page-title">Closing schedule · {{ p.label }}</h1>
+    <div class="form-hint">Reporting period {{ p.window }} · WD0 = {{ d.indicator.wd0 | mrday }}</div></div>
+  <a href="{{ base }}/?month={{ month_key }}" class="btn btn-secondary">← Monthly Review</a>
+</div>
+{% include "monthly_review/_top.html" %}
+<div class="card" style="max-width:980px;margin-bottom:16px;">
+  <div class="card-title">Activities</div>
+  <p class="form-hint">Each row below is tied to a close step or one of its criteria on the review page; its status is that step's status. There is no separate checklist, and a date passing never completes anything. <strong>Required</strong> rows follow the deadlines proposed in spec §6.2 (BD n = WD+n). <strong>Recommended</strong> rows are this app's suggested timing; the spec does not set it.</p>
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Workday</th><th>Date</th><th>Activity</th><th>Who</th><th>Prerequisites</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in d.schedule %}
+      <tr {% if a.overdue %}style="background:#fef2f2;"{% endif %}>
+        <td data-label="Workday"><strong>{{ a.wd_label }}</strong></td>
+        <td data-label="Date">{{ a.date | mrday }}</td>
+        <td data-label="Activity"><a href="{{ a.href | mrhref(month_key) }}">{{ a.title }}</a><div class="form-hint"><span class="badge {{ 'badge-purple' if a.kind == 'required' else 'badge-gray' }}">{{ 'Required' if a.kind == 'required' else 'Recommended' }}</span> {{ a.source }}</div>
+          {% if a.why and a.status != 'complete' %}<div class="form-hint">{{ a.why }}</div>{% endif %}</td>
+        <td data-label="Who" style="font-size:13px;">{{ a.role_text }}</td>
+        <td data-label="Prerequisites" style="font-size:12.5px;">{% if a.prereqs %}{% for q in a.prereqs %}<div>{{ q.title[:60] }}{{ '…' if q.title | length > 60 }} — {{ q.label }}</div>{% endfor %}{% else %}None{% endif %}</td>
+        <td data-label="Status">{{ step_badge(a.status) }}{% if a.overdue %} <span class="badge badge-red">Overdue</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<div class="card" style="max-width:980px;margin-bottom:16px;">
+  <div class="card-title">Business calendar in use</div>
+  <p><strong>{{ d.indicator.calendar.name }}</strong> {% if d.indicator.calendar.provisional %}<span class="badge badge-yellow">Provisional, not confirmed by Mudbugs</span>{% endif %}</p>
+  <p class="form-hint">{{ d.indicator.calendar.note }} {{ d.indicator.definition }} Dates use America/Chicago. Workdays are Monday to Friday except the holidays below; on a weekend or holiday the indicator says "Non-workday" and shows the next close workday. To change the holidays, set BUSINESS_CALENDAR_FILE (see app/services/business_calendar.py).</p>
+  <ul style="margin:4px 0 0 18px;font-size:13px;">
+    {% for day, name in holidays %}<li>{{ day | mrday }}: {{ name }}</li>{% endfor %}
+  </ul>
+</div>
+</div>
+{% endblock %}

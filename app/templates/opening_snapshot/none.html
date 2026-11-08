@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Opening Snapshot{% endblock %}
+{% from "opening_snapshot/_macros.html" import flash %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">Opening Snapshot</h1></div>
+{{ flash(request) }}
+<div class="card" style="max-width:680px;">
+  <p>No starting snapshot has been created yet.</p>
+  <p class="form-hint" style="margin:8px 0 12px;">A snapshot keeps what was reported for a starting date, exactly as reported. Clarifications and evidence are added beside it, never over it.</p>
+  <a href="/finance/opening/setup" class="btn btn-primary">Create snapshot</a>
+</div>
+{% endblock %}

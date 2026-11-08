@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ i.issue_id }}{% endblock %}
+{% block content %}
+<div class="mr-page">
+<div class="page-header"><div><h1 class="page-title" style="font-size:20px;">{{ i.title }}</h1>
+  <div class="form-hint">{{ i.issue_id }} · {{ i.month.strftime('%B %Y') }}{% if i.due_date %} · due {{ i.due_date.strftime('%a %b %-d, %Y') }}{% endif %} · <span class="badge {{ 'badge-green' if i.status == 'resolved' else ('badge-blue' if i.status == 'in_progress' else ('badge-yellow' if i.status == 'waiting' else 'badge-gray')) }}">{{ STATUS_LABEL[i.status] }}</span></div></div>
+  <a href="{{ base }}/" class="btn btn-secondary">← My actions</a></div>
+{% if msg %}<div class="alert alert-success" style="max-width:720px;">{{ msg }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" style="max-width:720px;">{{ error }}</div>{% endif %}
+
+<div class="card" style="max-width:720px;margin-bottom:12px;">
+  <div class="card-title">Conversation</div>
+  {% if not events %}<p class="form-hint">No messages yet. Tell us what you know, or attach what you have.</p>{% endif %}
+  {% for e in events %}
+  <div style="margin:8px 0;padding:6px 10px;border-left:3px solid {{ '#2563eb' if e.mine else '#d1d5db' }};font-size:14px;">
+    <div class="form-hint">{{ e.who }} · {{ e.when | mrlocal }}</div>
+    <div style="white-space:pre-wrap;">{{ e.text }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if files %}
+<div class="card" style="max-width:720px;margin-bottom:12px;"><div class="card-title">Files on this question</div>
+  <ul style="margin:0 0 0 18px;">{% for f in files %}<li><a href="{{ base }}/files/{{ f.id }}">{{ f.original_filename }}</a> <span class="form-hint">({{ (f.size_bytes / 1024) | round(0) | int }} KB · {{ f.user.display_name or f.user.username }} · {{ f.created_at | mrlocal }}){% if f.note %} {{ f.note }}{% endif %}</span></li>{% endfor %}</ul>
+</div>{% endif %}
+
+{% if i.status != 'resolved' %}
+<div class="card" style="max-width:720px;margin-bottom:12px;">
+  <div class="card-title">Reply</div>
+  <form method="post" action="{{ base }}/{{ i.issue_id }}/reply">
+    <div class="form-group"><label for="b">Your answer</label><textarea id="b" name="body" rows="4">{{ form.get('body', '') }}</textarea></div>
+    <div class="form-group"><label for="st">Status</label><select id="st" name="status"><option value="">Leave as it is</option><option value="in_progress">In progress, I'm working on it</option><option value="waiting">Waiting, I need something first</option></select></div>
+    <div class="form-hint">An administrator resolves the question; you cannot. Do not write payroll amounts or names.</div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Send</button></div>
+  </form>
+</div>
+<div class="card" style="max-width:720px;margin-bottom:12px;">
+  <div class="card-title">Attach a file</div>
+  <form method="post" action="{{ base }}/{{ i.issue_id }}/files" enctype="multipart/form-data">
+    <div class="form-group"><input type="file" name="file" required></div>
+    <div class="form-group"><label for="n">What is it?</label><input id="n" type="text" name="note" maxlength="300" value="{{ form.get('note', '') }}"></div>
+    <div class="form-hint">PDF, photo, CSV, Excel or text, up to 10 MB. Only you and the administrators can open it.</div>
+    <div class="form-actions"><button class="btn btn-secondary" type="submit">Attach</button></div>
+  </form>
+</div>
+{% if can_note_source %}
+<div class="card" style="max-width:720px;margin-bottom:12px;">
+  <div class="card-title">I have this record ({{ source_label }})</div>
+  <form method="post" action="{{ base }}/{{ i.issue_id }}/record" class="form-grid">
+    <div class="form-group"><label for="cs">Covers from</label><input id="cs" type="date" name="coverage_start" value="{{ form.get('coverage_start', '') }}" required></div>
+    <div class="form-group"><label for="ce">Covers to</label><input id="ce" type="date" name="coverage_end" value="{{ form.get('coverage_end', '') }}" required></div>
+    <div class="form-group form-full"><label for="wk">Where it is kept</label><input id="wk" type="text" name="where_kept" maxlength="200" value="{{ form.get('where_kept', '') }}" required placeholder="e.g. green binder, bank portal"></div>
+    <div class="form-group form-full form-hint">This tells the owners the record exists and where to find it. It does not check or reconcile anything.</div>
+    <div class="form-actions"><button class="btn btn-secondary" type="submit">Record that I have it</button></div>
+  </form>
+</div>{% endif %}
+{% else %}<p class="form-hint" style="max-width:720px;">This question is closed.</p>{% endif %}
+</div>
+{% endblock %}
