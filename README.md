@@ -228,6 +228,7 @@ You need to choose or provide: the B2 account and bucket name, the application k
 | [`docs/data_model.md`](docs/data_model.md) | Database schema — all tables, columns, and relationships |
 | [`docs/architecture.md`](docs/architecture.md) | Technical architecture, service layer, and test design |
 | [`docs/roadmap.md`](docs/roadmap.md) | Development phases and current status |
+| [`docs/releases.md`](docs/releases.md) | How versions are labelled, and the release notes |
 | [`docs/progress.md`](docs/progress.md) | Development log — what was built and when |
 | [`docs/backup_recovery.md`](docs/backup_recovery.md) | Backup encryption keys, recovery copies, and how to recover from an off-server backup |
 

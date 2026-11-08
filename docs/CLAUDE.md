@@ -1365,6 +1365,17 @@ Established by the history of this repository; follow it for every commit and pu
 \- Deployment is manual on ubuntu-dev; say in the PR when a change needs a backup, migration or `.env` change before it goes live.
 
 
+\### Versions and releases
+
+
+
+\- Each deployed state is labelled with an annotated tag `vMAJOR.MINOR.PATCH` on the `main` commit that is running on ubuntu-dev, plus a GitHub Release with the same notes. The rules (what bumps MINOR vs PATCH, never move a tag, no private data in a release) and the release history are in `docs/releases.md`.
+
+\- Tag only after the deployment is verified. Documentation-only and test-only commits are not versions; they ride with the next release.
+
+\- The repository is public: keep purchase rows, customer or employee details, receipt links, credentials and database snapshots out of commits, tags and releases. Counts and totals are fine.
+
+
 
 ---
 
