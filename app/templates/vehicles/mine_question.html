@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}{{ q.ref }}{% endblock %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">{{ q.ref }}</h1>
+  <div class="page-header-actions"><a href="/vehicle-questions/mine" class="btn btn-secondary">My questions</a></div></div>
+{% if saved %}<div class="alert alert-success">Thank you — your answer is saved.</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2 class="card-title">{{ v.title }}</h2>
+  <p>{{ m.qstatus(v.status) }}</p>
+  <p>{{ v.why }}</p>
+  {% for e in v.episodes %}
+    <div class="vr-evidence"><strong>Stock {{ e.stock }}</strong> — {{ e.ymm or 'description not reported' }}<br><span class="vr-vin">{{ e.vin or 'VIN not reported' }}</span>
+      {% if e.vehicle_source %}<br>Frazer vehicle source: "{{ e.vehicle_source }}"{% endif %}{% if e.purchase_date %} · listed purchase date {{ e.purchase_date }}{% endif %}
+      {% if e.has_contract %}<br>A Frazer contract is listed{% if e.contract_sale_date %} (sale date {{ e.contract_sale_date }}){% endif %}.{% endif %}</div>
+  {% endfor %}
+  {% if v.app %}<div class="vr-evidence">App unit: <strong>{{ (v.app.unit_status or '')|replace('_',' ') }}</strong> (unit last updated {{ v.app.unit_updated or 'unknown' }}).</div>{% endif %}
+</div>
+
+{% if waiting %}
+<div class="card"><p><strong>Your answer is saved and waiting for an administrator to approve it.</strong> It does not change anything yet.</p></div>
+{% endif %}
+{% if v.status in ('open','review_needed','proposed') %}
+<div class="card">
+  <h2 class="card-title">{{ 'Answer again' if waiting else 'Your answer' }}</h2>
+  {% if v.kind == 'shared_vin' %}<p class="form-hint">An administrator approves identity answers before they take effect.</p>{% endif %}
+  {{ m.answer_form('/vehicle-questions/mine/' ~ q.ref ~ '/answer', q, today, false) }}
+</div>
+{% endif %}
+<details class="card"><summary class="card-title">History</summary>
+  {% for h in history %}<div class="vr-event"><strong>{{ h.type|replace('_',' ')|title }}</strong> · {{ h.who }} · <span class="vr-date">{{ h.at.strftime('%b %-d, %Y %-I:%M %p') }} UTC</span>{% if h.body %}<div class="form-hint">{{ h.body }}</div>{% endif %}</div>{% endfor %}
+</details>
+{% endblock %}

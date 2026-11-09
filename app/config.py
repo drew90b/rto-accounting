@@ -8,7 +8,7 @@ DATABASE_URL = os.environ.get(
     "postgresql://postgres:password@localhost:5432/rto_accounting"
 )
 
-STORAGE_DIR = os.path.join(
+STORAGE_DIR = os.environ.get("STORAGE_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
     "storage",
     "receipts"
@@ -25,7 +25,14 @@ ALLOWED_ORIGINS = [
 ]
 # Set true only when the app is served over HTTPS (e.g. behind Tailscale Serve).
 SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+# Name of the session cookie when SESSION_COOKIE_SECURE is false. Cookies are shared across ports on one hostname,
+# so two copies of the app on the same host (a demo beside the live app) need different names.
+SESSION_COOKIE_NAME = os.environ.get("SESSION_COOKIE_NAME", "rto_session")
 # Absolute session length, measured from sign-in.
 SESSION_MAX_HOURS = int(os.environ.get("SESSION_MAX_HOURS", "12"))
 # A session unused for this long ends, even inside the absolute limit.
 SESSION_IDLE_MINUTES = int(os.environ.get("SESSION_IDLE_MINUTES", "30"))
+
+# Business calendar for the Monthly Review close schedule (spec section 20). Optional path to a JSON file that replaces
+# the built-in PROVISIONAL calendar; see app/services/business_calendar.py for the format.
+BUSINESS_CALENDAR_FILE = os.environ.get("BUSINESS_CALENDAR_FILE", "")

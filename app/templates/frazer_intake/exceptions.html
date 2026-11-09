@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Exceptions {{ up.upload_id }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1 class="page-title">Exceptions: {{ up.upload_id }}</h1><div class="form-hint">{{ TYPE_LABEL.get(up.export_type) }} · {{ up.original_filename }}</div></div>
+  <a href="/finance/frazer/uploads/{{ up.id }}" class="btn btn-secondary">← Summary</a>
+</div>
+<form class="filter-bar" method="get">
+  <select name="code">
+    <option value="">All exception types</option>
+    {% for g in all_groups %}<option value="{{ g.code }}" {{ 'selected' if code == g.code }}>{{ g.code }} ({{ g.count }})</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/finance/frazer/uploads/{{ up.id }}/exceptions" class="btn btn-secondary">Clear</a>
+</form>
+<div class="form-hint" style="margin-bottom:8px;">"Line" is the line in the original file; the header is line 1.</div>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Severity</th><th>Type</th><th>Line</th><th>Identity</th><th>Field</th><th>What was found</th></tr></thead>
+    <tbody>
+    {% for g in groups %}{% for e in g['items'] %}
+      <tr>
+        <td><span class="badge {{ 'badge-red' if e.severity == 'error' else ('badge-yellow' if e.severity == 'warning' else 'badge-gray') }}">{{ e.severity }}</span></td>
+        <td>{{ e.code }}</td>
+        <td>{{ e.row_number or 'whole file' }}</td>
+        <td>{{ e.identity or '' }}</td>
+        <td>{{ e.field or '' }}</td>
+        <td>{{ e.message }}</td>
+      </tr>
+    {% endfor %}{% else %}
+      <tr><td colspan="6" class="empty-cell">No exceptions.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

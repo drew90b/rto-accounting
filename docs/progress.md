@@ -18,6 +18,26 @@ Update this file as work is completed.
 
 ## Completed Work
 
+### 2026-11-08 — Monthly Review workspace (built on an unmerged feature branch; not deployed)
+
+Spec v0.5 section 20 (Increment M) and an administrator-only **Finance → Monthly Review** page: close workday indicator, month-end close progress bar, closing schedule, records received and missing, issues with owners and history, supported figures, reconciliation status and owner review notes. It reviews a month and never reconciles, verifies or closes one. Details: [`monthly_review.md`](monthly_review.md).
+
+- **Honest by construction:** a close step completes only when its records, capabilities, decisions and recorded confirmation/review are all satisfied. No gated capability is built and no decision is confirmed, so progress is 0% and Formal close is blocked; resolving an issue or saving a note changes neither.
+- **Provisional:** the business calendar (six assumed holidays, WD0 = last business day) is labelled provisional until confirmed (DEC-40).
+- **Integration:** this branch combines main + Opening Snapshot (010) + Frazer intake (011) + Monthly Review (012); the combined sequence was tested on a disposable PostgreSQL. The clock-dependent Opening Snapshot test was fixed here. Nothing is committed, merged, pushed or deployed.
+- **Refinement (same day):** separate Preparation and Close readiness bars built from evidence milestones; a restricted **My actions** view for assignees (migration 013 adds issue files); controlled not-applicable rules (only CL-4 under a stated condition with two administrators); a compact phone-friendly overview; the calendar anchors made explicit and the BD/WD equivalence verified (no failing example). Spec v0.5.1.
+- **Phone fix:** wide tables were silently clipped by the shared `overflow: hidden` table wrapper; they now stack into labelled rows on phones (scoped, desktop geometry unchanged), verified in Chromium at 375/390/430 px including expanded sections and My actions.
+- **Tests:** full suite passes (523 passed, 2 skipped, including the PostgreSQL migration tests).
+
+### 2026-11-08 — Frazer CSV Intake and Preview (built on an unmerged branch; not deployed)
+
+Spec v0.4 section 19 (Increment F) and an administrator-only **Finance → Frazer Intake** screen: upload a Frazer vehicle, customer-balance or payments CSV, see counts, source totals, new/unchanged/changed/conflicting/unresolved, exceptions with source line numbers, and cross-file checks. Nothing is written to purchases, units, payments or cash records. Details: [`frazer_intake.md`](frazer_intake.md).
+
+- **Verified on the real Nov 8 files** (private report outside Git): every preliminary count and amount confirmed (108 vehicles, 64 customer balances, 22 transaction entries; amounts are in the private report); the customer-balance layout is now implemented; the declared period (filename) is shown apart from the dates present (Nov 2 to 7).
+- **Tests:** full suite passes; 22/22 HTTP end-to-end checks on a disposable PostgreSQL; combined migration sequence 009 > 010 > 011 tested. Merge order decided: Opening Snapshot first.
+- **Bug found by the real files and fixed:** the payments cross-file check compared Sequential ID with stock numbers.
+- **Not done:** no commit, merge, push, deploy, live migration or live import. Merge Opening Snapshot (010) first, then re-point 011 to 010 (one line; see `frazer_intake.md`).
+
 ### 2026-11-08 — Google Form Purchase Catch-Up Import (52 purchases)
 
 Applied the reviewed catch-up of purchases that were in the old Google Form register but not in the app. Source data, reports and the import file are kept outside Git (`/home/drew/rto-reviews/2026-11-08-purchase-catchup/`).

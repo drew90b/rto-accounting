@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Add figure{% endblock %}
+{% from "opening_snapshot/_macros.html" import flash, pay_warning %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Add figure</h1>
+  <a href="/finance/opening/" class="btn btn-secondary">← Back</a>
+</div>
+{{ flash(request, error) }}
+<div class="alert" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;max-width:680px;">
+  Once saved, these fields can't be changed. Use clarifications for anything learned later.
+</div>
+<div class="card" style="max-width:680px;">
+  <form method="post" action="/finance/opening/figures/new">
+    <div class="form-group"><label for="section">Section *</label>
+      <select id="section" name="section" required>
+        <option value="">Choose…</option>
+        {% for value, label in sections %}<option value="{{ value }}" {{ 'selected' if form.get('section') == value }}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div class="form-group"><label for="label">Label *</label>
+      <input id="label" type="text" name="label" required maxlength="150" value="{{ form.get('label', '') }}">
+      <div class="form-hint">For example: Bank balances, Square loan, Weekly payroll (provisional)</div></div>
+    <div class="form-group"><label for="status">Status *</label>
+      <select id="status" name="status">
+        <option value="reported" {{ 'selected' if form.get('status', 'reported') == 'reported' }}>Reported — someone gave an amount or count</option>
+        <option value="pending" {{ 'selected' if form.get('status') == 'pending' }}>Pending — not known yet (no amount)</option>
+      </select></div>
+    <div class="form-group"><label for="amount">Reported amount ($)</label>
+      <input id="amount" type="text" inputmode="decimal" name="amount" value="{{ form.get('amount', '') }}">
+      <div class="form-hint">Leave blank for Pending. Never type 0 for "unknown".</div></div>
+    <div class="form-group"><label for="count">Reported count</label>
+      <input id="count" type="text" inputmode="numeric" name="count" value="{{ form.get('count', '') }}"></div>
+    <div class="form-group"><label for="pending_need">If pending: what is needed *</label>
+      <input id="pending_need" type="text" name="pending_need" maxlength="300" value="{{ form.get('pending_need', '') }}">
+      <div class="form-hint">For example: account list from Steve</div></div>
+    <div class="form-group"><label for="statement">What was reported (their words or a close paraphrase)</label>
+      <textarea id="statement" name="statement" rows="3">{{ form.get('statement', '') }}</textarea></div>
+    {{ pay_warning() }}
+    <div class="form-group"><label for="reported_by">Reported by *</label>
+      <input id="reported_by" type="text" name="reported_by" maxlength="100" value="{{ form.get('reported_by', '') }}"></div>
+    <div class="form-group"><label for="reported_via">How it was reported *</label>
+      <input id="reported_via" type="text" name="reported_via" maxlength="100" value="{{ form.get('reported_via', '') }}"></div>
+    <div class="form-group"><label for="reported_on">Date reported</label>
+      <input id="reported_on" type="date" name="reported_on" value="{{ form.get('reported_on', '') }}"></div>
+    <div class="form-group"><label for="time_note">Time reported, if known</label>
+      <input id="time_note" type="text" name="time_note" maxlength="100" value="{{ form.get('time_note', '') }}"></div>
+    <div class="form-group"><label for="reported_cutoff">Cutoff of the balance</label>
+      <input id="reported_cutoff" type="text" name="reported_cutoff" maxlength="200" value="{{ form.get('reported_cutoff', 'Unknown') }}">
+      <div class="form-hint">When the balance was taken. "Unknown" is fine.</div></div>
+    <div class="form-group"><label for="basis_note">Basis, if stated</label>
+      <input id="basis_note" type="text" name="basis_note" maxlength="200" value="{{ form.get('basis_note', '') }}">
+      <div class="form-hint">For example: cost, total invested, or selling value. Leave blank if not stated.</div></div>
+    <div class="form-group"><label for="due_note">Due date or note (commitments)</label>
+      <input id="due_note" type="text" name="due_note" maxlength="200" value="{{ form.get('due_note', '') }}"></div>
+    <button type="submit" class="btn btn-primary">Save figure</button>
+  </form>
+</div>
+{% endblock %}

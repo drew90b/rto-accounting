@@ -197,3 +197,34 @@ class InvoiceType(str, enum.Enum):
 class InvoiceStatus(str, enum.Enum):
     open = "open"
     paid = "paid"
+
+
+class OpeningSection(str, enum.Enum):
+    cash = "cash"
+    other_asset = "other_asset"
+    debt = "debt"
+    commitment = "commitment"
+    not_reported = "not_reported"
+
+
+class OpeningFigureStatus(str, enum.Enum):
+    """What the snapshot knows about a figure. There is deliberately no verified value:
+    nothing in the Opening Snapshot is checked against independent evidence."""
+    reported = "reported"
+    pending = "pending"
+
+
+class OpeningEntryType(str, enum.Enum):
+    clarification = "clarification"
+    correction = "correction"
+    evidence_added = "evidence_added"
+    withdrawal = "withdrawal"
+
+
+class OpeningEvidenceKind(str, enum.Enum):
+    message_from_steve = "message_from_steve"
+    bank_screenshot = "bank_screenshot"
+    bank_statement = "bank_statement"
+    frazer_report = "frazer_report"
+    lender_statement = "lender_statement"
+    other = "other"

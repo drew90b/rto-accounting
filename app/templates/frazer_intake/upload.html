@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}{{ up.upload_id }} {{ TYPE_LABEL.get(up.export_type, '') }}{% endblock %}
+{% macro sev_badge(sev) -%}<span class="badge {{ 'badge-red' if sev == 'error' else ('badge-yellow' if sev == 'warning' else 'badge-gray') }}">{{ sev }}</span>{%- endmacro %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ up.upload_id }} · {{ TYPE_LABEL.get(up.export_type, up.export_type) }}</h1>
+    <div class="form-hint">{{ up.original_filename }}</div>
+  </div>
+  <a href="/finance/frazer/" class="btn btn-secondary">← All uploads</a>
+</div>
+{% set ok = request.query_params.get('msg') %}
+{% if ok %}<div class="alert alert-success" style="max-width:820px;">{{ ok | replace('+', ' ') }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" style="max-width:820px;">{{ error }}</div>{% endif %}
+
+<div class="alert" style="background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;max-width:820px;">
+  Source evidence only. <strong>Nothing from this file has been imported</strong>; no purchase, unit, payment or cash record was created or changed.
+  {% if up.export_type in ('vehicles', 'customer_balances') %}
+  This is a <strong>snapshot of the day it was exported{% if up.declared_export_date %} ({{ up.declared_export_date | frday }}){% endif %}</strong>, not an opening balance for any earlier date.
+  {% endif %}
+</div>
+
+{% if up.status != 'parsed' %}
+<div class="card" style="max-width:820px;">
+  <div class="card-title">Rejected: nothing was read from this file</div>
+  {% for g in groups %}{% if g.severity == 'error' %}<p style="margin:8px 0;">{{ g.message }}</p>{% endif %}{% endfor %}
+  <p class="form-hint">The original file is kept (see Download). Upload a corrected export to try again.</p>
+</div>
+{% else %}
+
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">About this file</div>
+  <div class="review-facts" style="margin-top:8px;">
+    <div><div class="review-fact-label">Type</div><div class="review-fact-value">{{ TYPE_LABEL.get(up.export_type) }}</div></div>
+    <div><div class="review-fact-label">Records read</div><div class="review-fact-value">{{ up.row_count }}</div></div>
+    <div><div class="review-fact-label">Uploaded</div><div class="review-fact-value">{{ up.uploaded_at | frlocal }}<div class="form-hint">{{ up.uploaded_by.display_name }}</div></div></div>
+    <div><div class="review-fact-label">File</div><div class="review-fact-value">{{ (up.size_bytes / 1024) | round(1) }} KB<div class="form-hint">sha256 {{ up.sha256[:12] }}…</div></div></div>
+    {% if up.export_type == 'payments' %}
+    <div><div class="review-fact-label">Declared coverage</div><div class="review-fact-value">{% if up.declared_coverage_start %}{{ up.declared_coverage_start | frday }} to {{ up.declared_coverage_end | frday }}{% else %}Not declared{% endif %}{% if 'coverage_start' in (s.declared_from_filename or []) %} <span class="form-hint">(read from the filename)</span>{% endif %}</div></div>
+    <div><div class="review-fact-label">Coverage seen in the data</div><div class="review-fact-value">{% if up.observed_coverage_start %}{{ up.observed_coverage_start | frday }} to {{ up.observed_coverage_end | frday }}{% else %}None{% endif %}</div></div>
+    {% else %}
+    <div><div class="review-fact-label">Declared export date</div><div class="review-fact-value">{{ (up.declared_export_date | frday) or 'Not declared' }}{% if 'export_date' in (s.declared_from_filename or []) %} <span class="form-hint">(read from the filename)</span>{% endif %}</div></div>
+    {% endif %}
+    <div><div class="review-fact-label">Actual cutoff</div><div class="review-fact-value">{{ cutoff.original }}
+      {% if cutoff.latest %}<div class="form-hint">Later note ({{ cutoff.latest.created_at | frlocal }}): {{ cutoff.latest.actual_cutoff }}</div>{% endif %}
+      {% if not cutoff.known %}<div class="form-hint">Not supported by anything yet. It is not assumed to be midnight or the file date.</div>{% endif %}</div></div>
+  </div>
+</div>
+
+<div class="stats-grid" style="max-width:820px;grid-template-columns:repeat(5,1fr);">
+  {% for st, label in [('new', 'New'), ('unchanged', 'Unchanged'), ('changed', 'Changed'), ('conflicting', 'Conflicting'), ('unresolved', 'Unresolved')] %}
+  <a class="stat-card" href="/finance/frazer/uploads/{{ up.id }}/rows?status={{ st }}" style="text-decoration:none;color:inherit;">
+    <div class="stat-label">{{ label }}</div><div class="stat-value">{{ c.counts.get(st, 0) }}</div>
+    {% if loop.first %}<div class="stat-meta">{{ c.with_notes }} with warnings</div>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">What is ready and what is not</div>
+  <p style="margin:8px 0;"><strong>{{ ready.headline }}</strong></p>
+  <ul style="margin:0 0 0 18px;font-size:13px;line-height:1.55;">{% for l in ready.lines %}<li>{{ l }}</li>{% endfor %}</ul>
+  {% if c.baseline_text %}<p class="form-hint" style="margin-top:8px;">{{ c.baseline_text }}</p>{% endif %}
+  {% if up.export_type == 'payments' and c.has_baseline %}<p class="form-hint">{{ c.overlap_identities }} Sequential ID(s) also appear in the earlier upload(s).</p>{% endif %}
+  {% if c.removed_identities %}<p class="form-hint">{{ c.removed_identities | length }} record(s) in the previous snapshot are not in this one (reported only; nothing was removed).</p>{% endif %}
+  <p class="form-hint">No comparison is made with the app's own purchases, units or payments: Frazer data here is source evidence only. Identities (stock number; Sequential ID) are candidates until confirmed with Frazer.</p>
+</div>
+
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">What the file contains</div>
+  {% if up.export_type == 'payments' %}
+    <p class="form-hint" style="margin:6px 0;">Grouped by how Frazer labelled each entry. Amounts are totalled <strong>within</strong> a group and are never added across groups: a fee assessment is not money received.</p>
+    <div class="table-container"><table>
+      <thead><tr><th>Group (by Frazer's description)</th><th>Entries</th><th>Sum of Amount</th><th>Receipt # 0 or blank</th></tr></thead>
+      <tbody>
+      {% for k, label in CLASS_LABEL.items() %}{% if s.by_class.get(k) %}
+        <tr><td>{{ label }}</td><td>{{ s.by_class[k].count }}</td><td>{{ s.by_class[k].sum | frmoney }}</td><td>{{ s.receipt_zero_by_class.get(k, 0) }}</td></tr>
+      {% endif %}{% endfor %}
+      </tbody></table></div>
+    <details style="margin-top:8px;"><summary>By Frazer description and method code</summary>
+      <div class="table-container"><table><thead><tr><th>Description | method code</th><th>Entries</th><th>Sum of Amount</th></tr></thead><tbody>
+      {% for k, v in s.by_description_and_method.items() %}<tr><td>{{ k }}</td><td>{{ v.count }}</td><td>{{ v.sum | frmoney }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      <p class="form-hint">Codes are shown as written. What they mean (for example CA on a Down Payment) is not confirmed and nothing is inferred from them.</p>
+    </details>
+    <ul style="margin:8px 0 0 18px;font-size:13px;line-height:1.55;">
+      <li>Sequential ID unique in this file: <strong>{{ 'yes' if s.sequential_id_unique_in_file else 'NO' }}</strong> ({{ s.unique_sequential_ids }} distinct). It is a candidate identity, not yet confirmed as stable across exports.</li>
+      <li>Late-fee entries with nothing applied to any Applied-to column: {{ s.fee_entries_with_nothing_applied }} of {{ s.by_class.get('fee_assessment', {}).get('count', 0) }} (consistent with an assessment, not money received).</li>
+      <li>Payment entries whose Applied-to columns add up to the Amount: {{ s.payment_entries_fully_applied }} of {{ s.by_class.get('payment_entry', {}).get('count', 0) }}.</li>
+      <li>Transaction dates {{ s.transaction_date_min or 'none' }} to {{ s.transaction_date_max or 'none' }}; entry dates {{ s.date_entered_min or 'none' }} to {{ s.date_entered_max or 'none' }} (kept separate).</li>
+    </ul>
+  {% elif up.export_type == 'vehicles' %}
+    <ul style="margin:6px 0 0 18px;font-size:13px;line-height:1.55;">
+      <li>{{ s.records }} record(s); {{ s.unique_stock }} distinct stock number(s). Stock numbers are kept as text ({{ s.stock_with_leading_zero }} with a leading zero, {{ s.stock_letter_prefixed }} starting with a letter).</li>
+      <li>Duplicate VINs under different stock numbers: <strong>{{ s.duplicate_vin_groups | length }}</strong>{% for g in s.duplicate_vin_groups %}<br><span class="form-hint">{{ g.vin }} on stock {{ g.stocks | join(', ') }} (kept separate; not merged)</span>{% endfor %}</li>
+      <li>VIN blank: {{ s.vin_blank }}. Purchase dates {{ s.purchase_date_min or 'none' }} to {{ s.purchase_date_max or 'none' }}.</li>
+      <li>Total Cost, summed <strong>as reported</strong>: {{ s.total_cost_sum_as_reported | frmoney }} (a sum of Frazer's cost column; not an inventory valuation).</li>
+      <li>Records reporting a cost of 0: <strong>{{ s.zero_cost_records }}</strong>. Kept as 0; that does not confirm the vehicle cost nothing.</li>
+      {% if s.floor_plan_columns %}{% for fp in s.floor_plan_columns %}
+      <li>Floor-plan column <em>{{ fp.header }}</em>: {{ fp.records_with_value }} with a value ({{ fp.sum_as_reported | frmoney }} as reported), {{ fp.records_zero }} reported as 0, {{ fp.records_blank }} blank. A blank is not "no debt" and a 0 is not confirmed as "paid off".</li>
+      {% endfor %}{% else %}
+      <li>No floor-plan column was found in this file.</li>{% endif %}
+    </ul>
+  {% else %}
+    <ul style="margin:6px 0 0 18px;font-size:13px;line-height:1.55;">
+      <li>{{ s.records }} record(s): {{ s.records_with_stock }} with a stock number ({{ s.unique_stock }} distinct), {{ s.records_without_stock }} without.</li>
+      <li>Reported balances, summed <strong>as reported</strong>: {{ s.balance_sum_as_reported | frmoney }}{% if s.records_without_stock %}; rows without a stock number ({{ s.balance_sum_excluded_rows | frmoney }}) are left out of that sum{% endif %}. What a "balance" includes is not confirmed.</li>
+      {% if s.principal_sum_as_reported is defined %}<li>Of that, principal {{ s.principal_sum_as_reported | frmoney }}, fees owed {{ s.fees_owed_sum_as_reported | frmoney }} ({{ s.records_with_fees_owed }} account(s)), repairs {{ s.repairs_sum_as_reported | frmoney }}. Balance equals those three on {{ s.balance_equals_components }} of {{ s.records }} records. Sales run {{ s.sale_date_min | default('?') }} to {{ s.sale_date_max | default('?') }}.</li>{% endif %}
+      <li>Account labels: {% for k, n in s.account_labels.items() %}{{ k }} ({{ n }}){{ ', ' if not loop.last }}{% endfor %}.</li>
+    </ul>
+  {% endif %}
+</div>
+
+{% if cross %}
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">Cross-file checks</div>
+  {% if not cross.available %}<p style="margin:8px 0;">{{ cross.text }}</p>
+  {% else %}
+    <p class="form-hint" style="margin:6px 0;">Checked against <a href="/finance/frazer/uploads/{{ cross.other.id }}">{{ cross.other.upload_id }}</a> (the {{ cross.label }} with the nearest export date{% if cross.other.declared_export_date %}, exported {{ cross.other.declared_export_date | frday }}{% endif %}). Nothing is corrected.</p>
+    {% if cross.caveat %}<p class="form-hint">{{ cross.caveat }}</p>{% endif %}
+    {% if up.export_type == 'vehicles' %}
+      <ul style="margin:0 0 0 18px;font-size:13px;line-height:1.55;">
+        <li>{{ cross.vehicles_with_a_balance_record }} of {{ cross.vehicles_total }} vehicles have a balance record.</li>
+        <li>Balance records whose stock number is not in this vehicle list: <strong>{{ cross.balance_records_not_in_vehicle_list | length }}</strong>{% if cross.balance_records_not_in_vehicle_list %} ({{ cross.balance_records_not_in_vehicle_list[:10] | join(', ') }}){% endif %}.</li>
+        <li>Vehicles whose VIN differs from the balance record's VIN: <strong>{{ cross.vin_differs_rows | length }}</strong>{% if cross.vin_differs_rows %} (lines {{ cross.vin_differs_rows[:10] | join(', ') }}){% endif %}.</li>
+      </ul>
+    {% else %}
+      <ul style="margin:0 0 0 18px;font-size:13px;line-height:1.55;">
+        <li>Stock number found in the vehicle list: <strong>{{ cross.stock_found }} of {{ cross.records_total }}</strong>{% if cross.stock_missing %}; not found on lines {{ cross.stock_missing_rows[:10] | join(', ') }}{% if cross.stock_missing > 10 %} and {{ cross.stock_missing - 10 }} more{% endif %}{% endif %}.</li>
+        <li>VIN agrees: <strong>{{ cross.vin_agree }}</strong>; VIN differs: <strong>{{ cross.vin_differ }}</strong>{% if cross.vin_differ %} (lines {{ cross.vin_differ_rows[:10] | join(', ') }}){% endif %}; could not compare (a VIN is blank): {{ cross.vin_unchecked }}.</li>
+        {% if cross.down_payments %}<li>Down Payment entries agreeing with the Down Payment column of {{ cross.down_payments.other.upload_id }}: <strong>{{ cross.down_payments.agree }} of {{ cross.down_payments.total }}</strong>{% if cross.down_payments.differ_rows %}; differ on lines {{ cross.down_payments.differ_rows | join(', ') }}{% endif %}{% if cross.down_payments.no_balance_record_rows %}; no balance record for lines {{ cross.down_payments.no_balance_record_rows | join(', ') }}{% endif %}. Corroboration only.</li>{% endif %}
+        {% if cross.ambiguous_vehicle_stock %}<li>{{ cross.ambiguous_vehicle_stock }} stock number(s) appear more than once in the vehicle list, so the match is ambiguous.</li>{% endif %}
+      </ul>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">Exceptions{% if groups %} ({{ groups | length }} kind{{ '' if groups | length == 1 else 's' }}){% endif %}</div>
+  {% if not groups %}<p style="margin:8px 0;">None.</p>{% else %}
+  <div class="table-container"><table>
+    <thead><tr><th>Severity</th><th>What</th><th>Count</th><th>Source lines</th></tr></thead>
+    <tbody>
+    {% for g in groups[:12] %}
+      <tr>
+        <td>{{ sev_badge(g.severity) }}</td>
+        <td><strong>{{ g.code }}</strong><div class="form-hint">{{ g.message }}</div></td>
+        <td>{{ g.count }}</td>
+        <td>{% if g.lines %}{{ g.lines[:8] | join(', ') }}{% if g.lines | length > 8 %} … +{{ g.lines | length - 8 }} more{% endif %}{% else %}whole file{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% endif %}
+  <p style="margin-top:8px;"><a href="/finance/frazer/uploads/{{ up.id }}/exceptions">All exceptions in detail →</a></p>
+</div>
+
+<div class="card" style="max-width:820px;margin-bottom:16px;">
+  <div class="card-title">Notes on this upload</div>
+  {% for n in up.notes %}<div style="margin:8px 0;font-size:13px;"><strong>{{ n.created_at | frlocal }}</strong> · {{ n.created_by.display_name }}<br>{{ n.note }}{% if n.actual_cutoff %}<br><span class="form-hint">Actual cutoff stated: {{ n.actual_cutoff }}</span>{% endif %}</div>{% else %}<p class="form-hint" style="margin:6px 0;">No notes yet.</p>{% endfor %}
+  <form method="post" action="/finance/frazer/uploads/{{ up.id }}/notes" style="margin-top:10px;">
+    <div class="form-group"><label for="note">Add a note</label><textarea id="note" name="note" rows="2" required></textarea>
+      <div class="form-hint">Notes are added to the record; the original upload details never change.</div></div>
+    <div class="form-group"><label for="actual_cutoff">Actual cutoff, if this note establishes it</label><input id="actual_cutoff" type="text" name="actual_cutoff" maxlength="200"></div>
+    <button type="submit" class="btn btn-secondary">Add note</button>
+  </form>
+</div>
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;max-width:820px;">
+  {% if up.status == 'parsed' %}<a href="/finance/frazer/uploads/{{ up.id }}/rows" class="btn btn-primary">Record details</a>{% endif %}
+  <a href="/finance/frazer/uploads/{{ up.id }}/download" class="btn btn-secondary">Download the original file</a>
+</div>
+{% endblock %}

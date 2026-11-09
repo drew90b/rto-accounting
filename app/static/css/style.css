@@ -424,6 +424,13 @@ table a:hover { text-decoration: underline; }
 
 .filter-bar input[type="text"] { max-width: 100%; }
 
+/* Phones: let the page title and its buttons wrap, and keep wide dropdowns inside the screen. */
+@media (max-width: 700px) {
+    .page-header { flex-wrap: wrap; gap: 10px; }
+    .page-header-actions { flex-wrap: wrap; }
+    .filter-bar select { max-width: 100%; }
+}
+
 @media (max-width: 420px) {
     .review-facts { grid-template-columns: 1fr; }
 }
@@ -464,3 +471,80 @@ table a:hover { text-decoration: underline; }
     .review-actions { flex-direction: row; }
     .review-actions .btn, .review-actions button { width: auto; flex: 0 0 auto; padding: 8px 16px; font-size: 13px; }
 }
+
+
+/* ===================================================================================================================}
+
+   Monthly Review, closing schedule and My actions: phone layout (spec section 20, REQ-MR-30).
+   Root cause fixed here: .table-container is overflow:hidden, so a table wider than the phone was silently CUT OFF (the page
+   itself never scrolled). On a phone these tables now stack into labelled rows (nothing hidden, no smaller text); where a table
+   genuinely cannot stack, .mr-scroll makes it an obvious sideways-scroll region. Everything is scoped to .mr-page and the
+   stacking only applies at 700px and below, so the desktop layout is unchanged.
+   ========================================================================================================================== */
+.mr-page { min-width: 0; max-width: 100%; }
+.mr-page .card, .mr-page details, .mr-page summary, .mr-page li, .mr-page p, .mr-page td, .mr-page th, .mr-page label,
+.mr-page .form-hint, .mr-page .alert { overflow-wrap: break-word; }
+.mr-page input, .mr-page select, .mr-page textarea { max-width: 100%; box-sizing: border-box; min-width: 0; }
+.mr-page input[type="date"], .mr-page input[type="month"] { min-height: 36px; }   /* iOS Safari sizes these by their own intrinsic width */
+.table-container.mr-scroll {
+    overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; position: relative;
+    background:
+        linear-gradient(to right, #fff 30%, rgba(255,255,255,0)) left center / 40px 100% no-repeat local,
+        linear-gradient(to left,  #fff 30%, rgba(255,255,255,0)) right center / 40px 100% no-repeat local,
+        radial-gradient(farthest-side at 0 50%,   rgba(0,0,0,.28), rgba(0,0,0,0)) left center  / 12px 100% no-repeat scroll,
+        radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.28), rgba(0,0,0,0)) right center / 12px 100% no-repeat scroll;
+    background-color: #fff;
+}
+.table-container.mr-scroll:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+
+
+@media (max-width: 700px) {
+    .mr-page { font-size: 16px; }
+    .mr-page .card, .mr-page details, .mr-page summary, .mr-page li, .mr-page p, .mr-page td, .mr-page label, .mr-page .form-hint,
+    .mr-page .alert, .mr-page a { overflow-wrap: anywhere; }
+    .mr-page .page-header { flex-wrap: wrap; gap: 8px; }
+    .mr-page .page-header form { width: 100%; }
+    .mr-page .btn { white-space: normal; }
+    /* stacked, labelled rows instead of a wide table */
+    .mr-page table.mr-stack, .mr-page table.mr-stack tbody, .mr-page table.mr-stack tr, .mr-page table.mr-stack td { display: block; width: 100%; box-sizing: border-box; }
+    .mr-page table.mr-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* kept for screen readers */
+    .mr-page table.mr-stack tr { border-bottom: 1px solid #e2e6ea; padding: 8px 10px; }
+    .mr-page table.mr-stack tr:last-child { border-bottom: 0; }
+    .mr-page table.mr-stack td { padding: 3px 0; border: 0; }
+    .mr-page table.mr-stack td::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #5a6a7a; letter-spacing: .03em; }
+
+=======
+/* Vehicle reconciliation (docs/specs/vehicle-reconciliation-spec.md) */
+.vr-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vr-summary .form-hint { flex-basis: 100%; margin: 4px 0 0; }
+.vr-table td { vertical-align: top; }
+.vr-vin { font-size: 12px; color: #666; font-family: monospace; word-break: break-all; }
+.vr-src { font-size: 13px; margin: 2px 0; }
+.vr-src span:first-child { color: #555; }
+.vr-missing { color: #999; font-style: italic; }
+.vr-confirmed { color: #1a7f37; font-weight: 600; }
+.vr-date { color: #777; font-size: 12px; }
+.vr-evidence { border-left: 3px solid #d0d7de; padding: 4px 10px; margin: 8px 0; font-size: 14px; }
+.vr-event { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 14px; }
+.vr-choices { display: grid; gap: 6px; margin-bottom: 10px; }
+.vr-choice { display: flex; gap: 8px; align-items: flex-start; padding: 10px; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer; }
+.vr-choice input { margin-top: 3px; }
+.vr-qcard { display: block; text-decoration: none; color: inherit; }
+.vr-mobile-only { display: none; }
+.vr-more summary { cursor: pointer; font-size: 13px; color: #1d4ed8; padding: 6px 0; }
+.vr-hint { margin: 0 0 10px; }
+.vr-evidence a { display: inline-block; margin-top: 4px; }
+@media (max-width: 700px) {
+  /* Phone: each vehicle is a card. Nothing is hidden: the per-source detail moves into "What each source says". */
+  .vr-col-secondary { display: none; }
+  .vr-mobile-only { display: block; }
+  .vr-table, .vr-table tbody, .vr-table tr, .vr-table td { display: block; width: 100%; }
+  .vr-table thead { display: none; }
+  .vr-table tr { border: 1px solid #d0d7de; border-radius: 8px; margin: 0 0 10px; padding: 10px 12px; background: #fff; }
+  .vr-table td { border: 0; padding: 3px 0; }
+  .vr-table td:first-child { font-size: 17px; }
+}
+
+.vr-level { margin: 6px 0; font-size: 14px; }
+.vr-episode { margin-left: 12px; padding-left: 10px; border-left: 3px solid #d0d7de; }
+.vr-contract { margin-left: 12px; padding-left: 10px; border-left: 3px solid #e5e9ee; }

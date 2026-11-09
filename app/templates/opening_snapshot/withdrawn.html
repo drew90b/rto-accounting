@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Withdrawn figures{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Withdrawn figures</h1>
+  <a href="/finance/opening/" class="btn btn-secondary">← Back</a>
+</div>
+{% for f in figures %}
+<div class="review-card" style="max-width:680px;">
+  <div class="review-card-title"><a href="/finance/opening/figures/{{ f.id }}">{{ f.label }}</a></div>
+  <div class="review-card-sub">Withdrawn {{ f.withdrawn_at | oslocal }} by {{ f.withdrawn_by.display_name }}</div>
+  <div>{{ f.withdrawn_reason }}</div>
+</div>
+{% else %}
+<div class="form-hint">Nothing has been withdrawn.</div>
+{% endfor %}
+{% endblock %}

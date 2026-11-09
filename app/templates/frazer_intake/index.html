@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Frazer Intake{% endblock %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">Frazer Intake</h1></div>
+{% set ok = request.query_params.get('msg') %}
+{% if ok %}<div class="alert alert-success" style="max-width:760px;">{{ ok | replace('+', ' ') }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" style="max-width:760px;">{{ error }}</div>{% endif %}
+
+<div class="alert" style="background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;max-width:760px;">
+  Uploaded Frazer files are kept as <strong>source evidence only</strong>. Nothing here creates or changes a purchase,
+  vehicle, payment, customer or cash record. A vehicle or customer-balance file is a <strong>snapshot of the day it was exported</strong>,
+  not an opening balance for an earlier date.
+</div>
+
+<div class="card" style="max-width:760px;margin-bottom:18px;">
+  <div class="card-title">Upload a Frazer export</div>
+  <form method="post" action="/finance/frazer/upload" enctype="multipart/form-data">
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label for="file">CSV file *</label>
+        <input id="file" type="file" name="file" required accept=".csv,.CSV,text/csv">
+        <div class="form-hint">The type is detected from the column headings, not the file name.</div>
+      </div>
+      <div class="form-group">
+        <label for="export_type">Export type</label>
+        <select id="export_type" name="export_type">
+          <option value="">Detect from the columns (recommended)</option>
+          {% for value, label in types %}<option value="{{ value }}" {{ 'selected' if form.get('export_type') == value }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="export_date">Date it was exported</label>
+        <input id="export_date" type="date" name="export_date" value="{{ form.get('export_date', '') }}">
+      </div>
+      <div class="form-group">
+        <label for="coverage_start">Coverage starts (transactions)</label>
+        <input id="coverage_start" type="date" name="coverage_start" value="{{ form.get('coverage_start', '') }}">
+      </div>
+      <div class="form-group">
+        <label for="coverage_end">Coverage ends (transactions)</label>
+        <input id="coverage_end" type="date" name="coverage_end" value="{{ form.get('coverage_end', '') }}">
+      </div>
+      <div class="form-group form-full">
+        <label for="actual_cutoff">Actual cutoff, if you know it</label>
+        <input id="actual_cutoff" type="text" name="actual_cutoff" maxlength="200" placeholder="Leave blank if unknown" value="{{ form.get('actual_cutoff', '') }}">
+        <div class="form-hint">The real moment the report was taken. Blank is recorded as <strong>Unknown</strong>; never guess from the file name.</div>
+      </div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">Upload and read</button></div>
+    </div>
+  </form>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Upload</th><th>Type</th><th>File</th><th>Uploaded</th><th>Declared</th><th>Records</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for u in uploads %}
+      <tr>
+        <td><a href="/finance/frazer/uploads/{{ u.id }}">{{ u.upload_id }}</a></td>
+        <td>{{ TYPE_LABEL.get(u.export_type, u.export_type) }}</td>
+        <td>{{ u.original_filename }}</td>
+        <td>{{ u.uploaded_at | frlocal }}<br><span class="form-hint">{{ u.uploaded_by.display_name }}</span></td>
+        <td>
+          {% if u.export_type == 'payments' %}{{ u.declared_coverage_start | frday }}{% if u.declared_coverage_end %} to {{ u.declared_coverage_end | frday }}{% endif %}{% if not u.declared_coverage_start %}<span class="form-hint">no coverage declared</span>{% endif %}
+          {% else %}{% if u.declared_export_date %}Exported {{ u.declared_export_date | frday }}{% else %}<span class="form-hint">no export date declared</span>{% endif %}{% endif %}
+        </td>
+        <td>{{ u.row_count }}</td>
+        <td>{% if u.status == 'parsed' %}<span class="badge badge-green">Read</span>{% else %}<span class="badge badge-red">Rejected</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="empty-cell">No Frazer files uploaded yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

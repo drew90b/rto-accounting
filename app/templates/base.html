@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}RTO Accounting{% endblock %} — RTO Accounting</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=3">
+  <link rel="stylesheet" href="/static/css/style.css?v=4">
 </head>
 <body>
 <div class="mobile-header">
@@ -23,13 +23,14 @@
       {% set user = request.state.user %}
       {% if user and user.is_admin %}
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
-      <a href="/review/" class="{% if '/review' in request.url.path %}active{% endif %}">Review<span id="review-count-badge"></span></a>
+      <a href="/review/" class="{% if request.url.path.startswith('/review') %}active{% endif %}">Review<span id="review-count-badge"></span></a>
 
       <div class="sidebar-section">Purchases</div>
       <a href="/purchases/" class="{% if '/purchases' in request.url.path %}active{% endif %}">Purchases</a>
 
       <div class="sidebar-section">Inventory</div>
       <a href="/units/" class="{% if '/units' in request.url.path %}active{% endif %}">Units</a>
+      <a href="/vehicles/" class="{% if request.url.path.startswith('/vehicles') %}active{% endif %}">Vehicle Reconciliation</a>
 
       <div class="sidebar-section">People</div>
       <a href="/customers/" class="{% if '/customers' in request.url.path %}active{% endif %}">Customers</a>
@@ -46,10 +47,15 @@
       <a href="/invoices/" class="{% if '/invoices' in request.url.path %}active{% endif %}">Invoices</a>
       <a href="/documents/" class="{% if '/documents' in request.url.path %}active{% endif %}">Documents</a>
       <a href="/exceptions/" class="{% if '/exceptions' in request.url.path %}active{% endif %}">Exceptions</a>
+      <a href="/my-actions/" class="{% if '/my-actions' in request.url.path %}active{% endif %}">My actions</a>
+      <a href="/finance/review/" class="{% if '/finance/review' in request.url.path %}active{% endif %}">Monthly Review</a>
+      <a href="/finance/frazer/" class="{% if '/finance/frazer' in request.url.path %}active{% endif %}">Frazer Intake</a>
+      <a href="/finance/opening/" class="{% if '/finance/opening' in request.url.path %}active{% endif %}">Opening Snapshot</a>
       {% elif user %}
       <div class="sidebar-section">Purchases</div>
       <a href="/purchases/new" class="{% if request.url.path == '/purchases/new' %}active{% endif %}">New Purchase</a>
       <a href="/purchases/" class="{% if request.url.path == '/purchases/' %}active{% endif %}">Purchases</a>
+      <a href="/my-actions/" class="{% if '/my-actions' in request.url.path %}active{% endif %}">My actions</a>
       {% endif %}
       {% if user %}
       <div class="sidebar-section">{{ user.display_name }}</div>

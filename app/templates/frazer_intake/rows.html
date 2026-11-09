@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Records {{ up.upload_id }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1 class="page-title">Records: {{ up.upload_id }}</h1><div class="form-hint">{{ TYPE_LABEL.get(up.export_type) }} · {{ up.original_filename }}</div></div>
+  <a href="/finance/frazer/uploads/{{ up.id }}" class="btn btn-secondary">← Summary</a>
+</div>
+<div class="alert" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;">Customer-level detail. Source evidence only; nothing here has been imported.</div>
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="">All statuses ({{ total if not status else '' }}{% if status %}…{% endif %})</option>
+    {% for st in statuses %}<option value="{{ st }}" {{ 'selected' if status == st }}>{{ st|capitalize }} ({{ counts.get(st, 0) }})</option>{% endfor %}
+  </select>
+  {% if up.export_type == 'payments' %}
+  <select name="entry_class">
+    <option value="">All entry classes</option>
+    {% for k, v in CLASS_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if entry_class == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <input type="text" name="q" value="{{ q }}" placeholder="Search stock, VIN, ID, receipt, name">
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/finance/frazer/uploads/{{ up.id }}/rows" class="btn btn-secondary">Clear</a>
+</form>
+<div class="form-hint" style="margin-bottom:8px;">{{ total }} record(s). "Line" is the line in the original file; the header is line 1.</div>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th>Line</th><th>{{ 'Sequential ID' if up.export_type == 'payments' else 'Stock #' }}</th><th>Status</th>
+      {% if up.export_type == 'payments' %}<th>Transaction date</th><th>Entered</th><th>Amount</th><th>Description / code</th><th>Receipt #</th><th>Group</th>
+      {% elif up.export_type == 'vehicles' %}<th>VIN</th><th>Total cost</th><th>Purchase date</th>
+      {% else %}<th>VIN</th><th>Balance</th><th>Account label</th>{% endif %}
+      <th>Notes</th></tr>
+    </thead>
+    <tbody>
+    {% for r in items %}{% set f = r.fields %}
+      <tr>
+        <td>{{ r.row_number }}</td>
+        <td>{{ r.identity or '(none)' }}</td>
+        <td><span class="badge {{ {'new': 'badge-blue', 'unchanged': 'badge-green', 'changed': 'badge-yellow', 'conflicting': 'badge-orange', 'unresolved': 'badge-red'}[r.status] }}">{{ r.status }}</span></td>
+        {% if up.export_type == 'payments' %}
+          <td>{{ f.get('transaction_date') or '' }}</td><td>{{ f.get('date_entered') or '' }} {{ f.get('time_entered') or '' }}</td>
+          <td>{{ f.get('amount') | frmoney }}</td><td>{{ f.get('description') }} <span class="form-hint">({{ f.get('transaction_method') }}, type {{ f.get('transaction_type') }})</span></td>
+          <td>{{ f.get('receipt_number') }}</td><td>{{ CLASS_LABEL.get(r.entry_class, r.entry_class) }}</td>
+        {% elif up.export_type == 'vehicles' %}
+          <td>{{ f.get('vin') }}</td><td>{{ f.get('total_cost') | frmoney }}</td><td>{{ f.get('purchase_date') or '' }}</td>
+        {% else %}
+          <td>{{ f.get('vin') }}</td><td>{{ f.get('balance') | frmoney }}</td><td>{{ f.get('account_label') }}</td>
+        {% endif %}
+        <td>
+          {% if r.exceptions or r.diffs or r.note %}
+          <details><summary>{{ r.exceptions | length }} note{{ '' if r.exceptions | length == 1 else 's' }}{% if r.diffs %}, {{ r.diffs | length }} change{{ '' if r.diffs | length == 1 else 's' }}{% endif %}</summary>
+            {% for sev, code, msg in r.exceptions %}<div><span class="badge {{ 'badge-red' if sev == 'error' else ('badge-yellow' if sev == 'warning' else 'badge-gray') }}">{{ sev }}</span> {{ msg }}</div>{% endfor %}
+            {% if r.note %}<div class="form-hint">{{ r.note }}</div>{% endif %}
+            {% for k, old, new in r.diffs[:8] %}<div class="form-hint">{{ k | frlabel }}: {{ old if old not in (None, '') else '(blank)' }} → {{ new if new not in (None, '') else '(blank)' }}</div>{% endfor %}
+          </details>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="12" class="empty-cell">No records match.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<div class="filter-bar" style="margin-top:10px;">
+  {% if page > 1 %}<a class="btn btn-secondary" href="?status={{ status }}&q={{ q }}&entry_class={{ entry_class }}&page={{ page - 1 }}">← Previous</a>{% endif %}
+  <span class="form-hint">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-secondary" href="?status={{ status }}&q={{ q }}&entry_class={{ entry_class }}&page={{ page + 1 }}">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

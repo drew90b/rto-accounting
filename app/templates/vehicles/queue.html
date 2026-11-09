@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "vehicles/_macros.html" as m %}
+{% block title %}Vehicle questions{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Vehicle questions</h1>
+  <div class="page-header-actions"><a href="/vehicles/" class="btn btn-secondary">Vehicle list</a></div>
+</div>
+<form class="filter-bar" method="get">
+  <select name="status">
+    <option value="live" {% if status == 'live' %}selected{% endif %}>Needing attention</option>
+    <option value="decided" {% if status == 'decided' %}selected{% endif %}>Decided</option>
+    <option value="withdrawn" {% if status == 'withdrawn' %}selected{% endif %}>Withdrawn</option>
+    <option value="" {% if status == '' %}selected{% endif %}>All</option>
+  </select>
+  <select name="kind">
+    <option value="">Any kind</option>
+    <option value="shared_vin" {% if kind == 'shared_vin' %}selected{% endif %}>Shared VIN</option>
+    <option value="purchase_match" {% if kind == 'purchase_match' %}selected{% endif %}>Purchase match</option>
+    <option value="status_conflict" {% if kind == 'status_conflict' %}selected{% endif %}>Status</option>
+  </select>
+  <select name="owner">
+    <option value="">Anyone</option>
+    <option value="unassigned" {% if owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
+    {% for u in users %}<option value="{{ u.id }}" {% if owner == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-secondary" type="submit">Filter</button>
+</form>
+{% if not items %}<div class="card"><p>No questions here. Questions appear only when the loaded records disagree or are ambiguous.</p></div>{% endif %}
+{% for q in items %}
+<a class="review-card vr-qcard" href="/vehicles/q/{{ q.ref }}">
+  <div class="review-card-title">{{ q.title }}</div>
+  <div class="review-card-sub">{{ q.ref }} · {{ m.kind_label(q.kind) }}</div>
+  <div class="review-flags">{{ m.qstatus(q.status) }}
+    {% if q.needs_someone_else %}<span class="badge badge-purple">Needs someone else</span>{% endif %}
+    <span class="badge badge-gray">{{ 'Responsible: ' ~ names.get(q.owner_user_id) if q.owner_user_id else 'Unassigned' }}</span></div>
+</a>
+{% endfor %}
+{% endblock %}

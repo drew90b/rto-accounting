@@ -1,0 +1,131 @@
+{# Close workday indicator + preparation / readiness progress + next action + alerts. Included by the review page and the schedule page. #}
+{% from "monthly_review/_macros.html" import step_badge, mark %}
+{% set ind = d.indicator %}{% set cl = d.close %}
+<style>
+.mr-top{max-width:980px;margin:0 0 14px;}
+.mr-ind{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;}
+.mr-wd{font-size:24px;font-weight:700;line-height:1;}
+.mr-tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 18px;margin-top:8px;}
+.mr-bar{height:12px;background:#e5e7eb;border-radius:6px;overflow:hidden;margin:4px 0 2px;}
+.mr-bar>span{display:block;height:100%;}
+.mr-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px;margin-top:8px;}
+.mr-step{border:1px solid #e5e7eb;border-radius:6px;padding:6px 8px;font-size:13px;}
+.mr-step summary{cursor:pointer;display:flex;justify-content:space-between;gap:6px;align-items:center;}
+.mr-crit{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;line-height:1.5;}
+.mr-crit li{margin:3px 0;}
+.mr-next{border-left:4px solid #2563eb;background:#eff6ff;padding:8px 10px;margin-top:10px;border-radius:4px;font-size:14px;}
+.mr-alerts{list-style:none;margin:8px 0 0;padding:0;font-size:13px;}
+.mr-alerts li{margin:2px 0;}
+.mr-chip{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;font-weight:600;margin-right:4px;}
+.mr-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#4b5563;margin:8px 0 2px;}
+@media (max-width:600px){.mr-wd{font-size:20px;}.mr-top{padding:10px;}}
+</style>
+<div class="card mr-top" id="top">
+  <div class="mr-ind">
+    <div>
+      <div class="mr-wd" title="{{ ind.definition }}">{{ ind.label }}{% if ind.offset is none %} <span style="font-size:13px;font-weight:400;">({{ ind.non_workday_reason }})</span>{% endif %}</div>
+      <div style="font-size:13.5px;margin-top:3px;">
+        {{ ind.today | mrday }}
+        {% if ind.offset is none %}· next close workday <strong>{{ ind.next_workday | mrday }} ({{ ind.next_label }})</strong>{% endif %}
+        {% if ind.phase == 'before' %}· <strong>{{ ind.remaining }} workday{{ '' if ind.remaining == 1 else 's' }}</strong> to WD0 ({{ ind.wd0 | mrday }}){% elif ind.phase == 'today' %}· <strong>today is WD0</strong>{% else %}· WD0 was {{ ind.wd0 | mrday }}{% endif %}
+      </div>
+      <div style="font-size:13px;margin-top:2px;">Next scheduled:
+        {% if ind.next_activity %}<a href="{{ base }}/schedule?month={{ month_key }}"><strong>{{ ind.next_activity.title[:70] }}{{ '…' if ind.next_activity.title | length > 70 }}</strong></a> · {{ ind.next_activity.wd_label }} {{ ind.next_activity.date.strftime('%b %-d') }}
+          {% if ind.next_activity.overdue %}<span class="badge badge-red">Overdue</span>{% endif %}{% else %}none outstanding{% endif %}</div>
+    </div>
+    <a href="{{ base }}/schedule?month={{ month_key }}" class="btn btn-primary">View closing schedule</a>
+  </div>
+  <details style="margin-top:4px;font-size:12.5px;">
+    <summary>Calendar: {{ ind.calendar.name }}{% if ind.calendar.provisional %} <span class="badge badge-yellow">Provisional, not confirmed</span>{% endif %} · month end {{ ind.month_end.strftime('%a %b %-d') }} · WD0 {{ ind.wd0.strftime('%a %b %-d') }}</summary>
+    <div class="form-hint" style="margin-top:4px;">Two anchors, kept separate: the <strong>calendar month end</strong> ({{ ind.month_end | mrday }}) and <strong>WD0</strong>, the last business day ({{ ind.wd0 | mrday }}). {{ ind.definition }} The spec's "BD n" counts business days after the calendar month end; WD+n counts after WD0; they name the same day. {{ ind.calendar.note }} Dates use America/Chicago. Non-workdays do not advance the counter.</div>
+  </details>
+
+  <div class="mr-tracks">
+    <div>
+      <strong>Preparation {{ cl.prep.percent }}%</strong> <span class="form-hint">{{ cl.prep.met }} of {{ cl.prep.total }} milestones · {{ cl.prep.steps_prepared }} of {{ cl.prep.steps }} steps prepared</span>
+      <div class="mr-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ cl.prep.percent }}" aria-label="Preparation progress"><span style="width:{{ cl.prep.percent }}%;background:#2563eb;"></span></div>
+      <div class="form-hint">Work we can finish now. {% if cl.prep.percent == 100 %}<strong>Preparation is complete.</strong> {% endif %}It does not mean anything is reconciled or closed.</div>
+    </div>
+    <div>
+      <strong>Close readiness {{ cl.ready.percent }}%</strong> <span class="form-hint">{{ cl.ready.met }} of {{ cl.ready.total }} milestones · {{ cl.ready.steps_ready }} of {{ cl.ready.steps }} steps ready{% if cl.na %} · {{ cl.na }} not applicable{% endif %} · {% if cl.closed %}<strong>Closed</strong>{% else %}Not closed{% endif %}</span>
+      <div class="mr-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ cl.ready.percent }}" aria-label="Close readiness"><span style="width:{{ cl.ready.percent }}%;background:#6b7280;"></span></div>
+      <div class="form-hint">{% if cl.ready.blocked_capabilities or cl.ready.open_decisions %}Blocked by {{ cl.ready.blocked_capabilities | length }} unbuilt feature{{ '' if cl.ready.blocked_capabilities | length == 1 else 's' }}{% if cl.ready.open_decisions %} and {{ cl.ready.open_decisions | length }} open decision{{ '' if cl.ready.open_decisions | length == 1 else 's' }}{% endif %}.{% else %}Nothing blocks readiness.{% endif %}</div>
+    </div>
+  </div>
+  <details style="font-size:12.5px;margin-top:2px;"><summary>How are these calculated?</summary><div class="form-hint" style="margin-top:4px;"><p style="margin:0 0 4px;">{{ cl.explain_prep }}</p><p style="margin:0;">{{ cl.explain_ready }}</p></div></details>
+
+  <div class="mr-next"><strong>Next action:</strong> {{ d.next_action.text }}
+    {% if d.next_action.owner %}<span class="form-hint"> · {{ d.next_action.owner }}</span>{% endif %}
+    {% if d.next_action.why %}<div class="form-hint">{{ d.next_action.why }}</div>{% endif %}
+    <div style="margin-top:4px;"><a class="btn btn-primary btn-sm" href="{{ d.next_action.anchor | mrhref(month_key) }}">Go</a></div>
+  </div>
+
+  {% if d.alerts %}
+  <ul class="mr-alerts" aria-label="Needs attention now">
+    {% for a in d.alerts[:6] %}<li><span class="mr-chip" style="background:{{ '#fee2e2;color:#991b1b' if a.kind == 'Overdue' else ('#dbeafe;color:#1e40af' if a.kind == 'Reply' else '#f3f4f6;color:#374151') }};">{{ a.kind }}</span><a href="{{ a.href | mrhref(month_key) }}">{{ a.text[:90] }}{{ '…' if a.text | length > 90 }}</a> <span class="form-hint">{{ a.meta }}</span></li>{% endfor %}
+    {% if d.alerts | length > 6 %}<li class="form-hint">+ {{ d.alerts | length - 6 }} more in the sections below</li>{% endif %}
+  </ul>{% endif %}
+
+  <details style="margin-top:10px;" {% if request.query_params.get('open') or request.query_params.get('all') %}open{% endif %} id="close-steps">
+    <summary><strong>Close steps ({{ cl.steps | length }})</strong> <span class="form-hint">{% for k, n in cl.status_counts.items() if n %}{{ STEP_LABEL[k] }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</span></summary>
+    <div class="mr-steps">
+    {% for s in cl.steps %}
+    <details class="mr-step" id="step-{{ s.key }}" {% if s.key == request.query_params.get('open') %}open{% endif %}>
+      <summary><span><strong>{{ s.key if s.key != 'CLOSE' else 'Close' }}</strong> {{ s.name }}</span>{{ step_badge(s.status) }}</summary>
+      <div style="margin-top:4px;" class="form-hint">{{ s.spec }} · due BD{{ s.due }} (proposed){% if s.assigned %} · assigned to {{ s.assigned }}{% endif %}{% if s.open_issues %} · {{ s.open_issues }} open action{{ '' if s.open_issues == 1 else 's' }}{% endif %}
+        · preparation {{ s.prep_met }}/{{ s.prep_total }} · readiness {{ s.ready_met }}/{{ s.ready_total }}</div>
+      {% if s.status == 'blocked' %}<div class="alert alert-error" style="margin:6px 0;padding:6px 8px;font-size:12.5px;"><strong>Blocked.</strong> {{ s.why_blocked }}{% if s.next %} <br>Owner of the next action: {{ s.next.owner }}.{% endif %}</div>{% endif %}
+      {% for track, title in (('prep', 'Preparation: can be done now'), ('ready', 'Close readiness: needs unbuilt features or decisions')) %}
+      {% set items = s.criteria | selectattr('track', 'equalto', track) | list %}
+      {% if items %}<div class="mr-h">{{ title }}</div>
+      <ul class="mr-crit">
+        {% for c in items %}
+        <li>{{ mark(c) }} <span class="form-hint">{{ c.stage }}:</span> {{ c.label }}{% if c.why and (not c.met or c.kind == 'signoff') %}<div class="form-hint">{{ c.why }}</div>{% endif %}
+          {% if not c.met and c.actionable and c.kind != 'signoff' %}<div class="form-hint"><a href="{{ c.href | mrhref(month_key) }}">Do this</a> · {{ s.assigned or c.owner }}</div>{% endif %}
+          {% if c.kind == 'signoff' %}
+            {% if c.met %}
+              <form method="post" action="{{ base }}/steps/{{ s.key }}" style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="kind" value="{{ c.key }}"><input type="hidden" name="action" value="clear">
+                <input type="text" name="note" placeholder="Why clear it?" maxlength="300" required style="flex:1;min-width:120px;">
+                <button class="btn btn-secondary btn-sm" type="submit">Clear</button></form>
+            {% elif c.actionable %}
+              <form method="post" action="{{ base }}/steps/{{ s.key }}" style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="kind" value="{{ c.key }}"><input type="hidden" name="action" value="set">
+                <input type="text" name="note" placeholder="Optional note" maxlength="300" style="flex:1;min-width:120px;">
+                <button class="btn btn-primary btn-sm" type="submit">I {{ 'approve' if c.key == 'approve' else 'reviewed this' }} ({{ c.owner }})</button></form>
+              <div class="form-hint">Records that a person did this outside the app. The app has compared nothing.</div>
+            {% endif %}
+          {% endif %}
+        </li>{% endfor %}
+      </ul>{% endif %}
+      {% endfor %}
+      {# not-applicable policy #}
+      {% set na = s.na %}
+      <div class="mr-h">Not applicable?</div>
+      {% if not na.allowed %}<div class="form-hint">Cannot be excluded. {{ na.never }} A reason alone does not bypass a mandatory requirement.</div>
+      {% else %}
+        <div class="form-hint"><strong>Only if:</strong> {{ na.policy.condition }} <strong>Decided by:</strong> {{ na.policy.deciders }} <strong>Evidence:</strong> {{ na.policy.evidence }} {{ na.policy.contradiction }}</div>
+        {% if na.proposal %}
+          <div class="form-hint" style="margin-top:3px;">Proposed by {{ na.proposal.user.display_name or na.proposal.user.username }} on {{ na.proposal.created_at.strftime('%b %-d') }}{% if not s.restricted %}: {{ na.proposal.note }}{% endif %}.
+            {% if na.state == 'effective' %}<strong>Concurred by {{ na.concurrence.user.display_name or na.concurrence.user.username }}: step excluded.</strong>{% elif na.state == 'contradicted' %}<strong>{{ na.why }} It does not count.</strong>{% else %}<strong>Does not count yet: {{ na.why }}</strong>{% endif %}</div>
+          {% if na.state == 'proposed' %}
+          <form method="post" action="{{ base }}/steps/{{ s.key }}" style="margin-top:3px;"><input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="kind" value="na_concur"><input type="hidden" name="action" value="set">
+            <button class="btn btn-primary btn-sm" type="submit">I concur (a different administrator)</button></form>{% endif %}
+          <form method="post" action="{{ base }}/steps/{{ s.key }}" style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;"><input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="kind" value="not_applicable"><input type="hidden" name="action" value="clear">
+            <input type="text" name="note" placeholder="Why does it apply after all?" maxlength="300" required style="flex:1;min-width:120px;"><button class="btn btn-secondary btn-sm" type="submit">Withdraw</button></form>
+        {% else %}
+          <form method="post" action="{{ base }}/steps/{{ s.key }}" style="margin-top:3px;display:grid;gap:4px;"><input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="kind" value="not_applicable"><input type="hidden" name="action" value="set">
+            <input type="text" name="note" placeholder="Why it does not apply (the condition above)" maxlength="300" required>
+            <input type="text" name="evidence" placeholder="Where the evidence is kept" maxlength="200" required>
+            <button class="btn btn-secondary btn-sm" type="submit">Propose not applicable</button></form>
+        {% endif %}
+      {% endif %}
+    </details>
+    {% endfor %}
+    </div>
+  </details>
+</div>
+<script>
+(function(){function openFor(h){if(!h||h.length<2)return;var el=document.getElementById(decodeURIComponent(h.slice(1)));if(!el)return;var d=el.tagName==='DETAILS'?el:el.closest('details');while(d){d.open=true;d=d.parentElement?d.parentElement.closest('details'):null;}el.scrollIntoView();}
+window.addEventListener('hashchange',function(){openFor(location.hash)});openFor(location.hash);})();
+</script>

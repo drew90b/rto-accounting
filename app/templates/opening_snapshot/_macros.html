@@ -1,0 +1,27 @@
+{% macro flash(request, error=None) -%}
+  {% set ok = request.query_params.get('msg') %}
+  {% if error %}<div class="alert alert-error" style="max-width:680px;">{{ error }}</div>{% endif %}
+  {% if ok %}<div class="alert alert-success" style="max-width:680px;">{{ ok | replace('+', ' ') }}</div>{% endif %}
+{%- endmacro %}
+
+{% macro pay_warning() -%}
+  <div class="form-hint" style="margin:6px 0 12px; max-width:680px; color:#92400e;">
+    Do not enter individual employee pay or names with pay amounts. Totals only.
+  </div>
+{%- endmacro %}
+
+{% macro status_badge(figure) -%}
+  {% if figure.status.value == 'pending' %}<span class="badge badge-yellow">Pending</span>
+  {% else %}<span class="badge badge-blue">Reported</span>{% endif %}
+{%- endmacro %}
+
+{# The reported amount, count or "Pending - need", in the words the figure was recorded with. #}
+{% macro reported_value(f) -%}
+  {%- if f.status.value == 'pending' -%}Pending — {{ f.pending_need }}
+  {%- else -%}
+    {%- if f.reported_amount is not none -%}{{ f.reported_amount | osmoney }}{%- endif -%}
+    {%- if f.reported_amount is not none and f.reported_count is not none %} · {% endif -%}
+    {%- if f.reported_count is not none -%}{{ f.reported_count }} {{ 'item' if f.reported_count == 1 else 'items' }}{%- endif -%}
+    {%- if f.reported_amount is none and f.reported_count is none -%}See statement{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}

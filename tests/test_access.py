@@ -25,9 +25,21 @@ EMPLOYEE_ALLOWED = {
     ("GET", "/purchases/{purchase_id}/edit"),
     ("POST", "/purchases/{purchase_id}/edit"),
     ("GET", "/documents/{doc_id}/download"),         # purchase receipts only (checked per document)
+    # Vehicle reconciliation: only the user's own assigned questions (404 for anything else); see test_vehicle_recon_access.py
+    ("GET", "/vehicle-questions/mine"),
+    ("GET", "/vehicle-questions/mine/{ref}"),
+    ("POST", "/vehicle-questions/mine/{ref}/answer"),
     ("GET", "/account/password"),
     ("POST", "/account/password"),
     ("POST", "/logout"),
+    # My actions (spec section 20, REQ-MR-23..25): open to any signed-in user, but every handler narrows to issues ASSIGNED to the
+    # caller and not restricted; see tests/test_my_actions.py for the per-issue and per-file checks.
+    ("GET", "/my-actions/"),
+    ("GET", "/my-actions/files/{file_id}"),
+    ("GET", "/my-actions/{ref}"),
+    ("POST", "/my-actions/{ref}/reply"),
+    ("POST", "/my-actions/{ref}/files"),
+    ("POST", "/my-actions/{ref}/record"),
 }
 PUBLIC = {("GET", "/login"), ("POST", "/login"), ("POST", "/logout")}
 
