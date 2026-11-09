@@ -465,12 +465,15 @@ def test_ac_os_14_migration_010_upgrade_downgrade_upgrade():
         assert r.returncode == 0, r.stderr
         return r.stdout + r.stderr
 
-    alembic("upgrade", "head")
+    # Explicit revisions, so later migrations (the head moves on) do not break this test.
+    alembic("upgrade", "010")
     assert "010" in alembic("current")
-    alembic("downgrade", "-1")
+    alembic("downgrade", "009")
     assert "009" in alembic("current")
-    alembic("upgrade", "head")
+    alembic("upgrade", "010")
     assert "010" in alembic("current")
+    alembic("upgrade", "head")
+    assert "(head)" in alembic("current")
 
 
 # ---- AC-OS-15 --------------------------------------------------------------

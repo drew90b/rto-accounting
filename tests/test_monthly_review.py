@@ -911,8 +911,9 @@ def test_migrations_012_013_upgrade_downgrade_upgrade_on_postgres():
         assert r.returncode == 0, r.stderr
         return r.stdout + r.stderr
 
-    alembic("upgrade", "head")
-    assert "013 (head)" in alembic("current")
+    # Explicit revisions, so later migrations (the head moves on) do not break this test.
+    alembic("upgrade", "013")
+    assert "013" in alembic("current")
     alembic("downgrade", "012")
     cur = alembic("current")
     assert "012" in cur and "013" not in cur
@@ -920,8 +921,10 @@ def test_migrations_012_013_upgrade_downgrade_upgrade_on_postgres():
     assert "012" not in alembic("current")
     alembic("downgrade", "009")
     assert "009" in alembic("current")
+    alembic("upgrade", "013")
+    assert "013" in alembic("current")
     alembic("upgrade", "head")
-    assert "013 (head)" in alembic("current")
+    assert "(head)" in alembic("current")
 
 
 # ---- schedule anchors -------------------------------------------------------
