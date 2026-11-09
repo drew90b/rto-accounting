@@ -513,7 +513,7 @@ table a:hover { text-decoration: underline; }
     .mr-page table.mr-stack td { padding: 3px 0; border: 0; }
     .mr-page table.mr-stack td::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #5a6a7a; letter-spacing: .03em; }
 
-=======
+}
 /* Vehicle reconciliation (docs/specs/vehicle-reconciliation-spec.md) */
 .vr-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .vr-summary .form-hint { flex-basis: 100%; margin: 4px 0 0; }
