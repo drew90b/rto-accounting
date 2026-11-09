@@ -2,6 +2,8 @@
 
 Snapshot of the UNCOMMITTED working tree of /home/drew/projects/rto-monthly-review (which carries Opening Snapshot 010, Frazer intake 011 and Monthly Review 012-013) taken 2026-11-08T20:56:14Z on top of main 1b54dd3. Spec v0.5.2 inside. Nothing in the source worktrees was modified. SHA-256 of every file, so later drift in the source is detectable:
 
+**Release note (2026-11-09).** Six files listed below are deliberately NOT in the released tree: `docs/cash_control_assessment.md`, `docs/specs/cash-control-discovery.md` and `docs/specs/cash-financial-control-spec.md` (the cash-control specification is a draft awaiting review and stays unpublished), and the three `HANDOFF_*.md` session notes (they hold private local paths; kept outside Git). Code comments that cite the cash-control spec refer to that unpublished draft.
+
 ```
 d705bd3f2dfd949abc571b3b8d28d59f01be395c49c942f66fc0f79bb44a2d69  alembic/versions/010_opening_snapshot.py
 d00553d13cbe4313d8fec2542c916499bf0a8dee192a9741fff4339043dee4b6  alembic/versions/011_frazer_source_intake.py
