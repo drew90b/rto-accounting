@@ -68,18 +68,18 @@ if ($Mode -eq "Where") {
 if ($Mode -eq "Watch") {
   Say "Watching every local drive for new or changed files for $Minutes minutes. NOW run ONE saved export in Frazer (note which preset), then wait for this to finish."
   $skip = '\\Windows\\|\\ProgramData\\|\\AppData\\Local\\(Temp|Microsoft|Packages)|\\\$Recycle|\\System Volume|\\FrazerHelper\\discovery|\\Tailscale\\|\\Google\\|\\Microsoft\\'
-  $script:events = New-Object System.Collections.ArrayList
+  $global:FzEvents = New-Object System.Collections.ArrayList
   $subs = @()
   foreach ($d in (Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match '^[A-Z]:\\$' })) {
     $w = New-Object System.IO.FileSystemWatcher $d.Root; $w.IncludeSubdirectories = $true; $w.NotifyFilter = "FileName,LastWrite,Size"
     foreach ($ev in "Created","Changed","Renamed") {
-      $subs += Register-ObjectEvent $w $ev -Action { if ($Event.SourceEventArgs.FullPath -notmatch $using:skip -and -not (Test-Path $Event.SourceEventArgs.FullPath -PathType Container)) { $null = $script:events.Add(@((Get-Date), $Event.SourceEventArgs.ChangeType, $Event.SourceEventArgs.FullPath)) } }
+      $subs += Register-ObjectEvent $w $ev -MessageData $skip -Action { if ($Event.SourceEventArgs.FullPath -notmatch $Event.MessageData -and -not (Test-Path $Event.SourceEventArgs.FullPath -PathType Container)) { $null = $global:FzEvents.Add(@((Get-Date), $Event.SourceEventArgs.ChangeType, $Event.SourceEventArgs.FullPath)) } }
     }
     $w.EnableRaisingEvents = $true
   }
   Start-Sleep -Seconds ($Minutes * 60)
   Say "`n== Files that appeared or changed (unique) =="
-  $script:events | Group-Object { $_[2] } | ForEach-Object {
+  $global:FzEvents | Group-Object { $_[2] } | ForEach-Object {
     $path = $_.Name; $len = (Get-Item $path -ErrorAction SilentlyContinue).Length
     Say ("{0}  {1:HH:mm:ss}  {2} bytes  {3}" -f $path, $_.Group[-1][0], $len, $(if ($path -match "\.csv$") {"<-- CSV"} else {""}))
   }
