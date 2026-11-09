@@ -1,0 +1,13 @@
+{
+  "server": "http://100.123.116.111:8000",
+  "token": "fxh_PASTE_THE_TOKEN_FROM_THE_APP_HELPER_PAGE",
+  "landing_folder": "C:\\FrazerExports",
+  "work_folder": "C:\\FrazerHelper\\runs",
+  "payment_days": 10,
+  "wait_minutes": 20,
+  "exports": {
+    "vehicles":          { "label": "Vehicle list (saved export name in Frazer)",       "pattern": "*vehicle*.csv*",  "command": null },
+    "customer_balances": { "label": "Customer balances (saved export name in Frazer)",  "pattern": "*customer*.csv*", "command": null },
+    "payments":          { "label": "Transactions (saved export name in Frazer)",       "pattern": "*payment*.csv*",  "command": null }
+  }
+}

@@ -42,6 +42,13 @@ EMPLOYEE_ALLOWED = {
     ("POST", "/my-actions/{ref}/record"),
 }
 PUBLIC = {("GET", "/login"), ("POST", "/login"), ("POST", "/logout")}
+# Machine endpoints: no sign-in session, a bearer helper token instead. Without one (any session, any role) they answer 401 and do nothing;
+# what a token can reach is tested in tests/test_frazer_export_helper.py. No other route may live under this prefix.
+BEARER_PREFIX = "/api/frazer-helper/"
+
+
+def is_bearer(path):
+    return path.startswith(BEARER_PREFIX)
 
 
 def all_routes():
@@ -72,6 +79,9 @@ def test_every_route_requires_sign_in(anon_client):
     for method, path in all_routes():
         if (method, path) in PUBLIC:
             continue
+        if is_bearer(path):
+            assert call(anon_client, method, path).status_code == 401, (method, path)
+            continue
         r = call(anon_client, method, path)
         if r.status_code != 303 or not r.headers["location"].startswith("/login"):
             unprotected.append((method, path, r.status_code))
@@ -82,6 +92,9 @@ def test_every_route_outside_the_allow_list_is_forbidden_to_employees(employee_c
     open_routes = []
     for method, path in all_routes():
         if (method, path) in EMPLOYEE_ALLOWED or (method, path) in PUBLIC:
+            continue
+        if is_bearer(path):
+            assert call(employee_client, method, path).status_code == 401, (method, path)     # a signed-in employee is not a token
             continue
         r = call(employee_client, method, path)
         if r.status_code != 403:

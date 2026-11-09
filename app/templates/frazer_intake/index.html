@@ -6,6 +6,7 @@
 {% if ok %}<div class="alert alert-success" style="max-width:760px;">{{ ok | replace('+', ' ') }}</div>{% endif %}
 {% if error %}<div class="alert alert-error" style="max-width:760px;">{{ error }}</div>{% endif %}
 
+{% if freshness is defined and freshness %}{% if freshness.any_stale %}<div class="alert alert-error" style="max-width:760px;"><strong>Stale data.</strong> At least one Frazer export is older than {{ stale_hours }} hours or has never been uploaded. <a href="/finance/frazer/helper/">See the last successful update</a>.</div>{% else %}<div class="alert alert-success" style="max-width:760px;">All three export types were uploaded within {{ stale_hours }} hours. <a href="/finance/frazer/helper/">Details</a></div>{% endif %}{% endif %}
 <div class="alert" style="background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;max-width:760px;">
   Uploaded Frazer files are kept as <strong>source evidence only</strong>. Nothing here creates or changes a purchase,
   vehicle, payment, customer or cash record. A vehicle or customer-balance file is a <strong>snapshot of the day it was exported</strong>,

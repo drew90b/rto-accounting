@@ -18,6 +18,7 @@ from app.models.opening_snapshot import (
     OpeningSnapshot, OpeningFigure, OpeningFigureEntry, OpeningFigureEvidence,
 )
 from app.models.vehicle_recon import VrSnapshot, VrSourceRecord, VrQuestion, VrDecision, VrEvent
+from app.models.frazer_helper import FrazerHelperToken, FrazerHelperRun, FrazerHelperLayout
 
 __all__ = [
     "Customer", "Vendor", "Unit", "RepairJob", "Sale",
@@ -26,4 +27,5 @@ __all__ = [
     "FrazerUpload", "FrazerSourceRow", "FrazerUploadException", "FrazerUploadNote",
     "OpeningSnapshot", "OpeningFigure", "OpeningFigureEntry", "OpeningFigureEvidence",
     "VrSnapshot", "VrSourceRecord", "VrQuestion", "VrDecision", "VrEvent",
+    "FrazerHelperToken", "FrazerHelperRun", "FrazerHelperLayout",
 ]

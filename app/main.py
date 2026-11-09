@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models.user import User
 import app.models  # noqa: registers all models with Base
 
-from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth, frazer_intake, opening_snapshot, monthly_review, my_actions, vehicles, vehicle_questions
+from app.routes import units, customers, vendors, repair_jobs, sales, lease_accounts, payments, transactions, documents, exceptions, invoices, purchases, review, auth, frazer_intake, opening_snapshot, monthly_review, my_actions, vehicles, vehicle_questions, frazer_helper_api, frazer_helper_admin
 
 if len(config.SESSION_SECRET) < 32:
     raise RuntimeError(
@@ -64,7 +64,10 @@ app.include_router(transactions.router, prefix="/transactions", tags=["transacti
 app.include_router(documents.router, prefix="/documents", tags=["documents"], dependencies=_USER)
 app.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"], dependencies=_ADMIN)
 app.include_router(invoices.router, prefix="/invoices", tags=["invoices"], dependencies=_ADMIN)
+app.include_router(frazer_helper_admin.router, prefix="/finance/frazer/helper", tags=["frazer_helper"], dependencies=_ADMIN)
 app.include_router(frazer_intake.router, prefix="/finance/frazer", tags=["frazer_intake"], dependencies=_ADMIN)
+# Helper token endpoints: no sign-in dependency on purpose; each route requires a bearer token (see the module docstring).
+app.include_router(frazer_helper_api.router, prefix="/api/frazer-helper", tags=["frazer_helper_api"])
 app.include_router(monthly_review.router, prefix="/finance/review", tags=["monthly_review"], dependencies=_ADMIN)
 app.include_router(my_actions.router, prefix="/my-actions", tags=["my_actions"], dependencies=_USER)
 app.include_router(opening_snapshot.router, prefix="/finance/opening", tags=["opening_snapshot"], dependencies=_ADMIN)

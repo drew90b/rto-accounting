@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models.frazer_intake import FrazerUpload
 from app.models.user import User
 from app.services import frazer_intake_service as svc
+from app.services import frazer_helper_service as helper
 from app.services import frazer_parse as fp
 
 router = APIRouter()
@@ -69,7 +70,8 @@ def _not_found(request: Request):
 
 def _index(request, db, status_code=200, error=None, form=None):
     return _page(request, "frazer_intake/index.html", status_code, uploads=svc.list_uploads(db), error=error,
-                 form=form or {}, types=[(t, svc.TYPE_LABEL[t]) for t in fp.EXPORT_TYPES])
+                 form=form or {}, types=[(t, svc.TYPE_LABEL[t]) for t in fp.EXPORT_TYPES],
+                 freshness=helper.freshness(db), stale_hours=helper.STALE_AFTER_HOURS)
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Frazer export helper{% endblock %}
+{% block content %}
+<div class="page-header"><h1 class="page-title">Frazer export helper</h1><a href="/finance/frazer/" class="btn btn-secondary">Frazer Intake</a></div>
+{% if msg %}<div class="alert alert-success" style="max-width:900px;">{{ msg | replace('+', ' ') }}</div>{% endif %}
+{% if error %}<div class="alert alert-error" style="max-width:900px;">{{ error }}</div>{% endif %}
+{% if new_secret %}<div class="alert alert-success" style="max-width:900px;"><strong>Copy this token now. It is shown once and cannot be recovered.</strong>
+  <div style="margin-top:6px;"><code style="user-select:all;word-break:break-all;">{{ new_secret }}</code></div>
+  <div class="form-hint">Put it in the helper's <code>config.json</code> on the Frazer computer. If it is lost or exposed, revoke it below and make another.</div></div>{% endif %}
+
+<div class="card" style="max-width:900px;margin-bottom:14px;">
+  <div class="card-title">Last successful update</div>
+  {% if fresh.any_stale %}<div class="alert alert-error" style="margin:6px 0;"><strong>Stale data:</strong> at least one Frazer export is older than {{ STALE_HOURS }} hours or has never been uploaded. Reports built from it show that date, not today.</div>{% endif %}
+  <div class="table-container"><table class="mr-stack"><thead><tr><th>Export</th><th>Newest upload</th><th>Last confirmed current</th><th>Declared date / coverage</th></tr></thead><tbody>
+  {% for t in types %}{% set f = fresh[t] %}
+    <tr><td data-label="Export">{{ TYPE_LABEL[t] }}</td>
+      <td data-label="Newest upload">{% if f.upload %}<a href="/finance/frazer/uploads/{{ f.upload.id }}">{{ f.upload.upload_id }}</a>{% else %}none{% endif %}</td>
+      <td data-label="Last confirmed current">{{ f.confirmed_at | fhlocal if f.confirmed_at else 'never' }} <span class="badge {{ 'badge-red' if f.stale else 'badge-green' }}">{{ 'STALE' if f.stale else 'current' }} · {{ f.age_hours | fhage }}</span>{% if f.via %}<div class="form-hint">{{ f.via }}</div>{% endif %}</td>
+      <td data-label="Declared">{% if f.upload %}{{ f.declared or 'not declared' }}{% if f.coverage_end %} · covers to {{ f.coverage_end }}{% endif %}{% endif %}</td></tr>
+  {% endfor %}</tbody></table></div>
+  <p class="form-hint">Last <strong>complete</strong> helper run: {% if fresh.last_complete_run %}{{ fresh.last_complete_run.run_id }}, finished {{ fresh.last_complete_run.finished_at | fhlocal }}{% else %}none yet{% endif %}.
+  The three exports are taken at different moments. Each file's own time is shown on its run; they are not one simultaneous snapshot, and Frazer's true cutoff stays "Unknown".</p>
+</div>
+
+<div class="card" style="max-width:900px;margin-bottom:14px;">
+  <div class="card-title">Runs</div>
+  <div class="table-container"><table class="mr-stack"><thead><tr><th>Run</th><th>Status</th><th>Started</th><th>Per export</th></tr></thead><tbody>
+  {% for r in runs %}<tr><td data-label="Run">{{ r.run_id }}{% if r.retry_of_run_id %}<div class="form-hint">retry</div>{% endif %}</td>
+    <td data-label="Status"><span class="badge {{ {'complete':'badge-green','partial':'badge-yellow','failed':'badge-red','abandoned':'badge-gray','running':'badge-blue'}[r.status] }}">{{ r.status }}</span><div class="form-hint">{{ r.summary or '' }}</div></td>
+    <td data-label="Started">{{ r.started_at | fhlocal }}</td>
+    <td data-label="Per export">{% for t in types %}{% set x = (r.results_json or {}).get(t) %}<div style="font-size:13px;"><strong>{{ TYPE_LABEL[t] }}:</strong> {{ x.outcome if x else 'no result' }}{% if x and x.upload %} · {{ x.upload }}{% endif %}{% if x and x.message %} <span class="form-hint">{{ x.message }}</span>{% endif %}{% if x and x.file_written_at %}<div class="form-hint">file written {{ x.file_written_at }} UTC</div>{% endif %}</div>{% endfor %}
+      {% if r.sync_json %}<div class="form-hint">Reconciliation: {{ r.sync_json.state }}. {{ r.sync_json.detail }}</div>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4">No helper run yet.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+
+<div class="card" style="max-width:900px;margin-bottom:14px;">
+  <div class="card-title">Approved column layouts</div>
+  <p class="form-hint">The helper refuses a file whose column headings differ from the approved layout of that saved export (a preset edited in Frazer, a wrong report). Approve a layout from an upload you have already checked.</p>
+  <ul>{% for t in types %}<li>{{ TYPE_LABEL[t] }}: {% if layouts.get(t) %}approved from upload #{{ layouts[t].source_upload_id }} on {{ layouts[t].set_at | fhlocal }} ({{ layouts[t].headers_json|length }} columns){% else %}<strong>not approved yet</strong>{% endif %}</li>{% endfor %}</ul>
+  <form method="post" action="/finance/frazer/helper/layouts" class="fh-actions"><select name="upload_pk" aria-label="Upload to approve">
+    {% for u in uploads %}<option value="{{ u.id }}">{{ u.upload_id }} · {{ TYPE_LABEL[u.export_type] }} · {{ u.original_filename }}</option>{% endfor %}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Approve this upload's columns</button></form>
+</div>
+
+<div class="card" style="max-width:900px;margin-bottom:14px;">
+  <div class="card-title">Upload tokens</div>
+  <p class="form-hint">A token lets one helper installation send the three Frazer exports and read run status. It is not a sign-in: it opens no page and cannot read customers, balances or anything else. Revoking it stops it at once.</p>
+  <div class="table-container"><table class="mr-stack"><thead><tr><th>Label</th><th>Prefix</th><th>Uploads attributed to</th><th>Expires</th><th>Last used</th><th></th></tr></thead><tbody>
+  {% for t in tokens %}<tr><td data-label="Label">{{ t.label }}</td><td data-label="Prefix"><code>{{ t.token_prefix }}…</code></td><td data-label="Attributed to">{{ t.user.username }}</td>
+    <td data-label="Expires">{{ t.expires_at | fhlocal if t.expires_at else 'never' }}</td><td data-label="Last used">{{ t.last_used_at | fhlocal if t.last_used_at else 'never' }}</td>
+    <td>{% if t.revoked_at %}<span class="badge badge-gray">revoked</span>{% else %}<form method="post" action="/finance/frazer/helper/tokens/{{ t.id }}/revoke"><button class="btn btn-secondary btn-sm" type="submit">Revoke</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6">No tokens yet.</td></tr>{% endfor %}</tbody></table></div>
+  <form method="post" action="/finance/frazer/helper/tokens" class="form-grid" style="margin-top:10px;">
+    <div class="form-group"><label for="label">Label</label><input id="label" name="label" placeholder="Frazer PC, front office" required></div>
+    <div class="form-group"><label for="user_id">Attribute uploads to</label><select id="user_id" name="user_id">{% for u in users %}<option value="{{ u.id }}">{{ u.username }} ({{ u.role.value if u.role.value is defined else u.role }})</option>{% endfor %}</select></div>
+    <div class="form-group"><label for="days_valid">Valid for (days)</label><input id="days_valid" name="days_valid" type="number" value="90" min="1" max="365"></div>
+    <div class="form-group"><button class="btn btn-primary" type="submit">Create token</button></div>
+  </form>
+</div>
+{% endblock %}

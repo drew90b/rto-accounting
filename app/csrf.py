@@ -19,6 +19,11 @@ def _origin_of(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
 
 
+# Machine endpoints that authenticate with an explicit bearer token and read no cookie. A browser cannot be tricked into sending an
+# Authorization header cross-site, so the Origin check protects nothing there (and a non-browser client sends no Origin).
+BEARER_PREFIXES = ("/api/frazer-helper/",)
+
+
 class OriginCheckMiddleware:
     def __init__(self, app, allowed_origins):
         self.app = app
@@ -28,7 +33,8 @@ class OriginCheckMiddleware:
         if scope["type"] == "http" and scope["method"] in _UNSAFE_METHODS:
             headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
             origin = headers.get("origin") or _origin_of(headers.get("referer", ""))
-            if origin not in self.allowed:
+            bearer = scope["path"].startswith(BEARER_PREFIXES) and headers.get("authorization", "").lower().startswith("bearer ")
+            if origin not in self.allowed and not bearer:
                 response = PlainTextResponse("Cross-origin request refused.", status_code=403)
                 await response(scope, receive, send)
                 return
