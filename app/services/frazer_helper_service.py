@@ -35,6 +35,12 @@ GOOD = ("stored", "duplicate", "carried")
 LEASE_MINUTES = 45                      # a run that has been silent this long is treated as abandoned and no longer blocks a new one
 CLOCK_SKEW = timedelta(minutes=3)       # allowed difference between the helper computer's clock and the server's
 STALE_AFTER_HOURS = 30                  # data older than this is shown as stale on the intake and helper pages
+# Transaction coverage (REQ-FX-13). Each run asks Frazer for a period that starts OVERLAP_DAYS before the end of the last accepted
+# period, so consecutive periods always overlap and a missed day is caught up. Every DEEP_RECHECK_EVERY_DAYS the period reaches back
+# DEEP_RECHECK_DAYS (never before the first accepted start) so entries backdated or edited further back are seen again.
+OVERLAP_DAYS = 7
+DEEP_RECHECK_EVERY_DAYS = 7
+DEEP_RECHECK_DAYS = 62
 CHICAGO, UTC = ZoneInfo("America/Chicago"), ZoneInfo("UTC")
 TOKEN_PREFIX = "fxh_"
 
@@ -138,6 +144,69 @@ def layouts(db: Session) -> dict:
     return {r.export_type: r for r in db.query(FrazerHelperLayout).all()}
 
 
+# --- transaction coverage -----------------------------------------------------------------------------------------------
+
+def _accepted_periods(db: Session) -> list:
+    """[(start, end, run)] of the transaction periods ACCEPTED so far, oldest first. Accepted = the run finished COMPLETE and its
+    transaction file was stored, identical to a stored one, or carried from the run it retried. A partial, failed or abandoned run
+    never counts, so it can never move the checkpoint forward."""
+    out = []
+    for r in db.query(FrazerHelperRun).filter(FrazerHelperRun.status == "complete").order_by(FrazerHelperRun.id).all():
+        res = (r.results_json or {}).get(fp.PAYMENTS) or {}
+        if res.get("outcome") in GOOD and res.get("coverage_start") and res.get("coverage_end"):
+            try:
+                out.append((date.fromisoformat(res["coverage_start"]), date.fromisoformat(res["coverage_end"]), r))
+            except ValueError:
+                continue
+    return out
+
+
+def coverage_checkpoint(db: Session) -> Optional[dict]:
+    """The end of the last accepted transaction period, or None before the first complete run."""
+    acc = _accepted_periods(db)
+    if not acc:
+        return None
+    s, e, r = max(acc, key=lambda x: (x[1], x[2].id))
+    return {"end": e, "start": s, "run_id": r.run_id}
+
+
+def coverage_plan(db: Session, bdate: date, first_coverage_start: Optional[str] = None) -> dict:
+    """The transaction period this run must export. Decided here, not by the helper, and checked again when the file arrives."""
+    acc = _accepted_periods(db)
+    if not acc:
+        if not first_coverage_start:
+            raise HelperError("This is the first run, so the first transaction period must be stated explicitly: set "
+                              "first_coverage_start (a date such as 2026-10-01) in the helper's config.json. Nothing is assumed.")
+        try:
+            fs = date.fromisoformat(first_coverage_start)
+        except ValueError:
+            raise HelperError("first_coverage_start must be a date such as 2026-10-01.")
+        if fs > bdate:
+            raise HelperError("first_coverage_start is after today.")
+        return {"coverage_start": fs.isoformat(), "coverage_end": bdate.isoformat(), "basis": "first_run", "checkpoint_end": None,
+                "explanation": f"First run: the period starts on the date stated in the helper's settings ({fs.isoformat()})."}
+    floor = min(a[0] for a in acc)
+    cp_s, cp_e, cp_run = max(acc, key=lambda x: (x[1], x[2].id))
+    start = min(cp_e - timedelta(days=OVERLAP_DAYS), bdate)
+    basis = "catch_up"
+    why = (f"Catch-up: the last accepted period ended {cp_e.isoformat()} ({cp_run.run_id}); this one starts {OVERLAP_DAYS} days "
+           f"before that, so the two overlap.")
+    deep = [a for a in acc if a[0] <= max(a[1] - timedelta(days=DEEP_RECHECK_DAYS), floor)]
+    last_deep = max(a[1] for a in deep) if deep else None
+    if last_deep is None or (bdate - last_deep).days >= DEEP_RECHECK_EVERY_DAYS:
+        deep_start = max(bdate - timedelta(days=DEEP_RECHECK_DAYS), floor)
+        if deep_start < start:
+            start, basis = deep_start, "deep_recheck"
+            why = (f"Periodic recheck (every {DEEP_RECHECK_EVERY_DAYS} days): the period reaches back to {deep_start.isoformat()} "
+                   f"so entries backdated or edited up to {DEEP_RECHECK_DAYS} days back are seen again. Last accepted period ended "
+                   f"{cp_e.isoformat()} ({cp_run.run_id}).")
+        else:
+            basis = "deep_recheck"      # the catch-up period already reaches at least as far back
+    start = max(start, floor)
+    return {"coverage_start": start.isoformat(), "coverage_end": bdate.isoformat(), "basis": basis, "checkpoint_end": cp_e.isoformat(),
+            "explanation": why}
+
+
 # --- runs ---------------------------------------------------------------------------------------------------------------
 
 def _close(db: Session, run: FrazerHelperRun, status: str, summary: str):
@@ -147,6 +216,7 @@ def _close(db: Session, run: FrazerHelperRun, status: str, summary: str):
 
 def start_run(db: Session, token: FrazerHelperToken, *, params: Optional[dict] = None, retry_of: Optional[str] = None) -> FrazerHelperRun:
     now = _now()
+    params = dict(params or {})
     for r in db.query(FrazerHelperRun).filter(FrazerHelperRun.status == "running").all():
         if r.lease_expires_at > now:
             raise ActiveRun(r)
@@ -155,8 +225,9 @@ def start_run(db: Session, token: FrazerHelperToken, *, params: Optional[dict] =
     if missing:
         raise HelperError("An administrator must approve the expected column layout first (no layout for: " + ", ".join(missing) + "). "
                           "Do this on the Helper page, from an upload that was read correctly.")
+    params["plan"] = coverage_plan(db, business_date(now), params.get("first_coverage_start"))
     run = FrazerHelperRun(token_id=token.id, status="running", started_at=now, lease_expires_at=now + timedelta(minutes=LEASE_MINUTES),
-                          business_date=business_date(now).isoformat(), params_json=params or {}, results_json={})
+                          business_date=business_date(now).isoformat(), params_json=params, results_json={})
     if retry_of:
         prev = db.query(FrazerHelperRun).filter(FrazerHelperRun.run_id == retry_of).first()
         if prev is None or prev.status not in ("partial", "failed", "abandoned") or prev.token_id != token.id:
@@ -206,7 +277,8 @@ class _Upload:
 
 
 def submit_file(db: Session, token: FrazerHelperToken, run: FrazerHelperRun, *, export_type: str, filename: str, data: bytes,
-                sha256: str, generated_at: str, export_date: str, coverage_start: str = "", coverage_end: str = "") -> dict:
+                sha256: str, generated_at: str, export_date: str, coverage_start: str = "", coverage_end: str = "",
+                meta: Optional[dict] = None) -> dict:
     """Validate and store one file. Always returns a result dict (never raises for a bad FILE); a bad request raises HelperError."""
     if run.status != "running":
         raise BadRun(f"Run {run.run_id} is {run.status}; start a new run (or retry it).")
@@ -215,6 +287,11 @@ def submit_file(db: Session, token: FrazerHelperToken, run: FrazerHelperRun, *, 
     now = _now()
     base = {"export_type": export_type, "filename": filename, "size_bytes": len(data), "received_at": now.isoformat(timespec="seconds"),
             "export_date": export_date, "coverage_start": coverage_start or None, "coverage_end": coverage_end or None}
+    # what the helper says about where the file came from (kept as stated; none of it is trusted as proof)
+    for k in ("original_filename", "generated_local", "timezone", "period_readback", "generation"):
+        v = (meta or {}).get(k)
+        if v:
+            base[k] = str(v)[:200]
 
     def refuse(outcome: str, message: str) -> dict:
         res = {**base, "outcome": outcome, "message": message, "upload": None}
@@ -246,8 +323,10 @@ def submit_file(db: Session, token: FrazerHelperToken, run: FrazerHelperRun, *, 
             cs, ce = date.fromisoformat(coverage_start), date.fromisoformat(coverage_end)
         except ValueError:
             return refuse("stale", "A transaction export needs its coverage start and end dates.")
-        if cs > ce or ce.isoformat() != run.business_date:
-            return refuse("stale", f"The transaction period {coverage_start} to {coverage_end} must end on the run's date ({run.business_date}).")
+        plan = (run.params_json or {}).get("plan") or {}
+        if cs > ce or (coverage_start, coverage_end) != (plan.get("coverage_start"), plan.get("coverage_end")):
+            return refuse("stale", f"The transaction period {coverage_start} to {coverage_end} is not the period this run was given "
+                                   f"({plan.get('coverage_start')} to {plan.get('coverage_end')}). Nothing was stored.")
     # 3 the layout: an approved header row, in order
     declared = fp.Declared(date.fromisoformat(export_date), date.fromisoformat(coverage_start) if coverage_start else None,
                            date.fromisoformat(coverage_end) if coverage_end else None)
@@ -285,9 +364,43 @@ def submit_file(db: Session, token: FrazerHelperToken, run: FrazerHelperRun, *, 
     res = {**base, "outcome": outcome, "message": msg, "upload": up.upload_id, "upload_pk": up.id, "rows": up.row_count,
            "observed_start": up.observed_coverage_start.isoformat() if up.observed_coverage_start else None,
            "observed_end": up.observed_coverage_end.isoformat() if up.observed_coverage_end else None}
+    try:
+        res.update(_compare(db, up, coverage_start, coverage_end))
+        if res.get("note"):
+            res["message"] += " " + res.pop("note")
+    except Exception:                       # noqa: BLE001  the comparison is information; it must not undo a stored upload
+        res["compare"] = None
     _set_result(run, export_type, res)
     db.flush()
     return res
+
+
+def _compare(db: Session, up: FrazerUpload, coverage_start: str, coverage_end: str) -> dict:
+    """How the new upload relates to earlier ones, using intake's own comparison (read only). For transactions also: entries an
+    earlier upload has, dated inside this file's period, that this file no longer contains. Sequential IDs only, no customer data."""
+    from app.models.frazer_intake import FrazerSourceRow
+    c = intake.classify(db, up)
+    out = {"compare": {k: int(v) for k, v in c.counts.items()}}
+    notes = []
+    if c.has_baseline and (c.counts.get("changed") or c.counts.get("conflicting")):
+        notes.append(f"{c.counts.get('changed', 0) + c.counts.get('conflicting', 0)} record(s) differ from an earlier upload; both versions are kept "
+                     "and shown as revised, neither replaces the other.")
+    if up.export_type == fp.PAYMENTS and c.baseline_uploads and coverage_start and coverage_end:
+        mine = {r["identity"] for r in c.rows if r["identity"]}
+        gone = set()
+        for r in db.query(FrazerSourceRow).filter(FrazerSourceRow.upload_id.in_([b.id for b in c.baseline_uploads])):
+            td = (r.fields_json or {}).get("transaction_date") or ""
+            if r.identity and r.identity not in mine and coverage_start <= td <= coverage_end:
+                gone.add(r.identity)
+        out["absent_earlier_ids"] = sorted(gone)[:50]
+        out["absent_earlier_count"] = len(gone)
+        if gone:
+            notes.append(f"{len(gone)} entr{'y' if len(gone) == 1 else 'ies'} that an earlier upload has inside this period "
+                         f"{'is' if len(gone) == 1 else 'are'} not in this file (Sequential ID {', '.join(sorted(gone)[:8])}"
+                         f"{' ...' if len(gone) > 8 else ''}). Possibly removed or re-dated in Frazer; the earlier record is kept.")
+    if notes:
+        out["note"] = " ".join(notes)
+    return out
 
 
 def report_failure(db: Session, run: FrazerHelperRun, export_type: str, outcome: str, message: str) -> dict:

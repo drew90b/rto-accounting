@@ -59,6 +59,11 @@ def payments_bytes(amount="100.00", seq="9001", d=None):
     return fx.build(fx.PAYMENT_NOV8_HEADER, [fx.payment(**{"Sequential ID": seq, "Amount": amount, "Transaction Date": mmddyy(d), "Date Entered": mmddyy(d)})])
 
 
+def first_params():
+    """Before the first complete run the first transaction period must be stated explicitly (REQ-FX-13)."""
+    return {"first_coverage_start": (today() - timedelta(days=10)).isoformat()}
+
+
 def fingerprint(db):
     return {t.name: db.execute(text(f"select count(*) from {t.name}")).scalar() for t in Base.metadata.sorted_tables
             if not t.name.startswith(("frazer_", "vr_", "users")) and t.name != "alembic_version"}
@@ -112,7 +117,7 @@ def env(db, tmp_path, _override_db):
     e.land, e.work = tmp_path / "land", tmp_path / "work"
     e.land.mkdir(); e.work.mkdir()
     e.cfg = {**helper.DEFAULTS, "server": "http://test", "token": e.secret, "landing_folder": str(e.land), "work_folder": str(e.work),
-             "settle_seconds": 0, "poll_seconds": 0, "min_age_seconds": 0, "exports": {t: dict(helper.DEFAULTS["exports"][t]) for t in helper.TYPES}}
+             "settle_seconds": 0, "poll_seconds": 0, "min_age_seconds": 0, "first_coverage_start": first_params()["first_coverage_start"], "exports": {t: dict(helper.DEFAULTS["exports"][t]) for t in helper.TYPES}}
     e.files = {"vehicles": ("frazer-vehicles.csv.CSV", vehicles_bytes), "customer_balances": ("frazer-customer-balances.CSV", balances_bytes),
                "payments": ("frazer-payments.csv.CSV", payments_bytes)}
     e.skip = set()
@@ -162,15 +167,24 @@ def test_a_complete_run_stores_all_three_through_intake_and_syncs_reconciliation
     # each file keeps its own time; nothing claims one snapshot, and the true cutoff stays Unknown
     assert all(run.results_json[t]["file_written_at"] for t in helper.TYPES)
     assert all(u.actual_cutoff == "Unknown" for u in new)
-    assert os.listdir(os.path.join(env.cfg["work_folder"], sorted(os.listdir(env.cfg["work_folder"]))[0], "files"))   # a dated run folder holds the copies
+    folder = os.path.join(env.cfg["work_folder"], sorted(os.listdir(env.cfg["work_folder"]))[0])                       # a dated run folder holds the copies
+    d = datetime.now().strftime("%Y-%m-%d")                                      # "as of" = the helper computer's local date when the file was generated
+    assert {f"frazer-vehicles-as-of-{d}.csv", f"frazer-customer-balances-as-of-{d}.csv", "manifest.json"} <= set(os.listdir(folder))
+    assert any(n.startswith("frazer-payment-transactions-") and n.endswith(f"-through-{today().isoformat()}.csv") for n in os.listdir(folder))
     assert len([p for p in env.land.iterdir()]) == 3                              # Frazer's own files are left untouched
 
 
-def test_the_payment_period_is_configurable_and_declared(env):
-    env.cfg["payment_days"] = 14
-    env.go()
+def test_the_first_transaction_period_is_explicit_and_declared(env):
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=13)).isoformat()
+    rec = env.go()
     up = env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first()
     assert up.declared_coverage_end == today() and up.declared_coverage_start == today() - timedelta(days=13)
+    assert rec["transaction_period"]["basis"] == "first_run"
+    env.db.query(FrazerHelperRun).delete()
+    env.db.commit()
+    env.cfg["first_coverage_start"] = ""                                         # nothing is assumed for a first run
+    with pytest.raises(helper.HelperError, match="first run"):
+        env.go(fresh=True)
 
 
 # ---- partial failure and retry -------------------------------------------------------------------------------------------
@@ -178,13 +192,13 @@ def test_the_payment_period_is_configurable_and_declared(env):
 def test_a_missing_export_makes_the_run_partial_and_a_retry_completes_it_without_duplicates(env):
     env.skip = {"payments"}
     first = env.go()
-    assert first["final_status"] == "partial" and first["files"]["payments"]["outcome"] == "missing"
+    assert first["final_status"] == "partial" and first["files"]["payments"]["export"]["status"] == "missing"
     n = uploads(env.db)
     assert n == env.baseline_uploads + 2
     env.skip = set()
     second = env.go()                                                            # same button, same day: resumes
     assert second["final_status"] == "complete" and second["retry_of"] == first["server_run"]
-    assert second["files"]["vehicles"]["outcome"] == "carried" and second["files"]["customer_balances"]["outcome"] == "carried"
+    assert second["files"]["vehicles"]["upload"]["outcome"] == "carried" and second["files"]["customer_balances"]["upload"]["outcome"] == "carried"
     assert uploads(env.db) == n + 1                                              # only the missing one was added
     assert env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "vehicles").count() == 2    # baseline + today's, never two of today's
 
@@ -207,7 +221,7 @@ def test_a_failed_export_command_is_reported_and_stores_nothing(env):
     env.cfg["exports"]["payments"]["command"] = f'"{sys.executable}" -c "import sys; sys.exit(3)"'
     rec = env.go()
     assert rec["final_status"] == "failed" and uploads(env.db) == env.baseline_uploads
-    assert all("exit 3" in rec["files"][t]["message"] for t in helper.TYPES)
+    assert all("exit 3" in rec["files"][t]["export"]["message"] for t in helper.TYPES)
 
 
 # ---- stale, incomplete, wrong -------------------------------------------------------------------------------------------
@@ -218,12 +232,12 @@ def test_yesterdays_file_is_never_uploaded_as_todays_snapshot(env):
         env.write(t, age=26 * 3600)                                              # last night's files are still in the folder
     rec = env.go()
     assert rec["final_status"] == "failed"
-    assert all(rec["files"][t]["outcome"] == "stale" and "NOT used" in rec["files"][t]["message"] for t in helper.TYPES)
+    assert all(rec["files"][t]["export"]["status"] == "stale" and "NOT used" in rec["files"][t]["export"]["message"] for t in helper.TYPES)
     assert uploads(env.db) == env.baseline_uploads
 
 
 def test_the_server_refuses_stale_incomplete_and_misdated_files_even_from_a_careless_helper(env):
-    run = svc.start_run(env.db, env.token_row)
+    run = svc.start_run(env.db, env.token_row, params=first_params())
     env.db.commit()
     data = vehicles_bytes(1)
     import hashlib
@@ -271,7 +285,7 @@ def test_a_file_still_being_written_is_waited_for_not_sent(env, tmp_path):
         clock["t"] += 1
         if clock["t"] == 2:
             p.write_bytes(vehicles_bytes())                                       # finished on the second wait
-    path, problem = helper.wait_for_file(str(tmp_path / "land"), "*vehicle*", started, wait_seconds=60, settle_seconds=1, poll_seconds=1,
+    path, problem = helper.wait_for_file(str(tmp_path / "land"), {"pattern": "*vehicle*"}, started, wait_seconds=60, settle_seconds=1, poll_seconds=1,
                                          min_age_seconds=0, log=lambda m: None, sleep=sleep, now=lambda: time.time() + clock["t"])
     assert problem is None and path == str(p)
     p.write_bytes(b"")                                                            # empty
@@ -305,27 +319,27 @@ def test_an_identical_file_is_a_duplicate_and_a_changed_one_is_a_revision_kept_b
 # ---- one active run -----------------------------------------------------------------------------------------------------
 
 def test_only_one_run_can_be_active_and_an_abandoned_one_stops_blocking(env):
-    first = svc.start_run(env.db, env.token_row)
+    first = svc.start_run(env.db, env.token_row, params=first_params())
     env.db.commit()
     with pytest.raises(svc.ActiveRun):
-        svc.start_run(env.db, env.token_row)
+        svc.start_run(env.db, env.token_row, params=first_params())
     with pytest.raises(helper.HelperError, match="already in progress"):
         helper.run(env.cfg, api=env.api, log=lambda m: None, wait_seconds=0)
     first.lease_expires_at = datetime.utcnow() - timedelta(minutes=1)
     env.db.commit()
-    nxt = svc.start_run(env.db, env.token_row)
+    nxt = svc.start_run(env.db, env.token_row, params=first_params())
     assert env.db.get(FrazerHelperRun, first.id).status == "abandoned" and nxt.status == "running"
 
 
 def test_a_second_run_on_the_same_computer_is_refused_by_the_local_lock(env):
     with helper.Lock(env.cfg["work_folder"]):
-        with pytest.raises(helper.HelperError, match="Another helper run"):
+        with pytest.raises(helper.HelperError, match="Another update"):
             helper.run(env.cfg, api=env.api, log=lambda m: None, wait_seconds=0)
     helper.run(env.cfg, api=env.api, log=lambda m: None, ask=env.operator, wait_seconds=0, sleep=lambda s: None)   # the lock was released
 
 
 def test_the_database_itself_refuses_two_running_runs(env):
-    svc.start_run(env.db, env.token_row)
+    svc.start_run(env.db, env.token_row, params=first_params())
     env.db.commit()
     from sqlalchemy.exc import IntegrityError
     env.db.add(FrazerHelperRun(token_id=env.token_row.id, status="running", started_at=datetime.utcnow(), lease_expires_at=datetime.utcnow() + timedelta(minutes=5),
@@ -339,7 +353,7 @@ def test_a_run_needs_approved_layouts_first(env):
     env.db.query(svc.FrazerHelperLayout).delete()
     env.db.commit()
     with pytest.raises(svc.HelperError, match="approve the expected column layout"):
-        svc.start_run(env.db, env.token_row)
+        svc.start_run(env.db, env.token_row, params=first_params())
 
 
 # ---- who can do what ----------------------------------------------------------------------------------------------------
@@ -371,7 +385,7 @@ def test_missing_wrong_revoked_and_expired_tokens_are_refused(env):
 
 
 def test_a_disabled_user_stops_their_token_and_revoking_closes_an_open_run(env):
-    run = svc.start_run(env.db, env.token_row)
+    run = svc.start_run(env.db, env.token_row, params=first_params())
     env.db.commit()
     svc.revoke_token(env.db, env.token_row.id)
     env.db.commit()
@@ -396,7 +410,7 @@ def test_run_answers_carry_no_customer_data(env):
 def test_another_tokens_run_is_not_visible(env):
     other, secret2 = svc.create_token(env.db, env.admin, label="Other PC", user=env.emp)
     env.db.commit()
-    run = svc.start_run(env.db, env.token_row)
+    run = svc.start_run(env.db, env.token_row, params=first_params())
     env.db.commit()
     r = env.client.post(f"/api/frazer-helper/runs/{run.run_id}/finish", headers={"Authorization": "Bearer " + secret2})
     assert r.status_code == 409
@@ -446,3 +460,220 @@ def test_an_unchanged_file_still_proves_the_data_is_current(env):
     assert all(rec["server_results"][t]["outcome"] == "duplicate" for t in helper.TYPES) and uploads(env.db) == n
     f = svc.freshness(env.db)
     assert f["any_stale"] is False and "helper run" in f["vehicles"]["via"]
+
+
+# ---- transaction coverage: explicit first run, catch-up with overlap, periodic recheck (REQ-FX-13) -------------------------
+
+def _accepted(env, start, end):
+    """A finished, complete run whose transaction period was accepted (as the helper leaves it)."""
+    r = FrazerHelperRun(token_id=env.token_row.id, status="complete", started_at=datetime.utcnow(), lease_expires_at=datetime.utcnow(),
+                        finished_at=datetime.utcnow(), business_date=end.isoformat(),
+                        results_json={"payments": {"outcome": "stored", "coverage_start": start.isoformat(), "coverage_end": end.isoformat()}})
+    env.db.add(r)
+    env.db.flush()
+    r.run_id = f"FR-{r.id:04d}"
+    env.db.commit()
+    return r
+
+
+def test_the_next_period_catches_up_from_the_last_accepted_one_with_overlap(env):
+    t = today()
+    _accepted(env, t - timedelta(days=40), t - timedelta(days=3))
+    plan = svc.coverage_plan(env.db, t)
+    assert plan["basis"] == "catch_up" and plan["coverage_end"] == t.isoformat()
+    assert plan["coverage_start"] == (t - timedelta(days=3 + svc.OVERLAP_DAYS)).isoformat()      # starts before the last period ended
+    # nobody ran it for three weeks: the period still starts before the last accepted end, so there is no gap
+    env.db.query(FrazerHelperRun).delete()
+    _accepted(env, t - timedelta(days=200), t - timedelta(days=21))
+    plan = svc.coverage_plan(env.db, t)
+    assert date.fromisoformat(plan["coverage_start"]) <= t - timedelta(days=21 + svc.OVERLAP_DAYS)
+
+
+def test_a_periodic_recheck_reaches_further_back_but_never_before_the_first_accepted_start(env):
+    t = today()
+    _accepted(env, t - timedelta(days=200), t - timedelta(days=svc.DEEP_RECHECK_EVERY_DAYS))
+    plan = svc.coverage_plan(env.db, t)
+    assert plan["basis"] == "deep_recheck" and plan["coverage_start"] == (t - timedelta(days=svc.DEEP_RECHECK_DAYS)).isoformat()
+    env.db.query(FrazerHelperRun).delete()
+    _accepted(env, t - timedelta(days=20), t - timedelta(days=svc.DEEP_RECHECK_EVERY_DAYS))
+    assert svc.coverage_plan(env.db, t)["coverage_start"] == (t - timedelta(days=20)).isoformat()   # history starts where the first run said
+
+
+def test_a_partial_run_does_not_advance_the_coverage_checkpoint(env):
+    env.skip = {"vehicles"}
+    first = env.go()
+    assert first["final_status"] == "partial" and first["files"]["payments"]["upload"]["outcome"] == "stored"
+    assert svc.coverage_checkpoint(env.db) is None                                # the transactions were stored, but the run was not complete
+    env.skip = set()
+    second = env.go()
+    assert second["final_status"] == "complete" and second["files"]["payments"]["upload"]["outcome"] == "carried"
+    assert svc.coverage_checkpoint(env.db)["end"] == today()
+
+
+def test_the_server_refuses_a_transaction_file_for_any_other_period(env):
+    run = svc.start_run(env.db, env.token_row, params=first_params())
+    env.db.commit()
+    plan = run.params_json["plan"]
+    data = payments_bytes()
+    import hashlib
+    kw = dict(export_type="payments", filename="p.csv", data=data, sha256=hashlib.sha256(data).hexdigest(),
+              generated_at=datetime.utcnow().isoformat() + "Z", export_date=today().isoformat())
+    narrower = (date.fromisoformat(plan["coverage_start"]) + timedelta(days=1)).isoformat()
+    r = svc.submit_file(env.db, env.token_row, run, coverage_start=narrower, coverage_end=plan["coverage_end"], **kw)
+    assert r["outcome"] == "stale" and "not the period this run was given" in r["message"]
+    assert env.db.query(FrazerUpload).count() == env.baseline_uploads
+    ok = svc.submit_file(env.db, env.token_row, run, coverage_start=plan["coverage_start"], coverage_end=plan["coverage_end"], **kw)
+    assert ok["outcome"] == "stored"
+
+
+# ---- overlapping periods downstream: counted once, revisions surfaced, fees apart from receipts ----------------------------
+
+def _pay_rows(*rows):
+    return fx.build(fx.PAYMENT_NOV8_HEADER, list(rows))
+
+
+def _p(seq, amount="100.00", days_ago=2, **over):
+    d = mmddyy(today() - timedelta(days=days_ago))
+    return fx.payment(**{"Sequential ID": seq, "Amount": amount, "Applied to Contract": amount, "Transaction Date": d, "Date Entered": d, **over})
+
+
+def _fee(seq, days_ago=2):
+    d = mmddyy(today() - timedelta(days=days_ago))
+    return fx.late_fee(**{"Sequential ID": seq, "Transaction Date": d, "Date Entered": d})
+
+
+def _month_view(db):
+    from app.services import monthly_review_service as mr
+    from app.services.review_period import Period
+    t = today()
+    return mr.frazer_transactions(db, Period(month=t.replace(day=1), start=t - timedelta(days=20), end=t, label="test", window="test", is_stub=False))
+
+
+def test_overlapping_transaction_exports_count_each_entry_once_and_keep_fees_apart(env):
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001"), _fee("9002")))
+    assert env.go()["final_status"] == "complete"
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001"), _fee("9002"), _p("9003", "50.00", 0)))
+    second = env.go(fresh=True)                                                   # a second, intentional update on the same day
+    assert second["final_status"] == "complete" and second["transaction_period"]["basis"] in ("catch_up", "deep_recheck")
+    assert second["files"]["payments"]["upload"]["compare"] == {"unchanged": 2, "new": 1}
+    v = _month_view(env.db)
+    assert v["rows_seen"] >= 5 and not v["revised"]                               # 9001 and 9002 arrived twice ...
+    assert v["groups"]["payment_entry"]["count"] == 2 and str(v["groups"]["payment_entry"]["sum"]) == "150.00"   # ... and count once
+    assert v["groups"]["fee_assessment"]["count"] == 1 and str(v["groups"]["fee_assessment"]["sum"]) == "25.00"   # a fee is not a receipt
+
+
+def test_a_changed_entry_surfaces_as_a_revision_and_is_not_silently_replaced(env):
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001"), _p("9003", "50.00", 0)))
+    env.go()
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001", "110.00"), _p("9003", "50.00", 0)))
+    rec = env.go(fresh=True)
+    up = rec["files"]["payments"]["upload"]
+    assert up["outcome"] == "stored" and up["compare"].get("changed") == 1 and "both versions are kept" in up["message"]
+    v = _month_view(env.db)
+    assert v["revised"] == ["9001"]                                               # shown for a person to resolve
+    assert str(v["groups"]["payment_entry"]["sum"]) == "50.00"                    # neither version is counted until then
+    from app.models.frazer_intake import FrazerSourceRow
+    assert env.db.query(FrazerSourceRow).filter(FrazerSourceRow.identity == "9001", FrazerSourceRow.record_type == "payment_entry").count() == 2
+
+
+def test_an_entry_missing_from_a_later_export_of_the_same_period_is_reported(env):
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001"), _p("9003", "50.00", 0)))
+    env.go()
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9003", "50.00", 0)))
+    up = env.go(fresh=True)["files"]["payments"]["upload"]
+    assert up["absent_earlier_count"] == 1 and "9001" in up["message"] and "earlier record is kept" in up["message"]
+
+
+# ---- a second update on the same day, and old files -------------------------------------------------------------------------
+
+def test_a_second_update_the_same_day_adds_no_duplicate_records_or_questions(env):
+    assert env.go()["final_status"] == "complete"
+    n, q, snaps = uploads(env.db), env.db.query(VrQuestion).count(), env.db.query(VrSnapshot).count()
+    rec = env.go(fresh=True)                                                      # Frazer wrote the same data again
+    assert rec["final_status"] == "complete"
+    assert all(rec["files"][t]["export"]["status"] == "created" and rec["files"][t]["upload"]["outcome"] == "duplicate" for t in helper.TYPES)
+    assert (uploads(env.db), env.db.query(VrQuestion).count(), env.db.query(VrSnapshot).count()) == (n, q, snaps)
+    assert len([d for d in os.listdir(env.cfg["work_folder"]) if d[:2] == "20"]) == 2      # each update has its own dated folder
+
+
+# ---- automatic generation (the Frazer driver), with a stand-in for the Windows part ----------------------------------------
+
+class FakeDriver:
+    """Stands in for FrazerDriver.ps1: 'Frazer' writes the files (or does not) and the driver reports what it saw."""
+
+    def __init__(self, env, no_write=(), readback=None, diag_errors=(), crash=False, not_ok=()):
+        self.env, self.no_write, self.readback, self.diag_errors, self.crash, self.not_ok = env, set(no_write), readback, list(diag_errors), crash, set(not_ok)
+        self.calls = []
+
+    def generate(self, types, period, diag_dir, log):
+        self.calls.append((tuple(types), period))
+        if self.crash:
+            raise RuntimeError("boom")
+        out = {}
+        for t in types:
+            if t in self.not_ok:
+                out[t] = {"ok": False, "message": "The preset on screen was not the one expected. Create File was not clicked."}
+                continue
+            if t not in self.no_write:
+                self.env.write(t)
+            out[t] = {"ok": True, "message": "", "preset_name": "x", "dialog": True, "confirmations": [{"what": "slot", "selected": True}]}
+            if t == "payments":
+                out[t]["readback"] = self.readback or {"begin": mmddyy(date.fromisoformat(period[0])), "end": mmddyy(date.fromisoformat(period[1]))}
+        return {"exports": out, "diagnostics": {"screenshots": ["a.png"], "errors": self.diag_errors}, "stopped": None}
+
+
+def test_one_click_generates_archives_and_uploads_with_a_manifest(env):
+    old = env.write("vehicles", vehicles_bytes(5, "55555"), age=26 * 3600)       # yesterday's working file, about to be overwritten
+    drv = FakeDriver(env)
+    rec = env.go(mode="auto", driver=drv)
+    assert rec["final_status"] == "complete" and len(drv.calls) == 1 and drv.calls[0][0] == helper.TYPES     # one driver pass for all three
+    v, p = rec["files"]["vehicles"]["export"], rec["files"]["payments"]["export"]
+    assert v["original_filename"] == "frazer-vehicles.csv.CSV" and v["archive_name"].startswith("frazer-vehicles-as-of-") and v["archive_name"].endswith(".csv")
+    assert len(v["sha256"]) == 64 and v["generated_local"][-6] in "+-" and v["timezone"] and os.path.isfile(v["archive_path"])
+    assert p["archive_name"] == f"frazer-payment-transactions-{p['period']['start']}-through-{p['period']['end']}.csv" and p["period"]["confirmed_in_frazer"] is True
+    assert "Unknown" in rec["source_cutoff"]
+    up = env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first()
+    assert up.original_filename == p["archive_name"]
+    res = env.db.query(FrazerHelperRun).one().results_json["payments"]
+    assert res["original_filename"] == "frazer-payments.csv.CSV" and res["generation"] == "auto" and " to " in res["period_readback"]
+    kept = os.listdir(os.path.join(env.cfg["work_folder"], "_preserved"))
+    assert any(n.endswith("frazer-vehicles.csv.CSV") for n in kept)               # the earlier original was kept before Frazer overwrote it
+    assert any("COMPLETE" in line for line in helper.result_lines(rec))
+
+
+def test_a_driver_that_reports_success_without_a_fresh_file_proves_nothing(env):
+    for t in helper.TYPES:
+        env.write(t, age=3600)                                                    # the files in the folder are from earlier
+    rec = env.go(mode="auto", driver=FakeDriver(env, no_write=helper.TYPES))
+    assert rec["final_status"] == "failed" and uploads(env.db) == env.baseline_uploads
+    assert all(rec["files"][t]["export"]["status"] == "stale" and rec["files"][t]["upload"]["outcome"] == "not sent" for t in helper.TYPES)
+
+
+def test_transaction_dates_that_do_not_read_back_stop_that_export_only(env):
+    rec = env.go(mode="auto", driver=FakeDriver(env, readback={"begin": "11/01/26", "end": "11/08/26"}))
+    assert rec["final_status"] == "partial"
+    assert "NOT used" in rec["files"]["payments"]["export"]["message"] and rec["files"]["payments"]["upload"]["outcome"] == "not sent"
+    assert env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").count() == 1          # only the baseline
+    assert rec["files"]["vehicles"]["upload"]["outcome"] == "stored"
+
+
+def test_an_unconfirmed_preset_fails_that_export_and_the_retry_sends_only_it(env):
+    first = env.go(mode="auto", driver=FakeDriver(env, not_ok={"customer_balances"}))
+    assert first["final_status"] == "partial" and "not the one expected" in first["files"]["customer_balances"]["export"]["message"]
+    drv = FakeDriver(env)
+    second = env.go(mode="auto", driver=drv)
+    assert second["final_status"] == "complete" and drv.calls[0][0] == ("customer_balances",)                # only the missing export is generated again
+    assert uploads(env.db) == env.baseline_uploads + 3
+
+
+def test_a_diagnostic_problem_does_not_change_the_business_result(env):
+    rec = env.go(mode="auto", driver=FakeDriver(env, diag_errors=["screenshot end: Parameter is not valid."]))
+    assert rec["final_status"] == "complete" and rec["diagnostics"]["status"] == "problem"
+    text = "\n".join(helper.result_lines(rec))
+    assert "Export: created" in text and "Upload: accepted and stored" in text and "does not change the results above" in text
+
+
+def test_a_driver_crash_is_an_export_failure_not_a_helper_crash(env):
+    rec = env.go(mode="auto", driver=FakeDriver(env, crash=True))
+    assert rec["final_status"] == "failed" and uploads(env.db) == env.baseline_uploads
+    assert all(rec["files"][t]["export"]["status"] == "failed" for t in helper.TYPES)

@@ -29,6 +29,7 @@
     <td data-label="Status"><span class="badge {{ {'complete':'badge-green','partial':'badge-yellow','failed':'badge-red','abandoned':'badge-gray','running':'badge-blue'}[r.status] }}">{{ r.status }}</span><div class="form-hint">{{ r.summary or '' }}</div></td>
     <td data-label="Started">{{ r.started_at | fhlocal }}</td>
     <td data-label="Per export">{% for t in types %}{% set x = (r.results_json or {}).get(t) %}<div style="font-size:13px;"><strong>{{ TYPE_LABEL[t] }}:</strong> {{ x.outcome if x else 'no result' }}{% if x and x.upload %} · {{ x.upload }}{% endif %}{% if x and x.message %} <span class="form-hint">{{ x.message }}</span>{% endif %}{% if x and x.file_written_at %}<div class="form-hint">file written {{ x.file_written_at }} UTC</div>{% endif %}</div>{% endfor %}
+      {% set plan = (r.params_json or {}).get('plan') %}{% if plan %}<div class="form-hint">Transaction period asked for: {{ plan.coverage_start }} through {{ plan.coverage_end }}. {{ plan.explanation }}</div>{% endif %}
       {% if r.sync_json %}<div class="form-hint">Reconciliation: {{ r.sync_json.state }}. {{ r.sync_json.detail }}</div>{% endif %}</td></tr>
   {% else %}<tr><td colspan="4">No helper run yet.</td></tr>{% endfor %}</tbody></table></div>
 </div>

@@ -1,13 +1,14 @@
 {
-  "server": "http://100.123.116.111:8000",
+  "server": "http://RTO-APP-ADDRESS:8000",
   "token": "fxh_PASTE_THE_TOKEN_FROM_THE_APP_HELPER_PAGE",
-  "landing_folder": "C:\\FrazerExports",
+  "landing_folder": "C:\\FrazerData",
   "work_folder": "C:\\FrazerHelper\\runs",
-  "payment_days": 10,
-  "wait_minutes": 20,
+  "mode": "auto",
+  "driver": "C:\\FrazerHelper\\app\\FrazerDriver.ps1",
+  "first_coverage_start": "",
   "exports": {
-    "vehicles":          { "label": "Vehicle list (saved export name in Frazer)",       "pattern": "*vehicle*.csv*",  "command": null },
-    "customer_balances": { "label": "Customer balances (saved export name in Frazer)",  "pattern": "*customer*.csv*", "command": null },
-    "payments":          { "label": "Transactions (saved export name in Frazer)",       "pattern": "*payment*.csv*",  "command": null }
+    "vehicles":          { "label": "File 1 (vehicles)",             "slot": 1, "preset": "frazer-vehicles",             "file": "frazer-vehicles.CSV" },
+    "customer_balances": { "label": "File 3 (customer balances)",    "slot": 3, "preset": "frazer-customer-balances",    "file": "frazer-customer-balances.CSV" },
+    "payments":          { "label": "File 2 (payment transactions)", "slot": 2, "preset": "frazer-payment-transactions", "file": "frazer-payment-transactions.CSV" }
   }
 }
