@@ -60,3 +60,21 @@ Please answer or check these on the Frazer PC (a phone photo of each is plenty):
 3. **Which computer should run the helper?** The helper must run where it can read that folder as a normal path. If Frazer is remote and exports land on your own PC, install the helper on **your own PC** (the folder is local there). If Frazer is local, install it on the Frazer PC.
 4. **Are the three saved exports right?** In Frazer's export list, are there three saved presets (vehicles, customer balances, transactions)? Do they keep the same columns every time? Does the transaction preset ask for a date range when it runs?
 5. **Is there an automatic way to run an export?** Look in Frazer's export screen/menus and manual for "schedule", "automatic export", "command line" or "batch". If nothing exists, the helper keeps the "operator runs it, helper waits" mode, which already works.
+
+
+## Revised for Hosted Frazer (2026-11-10)
+
+**Confirmed on the Eunice computer (DESKTOP-A502OF8, Console session, Tailscale reaches the RTO server, no Python):** Frazer is *hosted*. `HostedClient.exe` opens an embedded remote-desktop connection to `fz-112048.hostedfrazer.com`. Frazer runs on the vendor's server; the Eunice computer shows it in a window.
+
+**What follows:**
+- Windows on Eunice sees one remote-desktop window, not Frazer's buttons. Local UI-Automation of Frazer's controls is **not available**. Any "click the saved export" automation would be pixel and keyboard injection into that window: possible, but fragile (it needs the Eunice desktop signed in and unlocked, the HostedClient window open and in front, and an unchanged screen size/scaling). It is the last resort, not the plan.
+- `C:\` inside Frazer is the **hosted server's** drive. A file saved there never reaches Eunice. A `\\tsclient\C\FrazerExports` path inside the hosted session maps to the **computer running HostedClient**, which is Eunice, *if the hosted connection redirects drives*. That is the property to prove first, and the real export folder will be `C:\FrazerExports` on Eunice.
+- The existing helper then works unchanged: it reads `C:\FrazerExports` on Eunice, checks, uploads. Generation is done by the operator running each saved export (the helper waits) until a better mechanism is found.
+
+**Order of work**
+1. Prove one saved export lands in `C:\FrazerExports` on Eunice (the verification steps, below). Nothing else is installed first.
+2. Ask the hosting provider whether Frazer can run saved exports on a schedule or write them to a shared location on the hosted side (a supported mechanism beats automation).
+3. Run the helper on Eunice with Python's no-install "embeddable" package (a folder, no administrator rights) or, if that is refused, a PowerShell version (PowerShell 5.1 is already there).
+4. Only if 1-2 give no way to generate exports without a person, evaluate keyboard-driven automation of the HostedClient window, with explicit failure detection (the helper already refuses stale or missing files, so a failed automation cannot upload yesterday's data).
+
+**Operating requirement, stated for the real setup:** the helper runs in the Eunice user's signed-in desktop session. It needs Eunice powered on, that user signed in, and (for manual-wait mode) the employee in Frazer. It does not need your laptop connected. Screen-driven automation would additionally need an unlocked, unobstructed desktop. How *you* reach Eunice (and so what happens when you disconnect) is a separate question: the Where report shows a Console session, so you are probably using a screen-sharing tool, not Remote Desktop, to reach it. That tool's behaviour on disconnect needs a test of its own.

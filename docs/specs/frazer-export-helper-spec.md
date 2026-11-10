@@ -8,7 +8,7 @@ Frazer exports are uploaded by hand through an administrator's browser, so data 
 ## 2. Discovery status (what is and is not known)
 | Question | Status |
 |---|---|
-| Is Frazer local Windows software, hosted, or RDP? | **Unknown.** Earlier screenshots showed a `\\tsclient` path, which is how an RDP session sees the *client* PC's drives. That suggests Frazer runs remotely and exports land on the operator's own PC. Not verified. |
+| Is Frazer local Windows software, hosted, or RDP? | **Hosted** (confirmed 2026-11-10): `HostedClient.exe` embeds a remote-desktop connection to the vendor's server. The helper runs on the Eunice computer (DESKTOP-A502OF8, Console session, Tailscale reaches the app, no Python). `C:\` inside Frazer is the hosted server's; a `\\tsclient` path inside the hosted session is expected to be the Eunice computer (to be verified). |
 | Where does the helper run? | **Where it can read the landing folder as an ordinary path.** If exports land on the operator's PC, there; if Frazer is local, on the Frazer PC. |
 | Landing folder, file names, saved presets | **Unknown**; the guide lists the smallest check (`docs/frazer_export_helper.md`). The observed 2026-11-08 files were named `frazer-vehicles-…csv.CSV`, `frazer-customer-balances-as-od-….CSV`, `frazer-payments-… through ….csv.CSV`. |
 | A supported export mechanism (command line, scheduler)? | **Unknown.** Not assumed. The helper supports a configured command per export; otherwise the operator runs the saved preset and the helper waits. Desktop automation of Frazer's native UI is not assumed and not built. |

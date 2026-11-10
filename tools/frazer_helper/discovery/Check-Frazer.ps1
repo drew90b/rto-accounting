@@ -27,21 +27,30 @@ function Get-FrazerProcs { Get-Process | Where-Object { $_.ProcessName -like $Pr
 if ($Mode -eq "Where") {
   Say "== Computer =="; Say ("Name: $env:COMPUTERNAME   User: $env:USERNAME   Windows: " + (Get-CimInstance Win32_OperatingSystem).Caption)
   Say "`n== Your session (is this Remote Desktop?) =="; Say ("SESSIONNAME=$env:SESSIONNAME   (console = at the machine; rdp-tcp#N = Remote Desktop)")
-  (query user 2>&1) | ForEach-Object { Say $_ }
-  Say "`n== Frazer processes (is it local software?) =="
+  if (Get-Command query.exe -ErrorAction SilentlyContinue) { try { (& query.exe user 2>&1) | ForEach-Object { Say $_ } } catch { Say "(query user failed: $($_.Exception.Message); skipped)" } }
+  else { Say "(query.exe is not available on this edition of Windows; skipped. This check is optional.)" }
+  Say "`n== Frazer processes (local software, or a hosted client?) =="
   $p = Get-FrazerProcs
   if (-not $p) { Say "No process matching '$ProcessName'. Start Frazer, sign in, and run this again (or pass -ProcessName)." }
+  $sys = [regex]::Escape($env:windir)
   foreach ($x in $p) {
     $w = Get-CimInstance Win32_Process -Filter "ProcessId=$($x.Id)"
     Say ("{0}  pid {1}  window '{2}'`n   exe: {3}`n   command line: {4}" -f $x.ProcessName, $x.Id, $x.MainWindowTitle, $w.ExecutablePath, $w.CommandLine)
-    if ($w.ExecutablePath) {
+    if ($x.ProcessName -match "Hosted") { Say "   -> a HOSTED client: Frazer itself runs on the vendor's server and this window is a remote-desktop view of it. Files it writes go to the hosted server unless saved to a \\tsclient path." }
+    if ($w.ExecutablePath -and $w.ExecutablePath -notmatch "^$sys") {
       $dir = Split-Path $w.ExecutablePath
       Say "   folder: $dir"
-      Get-ChildItem $dir -ErrorAction SilentlyContinue -Include *.chm,*.pdf,*.txt,*.ini,*.bat,*.cmd,*.vbs,*.exe -Recurse -Depth 1 |
-        Where-Object { $_.Name -match "export|sched|batch|cmd|command|auto|api|odbc|report|readme|help" } |
+      # documentation and configuration only: no executables, nothing under the Windows folder
+      Get-ChildItem $dir -ErrorAction SilentlyContinue -Include *.chm,*.pdf,*.txt,*.ini,*.rdp,*.config,*.json,*.bat,*.cmd,*.vbs -Recurse -Depth 2 |
+        Where-Object { $_.FullName -notmatch "^$sys" -and $_.Name -match "export|sched|batch|command|auto|api|odbc|report|readme|help|rdp|host" } |
         Select-Object -First 40 | ForEach-Object { Say ("   hint file: " + $_.FullName) }
     }
   }
+  Say "`n== Remote Desktop connection files and shortcuts mentioning Frazer =="
+  Get-ChildItem "$env:USERPROFILE\Desktop","$env:PUBLIC\Desktop","$env:USERPROFILE\Documents" -Include *.rdp,*.lnk -ErrorAction SilentlyContinue -Recurse -Depth 1 |
+    Where-Object { $_.Name -match "frazer|hosted" } | ForEach-Object { Say ("   " + $_.FullName) }
+  Say "`n== Is the Remote Desktop client (mstsc) running, and what does it connect to? =="
+  Get-CimInstance Win32_Process -Filter "Name='mstsc.exe'" -ErrorAction SilentlyContinue | ForEach-Object { Say ("   mstsc pid {0}: {1}" -f $_.ProcessId, $_.CommandLine) }
   Say "`n== Installed programs matching Frazer =="
   Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*","HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
     Where-Object { $_.DisplayName -like "*frazer*" } | ForEach-Object { Say ("{0} {1}  at {2}" -f $_.DisplayName, $_.DisplayVersion, $_.InstallLocation) }
