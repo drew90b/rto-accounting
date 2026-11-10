@@ -97,7 +97,7 @@ try {
       foreach ($x in @($r.renames)) { if ($x) { Say ("File {0}: '{1}' -> wanted '{2}': {3}" -f $x.slot, $x.from, $x.want, $x.result) } }
       if ($r.names_after) { Say ("names now (read back from Frazer): File 1 '{0}', File 2 '{1}', File 3 '{2}'" -f $r.names_after.'1', $r.names_after.'2', $r.names_after.'3') }
       if ($r.names_after) {
-        if ($r.settings_unchanged) { Say ("settings check: all {0} settings views look exactly as they did before the rename" -f $r.settings_views_compared) }
+        if ($r.settings_unchanged) { Say ("settings check: all {0} settings views show the same settings as before the rename" -f $r.settings_views_compared) }
         else { $problems += ('Saved export settings look different after the rename: ' + (@($r.settings_changed) -join '; ') + '. Compare the before- and after- pictures in ' + $bk); Say ('SETTINGS DIFFER after the rename: ' + (@($r.settings_changed) -join '; ')) }
       }
       $src = $null; if ($r.names_after) { $src = $r.names_after } elseif ($r.names_before) { $src = $r.names_before }

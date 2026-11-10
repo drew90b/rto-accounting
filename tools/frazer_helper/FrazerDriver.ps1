@@ -20,7 +20,7 @@
 param([ValidateSet("Export", "Names", "Presets")][string]$Action = "Names",
       [string]$RequestPath = "", [string]$ResultPath = "", [string]$OutDir = "")
 $ErrorActionPreference = "Stop"
-$DriverVersion = "1.0"
+$DriverVersion = "1.1"
 
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
@@ -88,6 +88,28 @@ public static class FzDrv {
     if (fg != 0 && fg != me) { AttachThreadInput(me, fg, true); BringWindowToTop(h); SetForegroundWindow(h); AttachThreadInput(me, fg, false); }
     return GetForegroundWindow() == h;
   }
+  // How many pixels differ between two pictures of the same region, counting only solid changes. A pixel counts when one
+  // colour channel differs by more than tol AND at least 3 of its 8 neighbours differ too. That ignores the faint colour
+  // noise of the remote display and the one-pixel dotted keyboard-focus outline, and still sees a tick, a radio dot or text.
+  public static int SolidDiff(int[] a, int[] b, int w, int h, int tol) {
+    if (a == null || b == null || a.Length != b.Length || a.Length != w * h) return -1;
+    bool[] d = new bool[a.Length];
+    for (int i = 0; i < a.Length; i++) {
+      int x = a[i], y = b[i];
+      if (Math.Abs(((x >> 16) & 255) - ((y >> 16) & 255)) > tol || Math.Abs(((x >> 8) & 255) - ((y >> 8) & 255)) > tol || Math.Abs((x & 255) - (y & 255)) > tol) d[i] = true;
+    }
+    int n = 0;
+    for (int r = 1; r < h - 1; r++) {
+      for (int c = 1; c < w - 1; c++) {
+        int i = r * w + c;
+        if (!d[i]) continue;
+        int k = 0;
+        for (int dr = -1; dr <= 1; dr++) for (int dc = -1; dc <= 1; dc++) if (d[i + dr * w + dc]) k++;
+        if (k >= 4) n++;
+      }
+    }
+    return n;
+  }
 }
 "@
 [void][FzDrv]::SetProcessDPIAware()
@@ -115,18 +137,19 @@ function Shot($hwnd, $name) {
   } catch { DiagError ("screenshot ${name}: " + $_.Exception.Message) }
 }
 
-# SHA-256 of the pixels of part of a window: used to show a saved export's settings look exactly the same before and after.
-function RegionHash($hwnd, $x, $y, $w, $h) {
+# The pixels of part of a window, kept so a saved export's settings can be compared before and after (see FzDrv.SolidDiff).
+function RegionPixels($hwnd, $x, $y, $w, $h) {
   $r = New-Object FzDrv+RECT; [void][FzDrv]::GetWindowRect($hwnd, [ref]$r)
-  $bmp = New-Object System.Drawing.Bitmap $w, $h
+  $bmp = New-Object System.Drawing.Bitmap $w, $h, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($r.L + $x, $r.T + $y, 0, 0, $bmp.Size); $g.Dispose()
-  $ms = New-Object System.IO.MemoryStream
-  $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp); $bmp.Dispose()
-  $sha = [Security.Cryptography.SHA256]::Create()
-  $hx = ([BitConverter]::ToString($sha.ComputeHash($ms.ToArray())) -replace '-', '').ToLower()
-  $ms.Dispose()
-  return $hx
+  $bd = $bmp.LockBits((New-Object System.Drawing.Rectangle 0, 0, $w, $h), [System.Drawing.Imaging.ImageLockMode]::ReadOnly, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  $px = New-Object 'int[]' ($w * $h)
+  [System.Runtime.InteropServices.Marshal]::Copy($bd.Scan0, $px, 0, $px.Length)
+  $bmp.UnlockBits($bd); $bmp.Dispose()
+  return @{ w = $w; h = $h; px = $px }
 }
+# Fewer solid changed pixels than this is treated as the same picture (one tick or radio dot changes well over this many).
+$SettingsDiffLimit = 6
 
 function WriteResult($obj) {
   $obj["driver_version"] = $DriverVersion
@@ -167,7 +190,8 @@ function Wins {
   return $o
 }
 function M8Wins { return @(Wins | Where-Object { $_.Title -like 'M-8*Export Data*' }) }
-function MainWin { return (Wins | Where-Object { $_.Title -like 'Frazer (*' -and $_.W -ge 800 } | Select-Object -First 1) }
+# A minimised Frazer window is small, so it is recognised by being minimised; OpenM8 restores it before sending anything.
+function MainWin { return (Wins | Where-Object { $_.Title -like 'Frazer (*' -and ($_.W -ge 800 -or [FzDrv]::IsIconic($_.H)) } | Select-Object -First 1) }
 function Exists($hwnd) { return [bool](Wins | Where-Object { $_.H -eq $hwnd }) }
 function Front { if ([FzDrv]::GetForegroundWindow() -ne $script:M8) { throw 'The Export Data window is not in front. Stopped; no more input was sent.' } }
 function WinRect($hwnd) { $r = New-Object FzDrv+RECT; [void][FzDrv]::GetWindowRect($hwnd, [ref]$r); return $r }
@@ -189,11 +213,15 @@ function CloseM8($hwnd) {
 # From the main Frazer window: Alt+M, then 8, and wait for a NEW Export Data window to come to the front
 function OpenM8 {
   $mainw = MainWin
-  if (-not $mainw) { throw 'Frazer is not open. Open Hosted Frazer, sign in, and leave it on its main screen.' }
+  if (-not $mainw) { throw 'Frazer is not open (or its window could not be found). Open Hosted Frazer, sign in, and leave it on its main screen.' }
   $extra = @(Wins | Where-Object { $_.Title -notlike 'Frazer (*' -and $_.Title -notlike 'M-8*Export Data*' })
   if ($extra.Count) { throw ("Another Frazer screen is open ('{0}'). Close it and leave Frazer on its main screen." -f ($extra[0].Title -replace ' \(fz-.*$', '')) }
   $old = @(M8Wins | ForEach-Object { $_.H })
-  if ([FzDrv]::IsIconic($mainw.H)) { [void][FzDrv]::ShowWindow($mainw.H, 9); Start-Sleep -Milliseconds 600 }
+  if ([FzDrv]::IsIconic($mainw.H)) {
+    Note 'The Frazer window was minimised; restoring it.'
+    [void][FzDrv]::ShowWindow($mainw.H, 9); Start-Sleep -Milliseconds 1500
+    if ([FzDrv]::IsIconic($mainw.H)) { throw 'The Frazer window is minimised and could not be restored. Click Frazer on the taskbar so it shows, then run this again. No input was sent.' }
+  }
   for ($i = 0; $i -lt 10; $i++) { if ([FzDrv]::ForceForeground($mainw.H)) { break }; Start-Sleep -Milliseconds 400 }
   if ([FzDrv]::GetForegroundWindow() -ne $mainw.H) { throw 'The Frazer window could not be brought to the front (is the screen locked, or another program in the way?). No input was sent.' }
   AltTap 0x4D; Start-Sleep -Milliseconds 700; Tap 0x38
@@ -388,16 +416,16 @@ try {
       AltTap ([int](0x30 + [int]$s.slot)); Start-Sleep -Milliseconds 1500; Front
       $r = M8Rect; [void][FzDrv]::SetCursorPos($r.L + 600, $r.T + 12); Start-Sleep -Milliseconds 500
       Shot $script:M8 ("{0}-file{1}" -f $prefix, $s.slot)
-      $h['options'] = RegionHash $script:M8 205 60 811 210
-      $h['file-type'] = RegionHash $script:M8 5 200 200 150
+      $h['options'] = RegionPixels $script:M8 205 60 811 210
+      $h['file-type'] = RegionPixels $script:M8 5 200 200 150
       if ($s.type -ne 'payments') {
         foreach ($t in $tabs) {
           Front; $r = M8Rect; [FzDrv]::Click($r.L + $t[1], $r.T + 341); Start-Sleep -Milliseconds 700
           [void][FzDrv]::SetCursorPos($r.L + 600, $r.T + 12); Start-Sleep -Milliseconds 400
           Shot $script:M8 ("{0}-file{1}-tab-{2}" -f $prefix, $s.slot, $t[0])
-          $h[$t[0]] = RegionHash $script:M8 5 352 1006 262
+          $h[$t[0]] = RegionPixels $script:M8 5 352 1006 262
         }
-      } else { $h['payments-options'] = RegionHash $script:M8 5 270 1006 340 }
+      } else { $h['payments-options'] = RegionPixels $script:M8 5 270 1006 340 }
       [void](CloseM8 $script:M8)
       return $h
     }
@@ -450,7 +478,12 @@ try {
     $changedViews = @()
     foreach ($s in $req.slots) {
       $now = Survey $s 'after'
-      foreach ($k in $fpBefore["$($s.slot)"].Keys) { if ($fpBefore["$($s.slot)"][$k] -ne $now[$k]) { $changedViews += ("File {0}: {1}" -f $s.slot, $k) } }
+      foreach ($k in $fpBefore["$($s.slot)"].Keys) {
+        $b4 = $fpBefore["$($s.slot)"][$k]; $af = $now[$k]
+        $nd = if ($af) { [FzDrv]::SolidDiff([int[]]$b4.px, [int[]]$af.px, [int]$b4.w, [int]$b4.h, 40) } else { -1 }
+        if ($nd -ne 0) { Note ("settings compare File {0} {1}: {2} solid changed pixel(s)" -f $s.slot, $k, $nd) }
+        if ($nd -lt 0 -or $nd -ge $SettingsDiffLimit) { $changedViews += ("File {0}: {1}" -f $s.slot, $k) }
+      }
     }
     $out.settings_views_compared = @($fpBefore.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
     $out.settings_changed = $changedViews

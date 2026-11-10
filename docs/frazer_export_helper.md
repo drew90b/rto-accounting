@@ -1,6 +1,6 @@
 # "Update RTO Records": operator, installation and recovery guide
 
-**Status (2026-11-10):** built on the unmerged branch `feature/frazer-export-helper`; **not deployed**. Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The Windows parts were proven step by step on the Eunice computer with test scripts; the packaged driver, installer and window are being demonstrated against a protected staging copy. Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
+**Status (2026-11-10):** built on the unmerged branch `feature/frazer-export-helper`; **not deployed**, no production upload. Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The packaged installer, driver and window were run on the Eunice computer against a protected staging copy on 2026-11-10 (results in "Staging demonstration" below). Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
 
 ## What it is
 
@@ -23,7 +23,9 @@ It never signs in to Frazer, stores no password, never opens a customer, never c
    - **COMPLETE**: all three exports were created fresh, accepted, and reconciliation is up to date.
    - **PARTLY DONE** or **NOT DONE**: the window says which export or upload failed and why. Fix that, then double-click the shortcut again. Exports already accepted today are not created or sent again.
 
-It is fine to run it more than once a day. If nothing changed in Frazer, the second update reports the files as identical and adds nothing.
+It is fine to run it more than once a day. If nothing changed in Frazer, the vehicle and balance files are reported as identical and add nothing. The transaction file is identical only when its period is the same as the last stored one: the update right after the very first one uses a shorter period (the last 7 days instead of the first-run start), so it is stored as a new upload whose entries all match ones already held and are counted once.
+
+The shortcut is on the desktop, so Frazer is usually minimised to reach it. That is fine: the helper restores the Frazer window itself.
 
 **If Frazer's screens cannot be driven** (see "When it stops"), press **I will run the exports myself** in the window. The helper then tells you which saved export to run and waits for each file; for payment transactions it tells you the exact Beginning and Ending dates to type. The same freshness and intake checks apply.
 
@@ -91,7 +93,7 @@ iex (iwr "$FzSource/f/Install-UpdateRtoRecords.ps1" -UseBasicParsing).Content
 Frazer must be signed in and on its main screen, Caps Lock off. The installer:
 1. creates `C:\FrazerHelper` and fetches `frazer_helper.py` and `FrazerDriver.ps1`;
 2. installs Python 3.12 **for this Windows user only** into `C:\FrazerHelper\python` (python.org installer; its signature must be the Python Software Foundation's or it is not run);
-3. takes a picture of every settings view of the three saved exports, then renames File 1 to `frazer-vehicles` and File 2 to `frazer-payment-transactions` (File 3 is already `frazer-customer-balances`). A new name is saved only after it reads back exactly from the name box; afterwards the names are read again from a fresh window and every settings view is compared with its earlier picture;
+3. takes a picture of every settings view of the three saved exports, then renames File 1 to `frazer-vehicles` and File 2 to `frazer-payment-transactions` (File 3 is already `frazer-customer-balances`). A new name is saved only after it reads back exactly from the name box; afterwards the names are read again from a fresh window and every settings view is compared with its earlier picture (ignoring the faint colour noise of the remote display and the dotted keyboard-focus outline, which are not settings);
 4. writes `config.json` from the names Frazer actually shows;
 5. creates the desktop shortcut **Update RTO Records**;
 6. checks the connection to the app and prints the result. It ends with `SETUP COMPLETE` or a list of problems.
@@ -104,7 +106,7 @@ To remove access: *Helper page > Revoke* (the helper stops working at once). To 
 
 | What the window says | Cause | What to do |
 |---|---|---|
-| Frazer is not open | Hosted Frazer is closed or signed out | Sign in, leave it on the main screen, run again |
+| Frazer is not open | Hosted Frazer is closed or signed out. (A minimised Frazer window is fine: the helper restores it) | Sign in, leave it on the main screen, run again |
 | Another Frazer screen is open | A customer or other window is in front of the main screen | Close it, run again |
 | The Frazer window could not be brought to the front | Screen locked, or another program is holding the front | Unlock, close the other window, run again |
 | File N in Frazer is named X, not Y | A saved export was renamed in Frazer | Rename it back in Frazer, or run setup again so the settings match |
@@ -127,4 +129,18 @@ After any failure, running it again the same day continues the unfinished update
 - **Hosted Frazer specifics.** Frazer runs on the vendor's server; each Frazer window appears on the Frazer computer as its own window with a title, but its controls are a picture. The helper recognises windows by title, checks the Export Data window is exactly 1016 x 656, reads which options are selected from the screen, reads text fields by copying them, and clicks Create File only where its green label is found. A Frazer update that moves these stops the helper before it clicks; the manual button is the fallback.
 - **Exports land locally** because the saved exports write to `\\tsclient\C\FrazerData`, which is the Frazer computer's own `C:\FrazerData`. Verified for the Windows user `steve`; another Windows user would need the same check.
 - **No supported export command** was found in Frazer; if the vendor provides one, put it in `config.json` (`"command"` per export, `"mode": "manual"`).
-- **Not verified:** behaviour while the remote-control viewer is disconnected; a different display scaling.
+- **Entries the app does not group.** A transaction whose description is neither a payment nor a Late Fee (seen: one "Deposit") is stored with a warning and counted in neither total until a person looks at it. The update still reports COMPLETE.
+- **Balances wording.** A new customer-balance file normally differs from the previous one in most rows (balances and days past due move daily). The result line says these records "differ from an earlier upload ... shown as revised"; for balances that is ordinary change, not a problem.
+- **Not verified:** behaviour while the remote-control viewer is disconnected; a different display scaling; a Windows user other than `steve`; the corrected settings comparison (driver 1.1) has been checked against the real before/after pictures off the Frazer computer but setup has not been re-run with it.
+
+## Staging demonstration (2026-11-10, Eunice, staging copy only)
+
+Counts and totals only; no production system was written to (production still had 3 Frazer uploads and no helper tables afterwards).
+
+| Step | Observed |
+|---|---|
+| Setup | Python 3.12.10 installed for the user (signature valid). File 1 renamed `FRZDATA1` to `frazer-vehicles`, File 2 `frzr-transctions` to `frazer-payment-transactions`; Frazer confirmed "The Specifications have been saved"; names read back from a fresh window. 23 settings views pictured before and after: 20 identical; 3 differed only by display noise (at most 2 of 255 colour levels) or the focus outline, which the first version of the comparison wrongly reported as a difference. |
+| Update 1 (first run) | Period 2026-10-01 through 2026-11-10, dates read back in Frazer. Vehicles 108 rows, balances 64 rows, transactions 140 rows, all stored; 0 unreadable rows; all 140 stock numbers found in the vehicle list; 102 payment entries, 37 Late Fee entries, 1 ungrouped. The 22 entries of the hand-uploaded Nov 8 file were all present and identical. Reconciliation synced; no new question. |
+| Update 2 (minutes later) | Period 2026-11-03 through 2026-11-10 (7 days before the last accepted end). Vehicles and balances identical, nothing stored. Transactions stored (24 rows), every entry identical to one already held; distinct entries unchanged at 102 / 37 / 1. No new snapshot, question, decision or event. |
+| Update 3 | Same period; all three files identical; nothing stored. Run with the Frazer window minimised, which the helper restored. |
+| Failed attempts | Three attempts made with Frazer minimised (before the fix) stopped in about a second with "Frazer is not open"; nothing was stored and the checkpoint did not move. |
