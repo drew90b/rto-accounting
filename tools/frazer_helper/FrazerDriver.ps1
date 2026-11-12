@@ -214,7 +214,10 @@ function CloseM8($hwnd) {
 function OpenM8 {
   $mainw = MainWin
   if (-not $mainw) { throw 'Frazer is not open (or its window could not be found). Open Hosted Frazer, sign in, and leave it on its main screen.' }
-  $extra = @(Wins | Where-Object { $_.Title -notlike 'Frazer (*' -and $_.Title -notlike 'M-8*Export Data*' })
+  # A parked helper window of the remote display (untitled, at most 100x100, far off every screen, seen 2026-11-11 as 40x40 at -10000,-10000)
+  # cannot show anything to anyone and is not a Frazer screen. Anything else that is not the main window or Export Data still stops the run.
+  function IsParked($w) { $r = WinRect $w.H; return ((-not $w.Title) -and $w.W -le 100 -and $w.Ht -le 100 -and $r.L -le -5000 -and $r.T -le -5000) }
+  $extra = @(Wins | Where-Object { $_.Title -notlike 'Frazer (*' -and $_.Title -notlike 'M-8*Export Data*' -and -not (IsParked $_) })
   if ($extra.Count) {
     # Record what was seen (diagnostics only: the decision above is unchanged). An untitled window is described by size and place.
     foreach ($w in @(Wins)) { $r = WinRect $w.H; Note ("visible remote window: '{0}' {1}x{2} at {3},{4} minimised={5}" -f ($w.Title -replace ' \(fz-.*$', ''), $w.W, $w.Ht, $r.L, $r.T, [FzDrv]::IsIconic($w.H)) }
