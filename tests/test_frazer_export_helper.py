@@ -677,3 +677,54 @@ def test_a_driver_crash_is_an_export_failure_not_a_helper_crash(env):
     rec = env.go(mode="auto", driver=FakeDriver(env, crash=True))
     assert rec["final_status"] == "failed" and uploads(env.db) == env.baseline_uploads
     assert all(rec["files"][t]["export"]["status"] == "failed" for t in helper.TYPES)
+
+
+# ---- the first production run: an attribution-only uploader, and a hand upload that already covers part of the period ------
+
+def _attributed(env):
+    from app.services import user_service
+    robot = user_service.create_attribution_user(env.db, username="eunice-frazer-helper", display_name="Eunice Frazer Helper")
+    _, env.secret = svc.create_token(env.db, env.admin, label="Eunice", user=robot)
+    env.db.commit()
+    env.api = TestApi(env.secret, env.client)
+    env.cfg["token"] = env.secret
+    return robot
+
+
+def test_uploads_are_attributed_to_the_helper_account_which_cannot_sign_in_or_be_assigned_work(env, client):
+    robot = _attributed(env)
+    assert env.go()["final_status"] == "complete"
+    new = env.db.query(FrazerUpload).order_by(FrazerUpload.id.desc()).limit(3).all()
+    assert {u.uploaded_by.display_name for u in new} == {"Eunice Frazer Helper"} and len(new) == 3
+    assert "Eunice Frazer Helper" in client.get("/finance/frazer/").text                    # the intake list names it
+    assert env.client.post("/login", data={"username": robot.username, "password": "anything-at-all"}, follow_redirects=False).status_code != 303
+    from app.services import monthly_review_service as mr, vehicle_recon_service as vrs
+    with pytest.raises(mr.ReviewError):
+        mr._owner(env.db, robot.id)                                                         # a review issue cannot be given to it
+    q = VrQuestion(ref="VQ-9999", question_key="k-9999", kind="status_conflict", title="t", evidence_fingerprint="f")
+    env.db.add(q); env.db.flush()
+    with pytest.raises(vrs.RecError):
+        vrs.assign(env.db, env.admin, "VQ-9999", robot.id)                                  # nor a vehicle question
+    assert vrs.assign(env.db, env.admin, "VQ-9999", env.emp.id).owner_user_id == env.emp.id  # a person still can be
+
+
+def test_the_first_run_overlapping_an_earlier_hand_upload_counts_each_entry_once(env):
+    """Production shape: a person already uploaded a transaction file for the start of the period; the helper's first run covers the
+    same days and more. Every entry is counted once, and the hand upload is neither replaced nor counted again."""
+    _attributed(env)
+    start = today() - timedelta(days=10)
+    hand = _pay_rows(_p("9001", "100.00", 8), _p("9002", "40.00", 6), _fee("9003", 5))
+    intake.store_upload(env.db, env.admin, file=_Up("frazer-payments-hand.csv", hand), coverage_start=start.isoformat(),
+                        coverage_end=(today() - timedelta(days=3)).isoformat())
+    env.db.commit()
+    env.cfg["first_coverage_start"] = start.isoformat()
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9001", "100.00", 8), _p("9002", "40.00", 6), _fee("9003", 5),
+                                                                          _p("9004", "60.00", 1), _fee("9005", 0)))
+    first = env.go()
+    assert first["final_status"] == "complete" and first["transaction_period"]["start"] == start.isoformat()
+    assert first["files"]["payments"]["upload"]["compare"] == {"unchanged": 3, "new": 2}
+    v = _month_view(env.db)
+    assert not v["revised"] and v["rows_seen"] >= 6                                          # three entries were read twice ...
+    assert v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "200.00"    # ... counted once
+    assert v["groups"]["fee_assessment"]["count"] == 2
+    assert svc.coverage_checkpoint(env.db)["start"] == start

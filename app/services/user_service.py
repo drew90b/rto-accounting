@@ -13,6 +13,10 @@ CLI and the sign-in code share:
     not lock itself out.
   - Five wrong passwords lock the account for LOCKOUT_MINUTES. The sign-in
     error is the same for an unknown user and a wrong password.
+  - An attribution-only account (create_attribution_user) has no password at
+    all: it exists so that work done by a machine, such as the Frazer export
+    helper's uploads, carries a name. Nobody can sign in as it, it cannot be
+    given a password, and it is not offered where work is assigned to a person.
 """
 
 from datetime import datetime, timedelta
@@ -32,6 +36,8 @@ LOCKOUT_MINUTES = 15
 _hasher = PasswordHasher()
 # Checked when the username is unknown so that case takes as long as a wrong password.
 _DUMMY_HASH = _hasher.hash("not-a-real-password")
+# Stored in place of a password hash for an attribution-only account. It is not a hash of anything, so no password matches it.
+NO_SIGN_IN = "!no-sign-in"
 
 
 def hash_password(password: str) -> str:
@@ -72,7 +78,32 @@ def create_user(
     return user
 
 
+def create_attribution_user(db: Session, *, username: str, display_name: str) -> User:
+    """A name for machine-made records. Role employee (the least), no password, cannot sign in."""
+    username = username.strip().lower()
+    if not username or not display_name.strip():
+        raise ValueError("Username and display name are required.")
+    if get_user_by_username(db, username):
+        raise ValueError(f"User '{username}' already exists.")
+    user = User(username=username, display_name=display_name.strip(), password_hash=NO_SIGN_IN, role=UserRole.employee,
+                must_change_password=False)
+    db.add(user)
+    db.flush()
+    return user
+
+
+def can_sign_in(user: User) -> bool:
+    return user.password_hash != NO_SIGN_IN
+
+
+def people(db: Session):
+    """Query of the active users a person can be: everyone who can sign in. Use it wherever work is assigned to someone."""
+    return db.query(User).filter(User.active.is_(True), User.password_hash != NO_SIGN_IN)
+
+
 def set_password(user: User, password: str, *, must_change: bool) -> None:
+    if not can_sign_in(user):
+        raise ValueError(f"{user.username} is an attribution-only account and cannot be given a password.")
     user.password_hash = hash_password(password)
     user.must_change_password = must_change
     user.failed_login_count = 0
@@ -100,6 +131,8 @@ def enable_user(user: User) -> None:
 
 
 def set_role(db: Session, user: User, role: UserRole) -> None:
+    if role == UserRole.admin and not can_sign_in(user):
+        raise ValueError(f"{user.username} is an attribution-only account and cannot be an administrator.")
     if role != UserRole.admin and _would_remove_last_admin(db, user):
         raise ValueError("Refusing to demote the last active admin.")
     user.role = role
@@ -130,7 +163,7 @@ def authenticate(db: Session, username: str, password: str) -> Optional[User]:
         verify_password(_DUMMY_HASH, password)
         return None
     now = datetime.utcnow()
-    if user.locked_until and user.locked_until > now:
+    if (user.locked_until and user.locked_until > now) or not can_sign_in(user):
         verify_password(_DUMMY_HASH, password)
         return None
     if not user.active or not verify_password(user.password_hash, password):

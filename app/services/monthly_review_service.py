@@ -30,6 +30,7 @@ from app.models.monthly_review import (
 from app.models.purchase import Purchase
 from app.models.user import User
 from app.services import business_calendar as bc
+from app.services import user_service
 from app.services import close_progress as cp
 from app.services import frazer_parse as fp
 from app.services import review_period as rp
@@ -520,7 +521,7 @@ def _owner(db: Session, owner_id) -> Optional[User]:
     if owner_id in (None, "", "none"):
         return None
     try:
-        u = db.query(User).filter(User.id == int(owner_id), User.active.is_(True)).first()
+        u = user_service.people(db).filter(User.id == int(owner_id)).first()
     except (TypeError, ValueError):
         u = None
     if u is None:
@@ -827,7 +828,7 @@ def build_review(db: Session, month: date, today: date, *, sync: bool = True) ->
     touched = bool(notes or atts or any(r["status"] in ("received", "partial") for r in records if r["key"].startswith("frazer")))
     headline = "In review" if notes else ("Collecting records" if touched else "Not started")
     stamps = [u.uploaded_at for u in db.query(FrazerUpload)] + [i.updated_at for i in issues] + [n.created_at for n in notes] + [a.created_at for a in atts]
-    owners = db.query(User).filter(User.active.is_(True)).order_by(User.display_name).all()
+    owners = user_service.people(db).order_by(User.display_name).all()
     recon = reconciliation(records, issues)
     marks = db.query(ReviewStepMark).filter(ReviewStepMark.month == period.month).order_by(ReviewStepMark.id).all()
     wd0 = bc.wd0_for_month(period.month)

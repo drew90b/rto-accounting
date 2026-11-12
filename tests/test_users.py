@@ -155,3 +155,40 @@ def test_cli_unlock_and_reset(run_cli, db):
     assert run_cli(["reset-password", "belinda", "--temporary"]) == 0
     db.refresh(user)
     assert user.session_version == v + 1 and user.must_change_password
+
+
+# ---- attribution-only accounts (a name for machine-made records; nobody signs in as one) ---------------------------------
+
+def test_an_attribution_account_can_never_sign_in_and_is_not_a_person(db):
+    make_user(db)
+    robot = svc.create_attribution_user(db, username="Eunice-Frazer-Helper", display_name="Eunice Frazer Helper")
+    db.commit()
+    assert robot.username == "eunice-frazer-helper" and robot.role == UserRole.employee and robot.active
+    assert "argon2" not in robot.password_hash and not svc.can_sign_in(robot)
+    for guess in ("", PW, svc.NO_SIGN_IN, "x" * 40):
+        assert svc.authenticate(db, "eunice-frazer-helper", guess) is None
+    assert robot.failed_login_count == 0 and robot.locked_until is None          # guesses do not even count toward a lockout
+    assert [u.username for u in svc.people(db).all()] == ["belinda"]             # not offered where work is assigned to someone
+
+
+def test_an_attribution_account_cannot_be_given_a_password_or_made_admin(db, run_cli, capsys):
+    assert run_cli(["create-attribution", "--username", "eunice-frazer-helper", "--display-name", "Eunice Frazer Helper"]) == 0
+    assert "nobody can sign in" in capsys.readouterr().out
+    robot = db.query(User).one()
+    with pytest.raises(ValueError):
+        svc.set_password(robot, PW, must_change=False)
+    assert run_cli(["reset-password", "eunice-frazer-helper", "--temporary"]) == 1
+    assert run_cli(["set-role", "eunice-frazer-helper", "admin"]) == 1
+    assert run_cli(["create-attribution", "--username", "eunice-frazer-helper", "--display-name", "Again"]) == 1
+    db.refresh(robot)
+    assert robot.password_hash == svc.NO_SIGN_IN and robot.role == UserRole.employee
+    run_cli(["list"])
+    assert "attribution only, no sign-in" in capsys.readouterr().out
+
+
+def test_the_sign_in_page_refuses_an_attribution_account(anon_client, db):
+    svc.create_attribution_user(db, username="eunice-frazer-helper", display_name="Eunice Frazer Helper")
+    db.commit()
+    r = anon_client.post("/login", data={"username": "eunice-frazer-helper", "password": svc.NO_SIGN_IN}, follow_redirects=False)
+    assert r.status_code != 303 or r.headers["location"].startswith("/login")
+    assert anon_client.get("/purchases/", follow_redirects=False).headers["location"].startswith("/login")

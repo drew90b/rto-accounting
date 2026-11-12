@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.vehicle_recon import VrQuestion
 from app.services import vehicle_recon_service as svc
 from app.services import vr_intake_bridge as bridge        # Frazer intake -> reconciliation (integration build)
+from app.services import user_service
 from app.services import vr_engine as eng
 
 router = APIRouter()
@@ -41,7 +42,7 @@ templates.env.globals["vr_state_label"] = eng.STATE_LABEL
 
 
 def _users(db):
-    return db.query(User).filter(User.active.is_(True)).order_by(User.display_name).all()
+    return user_service.people(db).order_by(User.display_name).all()
 
 
 @router.get("/", response_class=HTMLResponse)

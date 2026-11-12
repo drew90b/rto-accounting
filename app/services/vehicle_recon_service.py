@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.vehicle_recon import VrDecision, VrEvent, VrQuestion
+from app.services import user_service
 from app.services import vr_engine as eng
 from app.services import vr_sources as src
 
@@ -167,7 +168,7 @@ def assign(db: Session, admin: User, ref: str, user_id: Optional[int]) -> VrQues
         q.owner_user_id = None
         event(db, q, "assigned", "Unassigned", admin)
         return q
-    target = db.query(User).filter(User.id == user_id, User.active.is_(True)).first()
+    target = user_service.people(db).filter(User.id == user_id).first()
     if target is None:
         raise RecError("That person is not an active user.")
     if q.kind in ADMIN_ONLY_ASSIGNEE_KINDS and not target.is_admin:

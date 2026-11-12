@@ -3,6 +3,7 @@ Manage sign-in accounts. This is the only way to create or change users.
 
 Usage:
     python -m app.scripts.users create --username belinda --display-name "Belinda" --role employee [--temporary]
+    python -m app.scripts.users create-attribution --username eunice-frazer-helper --display-name "Eunice Frazer Helper"
     python -m app.scripts.users reset-password USER [--temporary]
     python -m app.scripts.users disable USER
     python -m app.scripts.users enable USER
@@ -13,6 +14,9 @@ Usage:
 Passwords are never taken as arguments (they would land in shell history).
 They are typed twice at a prompt, or --temporary generates a random one,
 prints it once, and forces a change at first sign-in. Hashes are never shown.
+
+create-attribution makes an account with no password, for naming machine-made
+records (the Frazer export helper's uploads). Nobody can sign in as it.
 """
 
 import argparse
@@ -53,6 +57,10 @@ def main(argv=None) -> int:
     p.add_argument("--role", required=True, choices=[r.value for r in UserRole])
     p.add_argument("--temporary", action="store_true")
 
+    p = sub.add_parser("create-attribution")
+    p.add_argument("--username", required=True)
+    p.add_argument("--display-name", required=True)
+
     p = sub.add_parser("reset-password")
     p.add_argument("username")
     p.add_argument("--temporary", action="store_true")
@@ -73,7 +81,8 @@ def main(argv=None) -> int:
             from app.models.user import User
             for u in db.query(User).order_by(User.username).all():
                 locked = u.locked_until is not None
-                print(f"{u.username}\t{u.role.value}\t{'active' if u.active else 'disabled'}\t{'locked' if locked else ''}")
+                note = "locked" if locked else ("" if user_service.can_sign_in(u) else "attribution only, no sign-in")
+                print(f"{u.username}\t{u.role.value}\t{'active' if u.active else 'disabled'}\t{note}")
             return 0
 
         if args.command == "create":
@@ -83,6 +92,9 @@ def main(argv=None) -> int:
                 role=UserRole(args.role), password=password, must_change_password=must_change,
             )
             message = f"Created {args.username.strip().lower()} ({args.role})."
+        elif args.command == "create-attribution":
+            user_service.create_attribution_user(db, username=args.username, display_name=args.display_name)
+            message = f"Created {args.username.strip().lower()} (attribution only; nobody can sign in as it)."
         else:
             user = _find(db, args.username)
             if args.command == "reset-password":
