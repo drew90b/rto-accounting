@@ -256,7 +256,7 @@ You need to choose or provide: the B2 account and bucket name, the application k
 | [`docs/roadmap.md`](docs/roadmap.md) | Development phases and current status |
 | [`docs/releases.md`](docs/releases.md) | How versions are labelled, and the release notes |
 | [`docs/frazer_intake.md`](docs/frazer_intake.md) | Frazer CSV intake and import preview (unmerged branch): what it does, rules, merge notes |
-| [`docs/frazer_export_helper.md`](docs/frazer_export_helper.md) | One-button Frazer export upload helper: operator guide, Windows install, what to check on the Frazer computer (unmerged branch) |
+| [`docs/frazer_export_helper.md`](docs/frazer_export_helper.md) | One-button Frazer export upload helper: operator guide, Windows install, what to check on the Frazer computer, first-production-run rehearsal and release runbook (release candidate, not deployed) |
 | [`docs/monthly_review.md`](docs/monthly_review.md) | Monthly Review workspace (unmerged branch): close progress, workday indicator, closing schedule, issues, notes |
 | [`docs/progress.md`](docs/progress.md) | Development log — what was built and when |
 | [`docs/backup_recovery.md`](docs/backup_recovery.md) | Backup encryption keys, recovery copies, and how to recover from an off-server backup |

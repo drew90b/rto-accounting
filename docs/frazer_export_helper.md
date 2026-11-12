@@ -1,6 +1,6 @@
 # "Update RTO Records": operator, installation and recovery guide
 
-**Status (2026-11-10):** built on the unmerged branch `feature/frazer-export-helper`; **not deployed**, no production upload. Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The packaged installer, driver and window were run on the Eunice computer against a protected staging copy on 2026-11-10 (results in "Staging demonstration" below). Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
+**Status (2026-11-12):** release candidate on the local branch `release/frazer-helper-rc1` (current `main` plus this work); **not merged, not deployed**, no production upload. The first production runs were rehearsed on a disposable copy of production ("First production run" below); the steps to release are in "Release runbook". Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The packaged installer, driver and window were run on the Eunice computer against a protected staging copy on 2026-11-10 (results in "Staging demonstration" below). Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
 
 ## What it is
 
@@ -81,7 +81,7 @@ How overlap is handled downstream (existing Monthly Review logic, unchanged): en
 
 **In the app (administrator), after the branch is deployed:** *Finance > Frazer Intake > Helper page*.
 1. **Approve the column layouts:** for each of the three exports choose an upload that was read correctly and press *Approve this upload's columns*. A file with different columns is refused.
-2. **Create a token:** label it, choose the person uploads are attributed to (the token gives them no extra access), copy it. It is shown once.
+2. **Create a token:** label it, choose who the uploads are attributed to, copy it. It is shown once. Attribute it to the helper's own account, not to a person: create that account once on the server with `python -m app.scripts.users create-attribution --username eunice-frazer-helper --display-name "Eunice Frazer Helper"`. An attribution-only account has no password: nobody can sign in as it, it cannot be given a password or made an administrator, and it is not offered where a review issue or a vehicle question is assigned to someone. Disabling it stops its token.
 
 **On the Frazer computer** (Windows PowerShell; no administrator rights): set the four values and run the installer's text. `$FzSource` is wherever the three files in `tools/frazer_helper/` are served from.
 
@@ -132,6 +132,63 @@ After any failure, running it again the same day continues the unfinished update
 - **Entries the app does not group.** A transaction whose description is neither a payment nor a Late Fee (seen: one "Deposit") is stored with a warning and counted in neither total until a person looks at it. The update still reports COMPLETE.
 - **Balances wording.** A new customer-balance file normally differs from the previous one in most rows (balances and days past due move daily). The result line says these records "differ from an earlier upload ... shown as revised"; for balances that is ordinary change, not a problem.
 - **Not verified:** behaviour while the remote-control viewer is disconnected; a different display scaling; a Windows user other than `steve`; the corrected settings comparison (driver 1.1) has been checked against the real before/after pictures off the Frazer computer but setup has not been re-run with it.
+
+## First production run (rehearsed 2026-11-12 on a disposable copy of production)
+
+Proposed settings, not yet configured anywhere: first transaction period starts **2026-11-01**; uploads attributed to **Eunice Frazer Helper**.
+
+Production holds three hand uploads from Nov 8 (vehicles 108 rows, balances 64, transactions 22 rows declared Nov 1 to Nov 8). The rehearsal restored a fresh copy of production into a throwaway PostgreSQL, applied `fh01` with the candidate, and ran the helper's own client code over HTTP against the candidate, in its "I will run the exports myself" mode. The files were the real exports Frazer produced on Eunice on Nov 10; the transaction file was that export cut to each period the app asked for. So it rehearses what the app does with the files, not a fresh Frazer export (that part is the staging demonstration below). 27 of 27 checks passed. Counts and totals only:
+
+| Step | Observed |
+|---|---|
+| First run, interrupted (vehicle export never appears) | The app asked for 2026-11-01 through the day of the run. Balances and transactions stored; run **partial**; **no checkpoint**. A new run started afterwards was again given the first-run period from 2026-11-01 |
+| Same day, run again | Continued the interrupted update: vehicles stored, the other two carried and not sent again; run **complete**; checkpoint set to that period. Transaction uploads: the Nov 8 hand upload plus one new one |
+| Double counting | The new transaction file held 26 entries: the 22 of the Nov 8 upload, all unchanged, plus 4 later ones. Monthly Review read 48 rows from the two uploads and counted 26 entries: 17 payment entries $7,868.70 and 9 Late Fee entries $419.00, exactly the new file's own totals (before: 14 / $6,700.70 and 8 / $369.00). No entry was "revised" |
+| Attribution | All three new uploads show **Eunice Frazer Helper**; the three Nov 8 uploads keep their uploader. Signing in as that account is refused, also with the token as the password; the token opens no page |
+| Second update | Period 2026-11-04 through the same day (7 days before the accepted end, never before 2026-11-01). Vehicles and balances identical, nothing stored; transactions stored, all 15 entries unchanged; November totals the same |
+| A later partial run | An older balance file left in the folder was refused as stale; run partial; the checkpoint stayed with the last complete run |
+| Everything else | Row counts of all 24 other tables (purchases, transactions, payments, units and so on) unchanged; no reconciliation question or decision created; reconciliation read the new snapshots |
+| Rollback | Account disabled, `alembic downgrade vr01`: the three helper tables are dropped, the uploads stay, and the code on `main` reads them with the same November totals. `alembic upgrade head` applied again cleanly |
+
+**What starting on 2026-11-01 means.** That date is the permanent floor: the helper never asks Frazer for anything earlier, including in the periodic recheck. October transactions therefore stay absent unless a person uploads an October export by hand in Frazer Intake (entries are matched by Sequential ID, so that is safe at any time).
+
+**One narrow limit seen in rehearsal.** In "I will run the exports myself" mode a file written up to about two seconds before the update started is treated as fresh. A person cannot hit that by hand, and the one-click mode measures from the moment it starts driving Frazer.
+
+## Release runbook (only after explicit approval; nothing here has been run on production)
+
+Run on ubuntu-dev in `/home/drew/projects/rto` unless it says Eunice. Production is `rto-web` (systemd) on `100.123.116.111:8000`, schema `vr01`.
+
+**1. Backup.** `sudo systemctl start rto-backup`, then check `systemctl status rto-backup --no-pager` shows success and note the newest folder in `/home/drew/rto-backups/auto/` (it must be from this minute; it restores itself into a throwaway cluster and fails loudly if that does not match). Also note the running commit: `git rev-parse --short HEAD` (expected `b3b1a2c`).
+
+**2. Code and migration.**
+```
+git switch main && git merge --ff-only release/frazer-helper-rc1
+source .venv/bin/activate && alembic upgrade head        # vr01 -> fh01: three new tables, nothing else changes
+alembic current                                           # fh01 (head)
+python -m app.scripts.users create-attribution --username eunice-frazer-helper --display-name "Eunice Frazer Helper"
+sudo systemctl restart rto-web && systemctl is-active rto-web
+```
+**3. In the app, as an administrator** (*Finance > Frazer Intake > Helper page*): approve the column layout of each of the three Nov 8 uploads; create a token labelled for Eunice, attributed to *Eunice Frazer Helper*; copy it (shown once; keep it out of Git, chat and this document).
+
+**4. Switch the Eunice shortcut** (Windows PowerShell on Eunice, as `steve`). The shortcut itself does not change; it reads `C:\FrazerHelper\config.json`. Only three values change, and Frazer's saved exports are not touched. Do not run a staging update on the same day before switching.
+```powershell
+$c='C:\FrazerHelper\config.json'; Copy-Item $c 'C:\FrazerHelper\config.staging.json'
+$j=Get-Content $c -Raw | ConvertFrom-Json
+$j.server='http://100.123.116.111:8000'; $j.first_coverage_start='2026-11-01'; $j.token=(Read-Host 'Paste the production token')
+[System.IO.File]::WriteAllText($c, ($j | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding $false))
+& 'C:\FrazerHelper\python\python.exe' 'C:\FrazerHelper\app\frazer_helper.py' check --config $c
+```
+The check must print the three approved layouts, `coverage_checkpoint: null` and no `STOPPED`. This snippet writes the file the same way the installer does but has not itself been run on Eunice.
+
+**5. First update.** With Frazer signed in on its main screen, double-click **Update RTO Records**. Expect: period 2026-11-01 through today, dates read back in Frazer; COMPLETE. Then in Frazer Intake: three new uploads attributed to Eunice Frazer Helper; the transaction upload shows the 22 Nov 8 entries as unchanged; on the Helper page the run is complete. If it ends PARTLY DONE, fix what it names and click again the same day.
+
+**6. Afterwards.** Tag and write the release notes as `docs/releases.md` describes (a migration makes it a MINOR version); push only then. Delete `config.staging.json` on Eunice. The staging services can be stopped once nobody needs them.
+
+**Rollback, mildest first.**
+1. *Stop the helper only:* Helper page > Revoke (or `python -m app.scripts.users disable eunice-frazer-helper`). The shortcut then reports that the app refused its token and changes nothing. Uploads already stored are ordinary intake evidence and can stay.
+2. *Point Eunice back at staging:* `Copy-Item C:\FrazerHelper\config.staging.json C:\FrazerHelper\config.json`.
+3. *Remove the code and tables:* disable the account, `alembic downgrade vr01` **while the new code is still checked out**, then `git switch --detach b3b1a2c && sudo systemctl restart rto-web`. Uploads the helper made stay and the old code reads them (rehearsed). Run history and tokens are lost. Fix forward on a branch; never force-push `main`.
+4. *Restore the backup from step 1* (`docs/backup_recovery.md`) only if the data itself is wrong; it discards everything entered since the backup, including purchases, so prefer 1 to 3.
 
 ## Staging demonstration (2026-11-10, Eunice, staging copy only)
 
