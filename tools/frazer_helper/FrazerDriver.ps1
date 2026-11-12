@@ -215,7 +215,15 @@ function OpenM8 {
   $mainw = MainWin
   if (-not $mainw) { throw 'Frazer is not open (or its window could not be found). Open Hosted Frazer, sign in, and leave it on its main screen.' }
   $extra = @(Wins | Where-Object { $_.Title -notlike 'Frazer (*' -and $_.Title -notlike 'M-8*Export Data*' })
-  if ($extra.Count) { throw ("Another Frazer screen is open ('{0}'). Close it and leave Frazer on its main screen." -f ($extra[0].Title -replace ' \(fz-.*$', '')) }
+  if ($extra.Count) {
+    # Record what was seen (diagnostics only: the decision above is unchanged). An untitled window is described by size and place.
+    foreach ($w in @(Wins)) { $r = WinRect $w.H; Note ("visible remote window: '{0}' {1}x{2} at {3},{4} minimised={5}" -f ($w.Title -replace ' \(fz-.*$', ''), $w.W, $w.Ht, $r.L, $r.T, [FzDrv]::IsIconic($w.H)) }
+    $x = $extra[0]; $xr = WinRect $x.H
+    Shot $x.H 'another-frazer-screen'
+    $name = $x.Title -replace ' \(fz-.*$', ''
+    if (-not $name) { $name = "a window with no title, {0}x{1} at {2},{3}" -f $x.W, $x.Ht, $xr.L, $xr.T }
+    throw ("Another Frazer screen is open ({0}; {1} other window(s) in all). Close it and leave Frazer on its main screen." -f $name, $extra.Count)
+  }
   $old = @(M8Wins | ForEach-Object { $_.H })
   if ([FzDrv]::IsIconic($mainw.H)) {
     Note 'The Frazer window was minimised; restoring it.'
