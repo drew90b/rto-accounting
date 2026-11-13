@@ -8,9 +8,10 @@ writes only the four review_* tables (REQ-MR-14).
 Rules this module enforces:
   * Figures come from supported data only; a missing input is explained, never shown as $0.
   * Frazer transaction totals use the union of uploads by Sequential ID, so overlapping or repeated uploads count once.
-  * An entry that a LATER export covering its date no longer contains is never removed or merged. It would leave the provisional
-    total only if that later export were established as complete and comparable (see _not_comparable); the app does not hold that
-    evidence today, so it stays in and the total is labelled unreconciled. It is raised for a person and stays open until resolved.
+  * An entry that a LATER export covering its date no longer contains is never removed or merged. It stays in the provisional total
+    and the total is labelled unreconciled until a reviewer records a decision (keep or exclude, with a reason) that the totals then
+    reflect. Closing its issue changes nothing. The app does not exclude it by itself: that would need the later export to be
+    established as complete and comparable (see _not_comparable), which the app cannot do today.
 """
 import re
 from collections import defaultdict
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.models.frazer_helper import FrazerHelperRun
 from app.models.frazer_intake import FrazerSourceRow, FrazerUpload, FrazerUploadException
+from app.models.monthly_review import ReviewEntryDecision
 from app.models.monthly_review import (
     ReviewIssue, ReviewIssueEvent, ReviewIssueFile, ReviewNote, ReviewSourceRecord, ReviewStepMark,
 )
@@ -181,12 +183,24 @@ def _not_comparable(later: FrazerUpload, holders: list, kind: tuple, facts: dict
     return None
 
 
+DECISION_CHOICES = {"keep": "Keep in the total", "exclude": "Exclude from the total"}
+MIN_REASON = 15
+
+
+def entry_decisions(db: Session) -> dict:
+    """Sequential ID -> the latest reviewer decision about that entry (earlier ones stay in the history)."""
+    out = {}
+    for d in db.query(ReviewEntryDecision).order_by(ReviewEntryDecision.id):
+        out[d.identity] = d
+    return out
+
+
 def frazer_transactions(db: Session, period: Period) -> dict:
     """Union of the transaction uploads by Sequential ID, restricted to the reporting period."""
     ups = _payments_uploads(db)
     out = {"uploads": ups, "relevant": [], "has_uploads": bool(ups), "rows_seen": 0, "distinct": 0, "groups": {}, "pairs": {},
            "revised": [], "errored": [], "undated": 0, "outside": 0, "in_period": 0, "intervals": [], "present_start": None,
-           "present_end": None, "absent": []}
+           "present_end": None, "absent": [], "lapsed": [], "unreconciled": False}
     if not ups:
         return out
     ids = [u.id for u in ups]
@@ -202,6 +216,7 @@ def frazer_transactions(db: Session, period: Period) -> dict:
         FrazerUploadException.identity.isnot(None)).distinct()}
     entries: dict = {}
     by_id = {u.id: u for u in ups}
+    decisions = entry_decisions(db)
     facts = {"errors": {i for (i,) in db.query(FrazerUploadException.upload_id).filter(
                  FrazerUploadException.upload_id.in_(ids), FrazerUploadException.severity == "error").distinct()},
              "helper": _helper_results(db), "kinds": defaultdict(set)}
@@ -242,18 +257,28 @@ def frazer_transactions(db: Session, period: Period) -> dict:
         day, last = _d(f["transaction_date"]), max(e.uploads)
         missing = [u for u in ups if u.id > last and _declared_interval(u)[2] in ("declared", "filename")
                    and _declared_interval(u)[0] <= day <= _declared_interval(u)[1]]
+        dec = decisions.get(ident)
+        matched = dec if dec is not None and dec.last_held_upload_id == last else None
+        if dec is not None and matched is None and not missing:
+            out["lapsed"].append({"identity": ident, "decision": dec, "date": day, "amount": amt,
+                                  "listed_in": [(by_id[i].upload_id, i) for i in sorted(e.uploads) if i > dec.last_held_upload_id]})
         if missing:
             holders = [by_id[i] for i in sorted(e.uploads)]
             kind = (cls or "unclassified", f.get("transaction_type") or "")
             reasons = {u.upload_id: _not_comparable(u, holders, kind, facts) for u in missing}
             proof = [u for u in missing if reasons[u.upload_id] is None]
+            # what the total does with it: a reviewer's decision first; else (never today) proven comparability; else it stays counted
+            state = ("excluded" if matched is not None and matched.choice == "exclude" else
+                     "kept" if matched is not None else "auto_excluded" if proof else "undecided")
             out["absent"].append({
                 "identity": ident, "date": day, "amount": amt, "entry_class": cls or "unclassified", "description": f.get("description") or "",
-                "held_in": [(h.upload_id, h.id) for h in holders], "missing_from": [(u.upload_id, u.id) for u in missing],
-                "comparable": bool(proof), "counted": not proof,
+                "last_held": last, "held_in": [(h.upload_id, h.id) for h in holders], "missing_from": [(u.upload_id, u.id) for u in missing],
+                "comparable": bool(proof), "state": state, "decision": matched, "counted": state in ("undecided", "kept"),
                 "basis": (f"{proof[0].upload_id} is accepted as complete and comparable: every row read, same columns, other entries of this "
                           "kind listed, and the helper's report of the period and settings is accepted") if proof else "; ".join(f"{k}: {v}" for k, v in reasons.items())})
-            if proof:
+            if state == "undecided":
+                out["unreconciled"] = True
+            if state in ("excluded", "auto_excluded"):
                 continue                                    # left out of the provisional total; kept, listed, and raised for a person
         out["in_period"] += 1
         dates.append(_d(f["transaction_date"]))
@@ -446,7 +471,8 @@ def figures(db: Session, period: Period, tx: dict, records: list) -> dict:
             "pairs": [{"key": k, "count": v["count"], "sum": _money(v["sum"])} for k, v in sorted(tx["pairs"].items())],
             "rows_seen": tx["rows_seen"], "distinct": tx["distinct"], "in_period": tx["in_period"], "outside": tx["outside"],
             "revised": tx["revised"], "errored": tx["errored"], "undated": tx["undated"], "uploads": len(tx["relevant"]),
-            "absent": [{**a, "amount": _money(a["amount"]), "issue": None} for a in tx["absent"]], "unreconciled": False,
+            "absent": [{**a, "amount": _money(a["amount"]), "issue": None} for a in tx["absent"]], "unreconciled": tx["unreconciled"],
+            "lapsed": [{**x, "amount": _money(x["amount"])} for x in tx["lapsed"]], "history": [], "decided": 0,
             "present": rp.fmt_range(tx["present_start"], tx["present_end"]) if tx["present_start"] else None,
         }
     for etype, label in ((fp.CUSTOMERS, "Customer balances"),):
@@ -731,15 +757,20 @@ def _candidates(db: Session, period: Period, today: date, tx: dict, records: lis
                 "CL-2", None, {"entries": fee["count"], "total": str(fee["sum"])}, [("Frazer Intake", FRAZER_HOME)])
     for a in tx["absent"]:
         held, gone = ", ".join(n for n, _ in a["held_in"]), ", ".join(n for n, _ in a["missing_from"])
-        treat = ("It is LEFT OUT of the provisional total" if a["comparable"] else "It is STILL COUNTED, and the total is labelled unreconciled")
+        dec = a["decision"]
+        if dec is not None:
+            now_ = f"{'excluded from' if dec.choice == 'exclude' else 'kept in'} the totals by {user_name(dec.user)} on {dec.created_at:%Y-%m-%d}"
+        else:
+            now_ = "no decision yet: still counted, and the total is labelled unreconciled"
         add(f"absent:frazer_transaction:{a['identity']}", "reconciliation",
             f"Frazer entry {a['identity']} ({_money(a['amount'])}, {a['description'] or a['entry_class']}, dated {a['date'].isoformat()}) is not in a later export that covers its date",
-            f"Upload {held} holds this entry. The later export {gone} covers {a['date'].isoformat()} and does not list it. {treat}: "
-            f"{a['basis']}. The original upload and entry are kept unchanged; nothing is merged with any other entry and no reason is "
-            "assumed. Find out in Frazer what happened to it, then resolve this issue with a note saying what was found.", "CL-2", None,
+            f"Upload {held} holds this entry. The later export {gone} covers {a['date'].isoformat()} and does not list it. The original upload and "
+            "entry are kept unchanged; nothing is merged with any other entry and no reason is assumed. Until a reviewer records a decision "
+            "(keep or exclude, with a reason, under Collections and spending) the entry stays in the provisional total and the total is "
+            "labelled unreconciled. Closing this issue does not change the total: only a recorded decision does.", "CL-2", None,
             {"sequential_id": a["identity"], "transaction_date": a["date"].isoformat(), "amount": _money(a["amount"]),
-             "description": a["description"], "held_in": held, "not_listed_in": gone,
-             "in_provisional_total": "no" if a["comparable"] else "yes (unreconciled)", "basis": a["basis"]},
+             "description": a["description"], "held_in": held, "not_listed_in": gone, "decision": now_,
+             "why_not_established_by_the_app": a["basis"]},
             [(n, f"{FRAZER_HOME}uploads/{pk}") for n, pk in a["held_in"] + a["missing_from"]])
     if tx["revised"]:
         add("conflict:frazer_transactions", "mapping", "Some Frazer entries differ between uploads",
@@ -791,6 +822,44 @@ def sync_auto_issues(db: Session, period: Period, today: date, tx: Optional[dict
             out["cleared"] += 1
     db.flush()
     return out
+
+
+# --- reviewer decisions about entries a later export no longer lists --------------------------------------------------------
+
+def record_entry_decision(db: Session, user: User, month: date, *, identity: str, last_held_upload_id, choice: str, reason: str) -> ReviewEntryDecision:
+    """Record that the totals should keep or exclude one entry. Append-only; the entry, its uploads and its issue are not changed except
+    that the issue gets a history line. The evidence the reviewer saw must still be the current evidence (otherwise: reload and look again)."""
+    if not user.is_admin:
+        raise ReviewError("Only an administrator can record this decision.")
+    if choice not in DECISION_CHOICES:
+        raise ReviewError("Choose whether to keep the entry in the totals or exclude it.")
+    reason = (reason or "").strip()
+    check_restricted_text(reason)
+    if len(reason) < MIN_REASON:
+        raise ReviewError(f"Say why, in at least {MIN_REASON} characters: what you found in Frazer or from whom. This is the only record of the decision.")
+    if len(reason) > 1500:
+        raise ReviewError("Keep the reason under 1,500 characters.")
+    period = rp.period_for(month)
+    tx = frazer_transactions(db, period)
+    a = next((x for x in tx["absent"] if x["identity"] == (identity or "").strip()), None)
+    try:
+        seen = int(last_held_upload_id)
+    except (TypeError, ValueError):
+        seen = None
+    if a is None or a["last_held"] != seen:
+        raise ReviewError("That entry is no longer listed as missing from a later export, or the uploads changed since this page was loaded. "
+                          "Reload the page and look again; nothing was recorded.")
+    d = ReviewEntryDecision(identity=a["identity"], choice=choice, reason=reason, user_id=user.id, last_held_upload_id=a["last_held"],
+                            held_in_json=[list(x) for x in a["held_in"]], not_listed_in_json=[list(x) for x in a["missing_from"]],
+                            entry_date=a["date"], amount=str(a["amount"]), description=a["description"][:120], entry_class=a["entry_class"],
+                            basis=a["basis"])
+    db.add(d)
+    db.flush()
+    issue = db.query(ReviewIssue).filter(ReviewIssue.month == period.month, ReviewIssue.kind == "auto",
+                                         ReviewIssue.auto_key == f"absent:frazer_transaction:{a['identity']}").first()
+    if issue is not None:
+        _log(db, issue, "decision", user, to=DECISION_CHOICES[choice], body=reason)
+    return d
 
 
 # --- notes and attestations --------------------------------------------------------------------------------------------
@@ -956,18 +1025,20 @@ def build_review(db: Session, month: date, today: date, *, sync: bool = True) ->
     part = sum(1 for r in expected if r["status"] == "partial")
     fig_tx = figures(db, period, tx, records)
     if fig_tx["transactions"]:
+        ft = fig_tx["transactions"]
         by_key = {i.auto_key: i for i in issues if i.kind == "auto"}
-        for a in fig_tx["transactions"]["absent"]:
+        for a in ft["absent"]:
             a["issue"] = by_key.get(f"absent:frazer_transaction:{a['identity']}")
-        # unreconciled: an entry that could not be shown to be gone is still in the total, and nobody has resolved its issue yet
-        fig_tx["transactions"]["unreconciled"] = any(a["counted"] and not (a["issue"] and a["issue"].status == "resolved")
-                                                     for a in fig_tx["transactions"]["absent"])
+        ids = {a["identity"] for a in ft["absent"]} | {x["identity"] for x in ft["lapsed"]}
+        ft["history"] = (db.query(ReviewEntryDecision).filter(ReviewEntryDecision.identity.in_(ids)).order_by(ReviewEntryDecision.id.desc()).all()
+                         if ids else [])
+        ft["decided"] = sum(1 for a in ft["absent"] if a["decision"] is not None)
     summaries = {
         "records": f"{len(complete)} of {len(expected)} in place · {miss} missing · {part} partial",
         "attention": f"{len(live)} open · {len(overdue)} overdue · {sum(1 for i in live if not i.owner_user_id)} without an owner"
                      + (f" · {len(answered)} reply to review" if answered else ""),
         "figures": ((f"Frazer: {tx['in_period']} entries" + (" (partial coverage)" if records[0]['status'] != 'received' else "")
-                     + (f" · {len(tx['absent'])} not in a later export" if tx["absent"] else "")) if tx["relevant"]
+                     + (f" · {len(tx['absent'])} not in a later export" + (" · UNRECONCILED" if tx["unreconciled"] else " · decided") if tx["absent"] else "")) if tx["relevant"]
                     else "No Frazer export covers this period") + f" · {fig_tx['spending']['count']} purchase(s) entered",
         "recon": f"Nothing reconciled · {close['ready']['met']} of {close['ready']['total']} readiness milestones · "
                  f"{len(close['ready']['blocked_capabilities'])} unbuilt features block the rest",

@@ -154,7 +154,8 @@
   {% if f.tx_missing %}<p><strong>Not available.</strong> {{ f.tx_missing }}</p>
   {% else %}{% set t = f.transactions %}
   {% if t.partial %}<div class="alert" style="background:#fef9c3;border:1px solid #fde047;color:#854d0e;padding:6px 10px;">Partial coverage: these totals cover only {{ t.present or 'the dates uploaded' }}, not the whole period.</div>{% endif %}
-  {% if t.unreconciled %}<div class="alert alert-error" style="padding:6px 10px;"><strong>Unreconciled total.</strong> At least one entry below is still counted although a later export covering its date does not list it, and it could not be established that the two exports are comparable. Resolve its issue before relying on these totals.</div>{% endif %}
+  {% if t.unreconciled %}<div class="alert alert-error" style="padding:6px 10px;"><strong>Unreconciled total.</strong> At least one entry listed below is still counted although a later export covering its date does not list it, and nothing has been decided about it. Record a decision for each one (keep or exclude, with a reason) before relying on these totals. Closing its issue does not change this.</div>
+  {% elif t.decided or t.lapsed %}<div class="alert" style="background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:6px 10px;"><strong>Reviewer decisions are applied to these totals</strong> ({{ t.decided }} entr{{ 'y' if t.decided == 1 else 'ies' }}, listed below with who decided, when and why). This is a reviewed source total, <strong>not a reconciliation</strong>: nothing else in the month is reconciled, and Frazer's entries are not compared with bank, Square or cash records.</div>{% endif %}
   <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
     <thead><tr><th>Group</th><th>Entries</th><th>Total</th><th>Label</th></tr></thead>
     <tbody>{% for r in t.rows %}{% if r.present or loop.index <= 2 %}<tr><td data-label="Group">{{ r.label }}</td><td data-label="Entries">{{ r.count }}</td><td data-label="Total">{{ r.sum if r.present else '—' }}</td><td data-label="Label" class="form-hint">{{ r.basis }}</td></tr>{% endif %}{% endfor %}</tbody>
@@ -164,16 +165,32 @@
   {% if t.revised or t.errored or t.undated %}<p class="form-hint"><strong>Left out of the totals:</strong>
     {% if t.revised %}{{ t.revised | length }} entr{{ 'y' if t.revised | length == 1 else 'ies' }} with different content in different uploads (IDs {{ t.revised[:8] | join(', ') }}); {% endif %}
     {% if t.errored %}{{ t.errored | length }} with errors (IDs {{ t.errored[:8] | join(', ') }}); {% endif %}{% if t.undated %}{{ t.undated }} without a readable date.{% endif %}</p>{% endif %}
-  {% if t.absent %}<h4 style="font-size:13px;margin:10px 0 4px;">Entries a later export no longer lists ({{ t.absent | length }})</h4>
-  <p class="form-hint">Each is held in an earlier upload and is missing from a later export whose period covers its date. The earlier upload and entry are kept as they are; nothing is merged and no reason is assumed. An entry leaves the provisional total only when the later export is complete and comparable. Each stays open under Needs attention (section 3) until a reviewer resolves it.</p>
-  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
-    <thead><tr><th>Sequential ID</th><th>Dated</th><th>Description</th><th>Amount</th><th>Held in</th><th>Not listed in</th><th>Provisional total</th><th>Issue</th></tr></thead>
-    <tbody>{% for a in t.absent %}<tr><td data-label="Sequential ID">{{ a.identity }}</td><td data-label="Dated">{{ a.date.strftime('%b %-d, %Y') }}</td><td data-label="Description">{{ a.description or a.entry_class }}</td><td data-label="Amount">{{ a.amount }}</td>
-      <td data-label="Held in">{% for n, pk in a.held_in %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}</td>
-      <td data-label="Not listed in">{% for n, pk in a.missing_from %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}</td>
-      <td data-label="Provisional total">{% if a.counted %}<strong>Still counted</strong> (unreconciled){% else %}<strong>Left out</strong>{% endif %}<div class="form-hint">{{ a.basis }}</div></td>
-      <td data-label="Issue">{% if a.issue %}<a href="#issue-{{ a.issue.issue_id }}">{{ a.issue.issue_id }}</a> · {{ STATUS_LABEL[a.issue.status] }}{% else %}not raised yet{% endif %}</td></tr>{% endfor %}</tbody>
-  </table></div>{% endif %}
+  {% if t.absent or t.lapsed %}<h4 style="font-size:13px;margin:10px 0 4px;">Entries a later export no longer lists ({{ t.absent | length }})</h4>
+  <p class="form-hint">Each is held in an earlier upload and is missing from a later export whose period covers its date. The earlier upload and entry are kept exactly as uploaded; nothing is merged, deleted or explained away, and the app does not say what happened to the entry. It stays in the total, and the total stays unreconciled, until a reviewer records a decision. The decision changes only what these totals count. Closing the issue under Needs attention changes nothing.</p>
+  {% for a in t.absent %}<div class="card" style="padding:10px;margin-bottom:8px;" id="absent-{{ a.identity }}">
+    <div><strong>Sequential ID {{ a.identity }}</strong> · {{ a.description or a.entry_class }} · <strong>{{ a.amount }}</strong> · dated {{ a.date.strftime('%b %-d, %Y') }}</div>
+    <div class="form-hint">Held in: {% for n, pk in a.held_in %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %} · Not listed in: {% for n, pk in a.missing_from %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}
+      · Issue: {% if a.issue %}<a href="#issue-{{ a.issue.issue_id }}">{{ a.issue.issue_id }}</a> ({{ STATUS_LABEL[a.issue.status] }}){% else %}not raised yet{% endif %}</div>
+    <div style="margin:4px 0;">{% if a.decision %}{% if a.decision.choice == 'exclude' %}<strong>Excluded from the totals</strong>{% else %}<strong>Kept in the totals</strong>{% endif %} by {{ a.decision.user.display_name or a.decision.user.username }}, {{ a.decision.created_at | mrlocal }}.
+      <div>Reason: {{ a.decision.reason }}</div>
+      {% elif a.state == 'auto_excluded' %}<strong>Left out</strong> (accepted as comparable by the app)
+      {% else %}<strong>Still counted</strong> · no decision yet (unreconciled)<div class="form-hint">Why the app cannot settle it itself: {{ a.basis }}</div>{% endif %}</div>
+    <details {{ '' if a.decision else 'open' }}><summary>{{ 'Change the decision' if a.decision else 'Record a decision' }}</summary>
+      <form method="post" action="{{ base }}/entries/decision" class="form-grid" style="margin-top:6px;">
+        <input type="hidden" name="month" value="{{ month_key }}"><input type="hidden" name="identity" value="{{ a.identity }}"><input type="hidden" name="last_held_upload_id" value="{{ a.last_held }}">
+        <div class="form-group form-full"><label><input type="radio" name="choice" value="keep" required> Keep it in the totals (Frazer still has it, or it is real)</label><br>
+          <label><input type="radio" name="choice" value="exclude" required> Exclude it from the totals (it is not in Frazer, or was entered again under another number)</label></div>
+        <div class="form-group form-full"><label for="reason-{{ a.identity }}">Reason (what you found in Frazer, or from whom; at least 15 characters)</label>
+          <textarea id="reason-{{ a.identity }}" name="reason" rows="3" maxlength="1500" required></textarea></div>
+        <div class="form-group form-full"><button class="btn btn-primary btn-sm" type="submit">Record decision</button>
+          <span class="form-hint">Adds a record; never edits or deletes the entry, the upload or an earlier decision.</span></div>
+      </form></details>
+  </div>{% endfor %}
+  {% for x in t.lapsed %}<div class="form-hint" style="margin-bottom:6px;"><strong>Decision no longer applies:</strong> entry {{ x.identity }} ({{ x.amount }}) was decided as "{{ x.decision.choice }}" by {{ x.decision.user.display_name or x.decision.user.username }}, but {% for n, pk in x.listed_in %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %} lists it again. It is counted once. Decide again if it goes missing again.</div>{% endfor %}
+  {% if t.history %}<details><summary>Decision history ({{ t.history | length }})</summary><ul style="margin:4px 0 0 18px;font-size:13px;">
+    {% for h in t.history %}<li>{{ h.created_at | mrlocal }} · {{ h.user.display_name or h.user.username }} · entry {{ h.identity }} ({{ h.amount }}, {{ h.entry_date.strftime('%b %-d') }}) · <strong>{{ 'exclude' if h.choice == 'exclude' else 'keep' }}</strong> · {{ h.reason }}
+      · held in {% for n, pk in h.held_in_json %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}; not listed in {% for n, pk in h.not_listed_in_json %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}</li>{% endfor %}</ul></details>{% endif %}
+  {% endif %}
   <details><summary>By Frazer description and method code</summary><ul style="margin:4px 0 0 18px;font-size:13px;">{% for x in t.pairs %}<li>{{ x.key }}: {{ x.count }} · {{ x.sum }}</li>{% endfor %}</ul></details>
   {% endif %}
 

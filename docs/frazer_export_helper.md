@@ -148,7 +148,7 @@ Production holds three hand uploads from Nov 8 (vehicles 108 rows, balances 64, 
 | Second update | Period 2026-11-04 through the same day (7 days before the accepted end, never before 2026-11-01). Vehicles and balances identical, nothing stored; transactions stored, all 15 entries unchanged; November totals the same |
 | A later partial run | An older balance file left in the folder was refused as stale; run partial; the checkpoint stayed with the last complete run |
 | Everything else | Row counts of all 24 other tables (purchases, transactions, payments, units and so on) unchanged; no reconciliation question or decision created; reconciliation read the new snapshots |
-| Rollback | Account disabled, `alembic downgrade vr01`: the three helper tables are dropped, the uploads stay, and the code on `main` reads them with the same November totals. `alembic upgrade head` applied again cleanly |
+| Rollback | Account disabled, `alembic downgrade vr01`: the four new tables are dropped, the uploads stay, and the code on `main` reads them with the same November totals. `alembic upgrade head` applied again cleanly |
 
 **Repeated 2026-11-13 on a fresh production copy with the Nov 12 exports** (commit `55a67cf`; one-click mode with a stand-in for the Windows driver; 35 of 35 checks). First period 2026-11-01 through Nov 12: the new transaction file held 37 rows, 21 of the 22 Nov 8 entries unchanged and 16 new; alone it totals 24 payment entries $9,652.70 and 13 Late Fee entries $619.00. Monthly Review, read from the page itself, showed **25 payment entries $11,252.70 and 13 Late Fee entries $619.00 under an "Unreconciled total" banner**, and listed one entry the later export no longer lists: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, not in the new upload, still counted, with an open issue linking both uploads. `FU-0002` still holds its 22 rows. For information only: if the helper's report were accepted as proof (DEC-FX-07 b) the totals would be 24 / $9,652.70 with that entry listed as left out. Partial run, checkpoint, attribution, second update (period Nov 5 on, totals unchanged, exception still open), row counts of the 18 business tables and rollback were as before.
 
@@ -163,11 +163,15 @@ Production holds three hand uploads from Nov 8 (vehicles 108 rows, balances 64, 
 **The rule (Monthly Review only; no upload, entry or other record is changed).** Specification: `specs/frazer-export-helper-spec.md` section 7 (REQ-FX-18), which also shows where the existing specifications cover this and where they do not. An entry is *not listed later* when an upload newer than the last one that holds it has a declared period covering the entry's date and does not contain its Sequential ID.
 
 - The entry is listed under *Collections and spending* with its amount, the uploads that hold it and the uploads that do not, and an issue is raised under *Needs attention* with links to both. The issue stays open until a reviewer resolves it with a note.
-- **It stays in the provisional total, and the page labels the total "Unreconciled"** until that issue is resolved. It would leave the total only if the later export were established as complete and comparable. The app can check for itself that every row was read, that the columns are the same and that the later file lists other entries of the same kind. It cannot check what period Frazer applied or what the saved export's settings include: for those it has only the helper's own report, which the specifications do not accept as proof. So today no entry is taken out automatically (owner decision DEC-FX-07).
+- **It stays in the provisional total, and the page labels the total "Unreconciled", until a reviewer records a decision about it.** It would leave the total by itself only if the later export were established as complete and comparable. The app can check for itself that every row was read, that the columns are the same and that the later file lists other entries of the same kind. It cannot check what period Frazer applied or what the saved export's settings include: for those it has only the helper's own report, which the specifications do not accept as proof. So the app never excludes an entry on its own (the switch `ACCEPT_HELPER_REPORT_AS_PROOF` is off).
 - The original upload and entry are kept exactly as uploaded. Nothing is merged with any other entry, and the app does not say why the entry is no longer listed.
 - An export that does not cover the entry's date says nothing about it. If a later export lists the entry again, it is counted once and its issue is marked "condition no longer detected" for a person to close.
 
-**Limits.** Resolving the issue records what was found and removes the "Unreconciled" label; it does not change the total, so an entry that really is gone from Frazer stays counted until DEC-FX-07 is decided and built. The figure a reviewer should use meanwhile is the total less the listed entries they have confirmed in Frazer.
+**The reviewer's decision (an administrator, on the Monthly Review page under *Collections and spending*).** For each listed entry choose **Keep it in the totals** or **Exclude it from the totals** and give a reason (at least 15 characters: what you found in Frazer, or from whom). The decision is an append-only record with the reviewer, the time, the reason and links to both uploads; it changes only what these totals count. The total then follows it: exclude drops the entry's amount, keep leaves it, and in both cases the "Unreconciled" label is replaced by a notice that the totals are a reviewed source total and **not a reconciliation** of the month. A later decision supersedes an earlier one and both stay in the history. If a later export lists the entry again, the decision no longer applies and the entry is counted once; if it goes missing again it is undecided again.
+
+**Closing the issue under *Needs attention* never changes the total or the "Unreconciled" label.** Only a recorded decision does. The issue itself stays open until someone closes it; the decision is added to its history.
+
+**Limits.** The decision is the reviewer's judgement, not evidence from Frazer: the app records who made it and why. It applies to the entry it was made on and nothing else. Migration `fh02` adds the table; `alembic downgrade` of it drops the decisions, after which Monthly Review (without this code) counts the entries again.
 
 ## Release runbook (only after explicit approval; nothing here has been run on production)
 
@@ -185,8 +189,8 @@ The backup restores itself into a throwaway cluster and fails loudly if that doe
 **2. Code and migration (app still stopped).**
 ```
 git switch main && git merge --ff-only release/frazer-helper-rc1
-source .venv/bin/activate && alembic upgrade head        # vr01 -> fh01: three new tables, nothing else changes
-alembic current                                           # fh01 (head)
+source .venv/bin/activate && alembic upgrade head        # vr01 -> fh01 -> fh02: four new tables, nothing else changes
+alembic current                                           # fh02 (head)
 python -m app.scripts.users create-attribution --username eunice-frazer-helper --display-name "Eunice Frazer Helper"
 sudo systemctl start rto-web && systemctl is-active rto-web     # active; then open /login
 ```
@@ -218,7 +222,7 @@ The check must print the three approved layouts, `coverage_checkpoint: null` and
 
 **5. First update.** With Frazer signed in on its main screen, double-click **Update RTO Records**. Expect: period 2026-11-01 through today, dates read back in Frazer; COMPLETE. Then check:
 - *Frazer Intake:* three new uploads attributed to Eunice Frazer Helper; on the Helper page the run is complete.
-- *Monthly Review, November:* as rehearsed with the Nov 12 exports, **25 payment entries $11,252.70 and 13 Late Fee entries $619.00** through Nov 12 (later days add to this), under an **"Unreconciled total"** banner, and one entry listed as no longer in the later export: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, still counted, with an open issue under *Needs attention*. Frazer's own export for the same days holds 24 payment entries, $9,652.70.
+- *Monthly Review, November:* as rehearsed with the Nov 12 exports, **25 payment entries $11,252.70 and 13 Late Fee entries $619.00** through Nov 12 (later days add to this), under an **"Unreconciled total"** banner, and one entry listed as no longer in the later export: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, still counted, with an open issue under *Needs attention*. Frazer's own export for the same days holds 24 payment entries, $9,652.70. Look the entry up in Frazer, then record a decision on the page (keep or exclude, with a reason); after an exclude decision the page shows 24 and $9,652.70 with the decision, reviewer and reason visible, and the notice that the month is not reconciled. Do not close the issue first expecting the label to clear: it will not.
 - If it ends PARTLY DONE, fix what it names and click again the same day.
 
 **6. Afterwards.** Tag and write the release notes as `docs/releases.md` describes (a migration makes it a MINOR version); push only then. Delete `config.staging.json` on Eunice. The staging services can be stopped once nobody needs them.
@@ -226,7 +230,7 @@ The check must print the three approved layouts, `coverage_checkpoint: null` and
 **Rollback, mildest first.**
 1. *Stop the helper only:* Helper page > Revoke (or `python -m app.scripts.users disable eunice-frazer-helper`). The shortcut then reports that the app refused its token and changes nothing. Uploads already stored are ordinary intake evidence and can stay.
 2. *Point Eunice back at staging:* `Copy-Item C:\FrazerHelper\config.staging.json C:\FrazerHelper\config.json`.
-3. *Remove the code and tables:* `sudo systemctl stop rto-web`, disable the account, `alembic downgrade vr01` **while the new code is still checked out**, then `git switch --detach b3b1a2c && sudo systemctl start rto-web`. Uploads the helper made stay and the old code reads them (rehearsed). Run history and tokens are lost. Fix forward on a branch; never force-push `main`.
+3. *Remove the code and tables:* `sudo systemctl stop rto-web`, disable the account, `alembic downgrade vr01` (it passes `fh02`, which **drops reviewer decisions**: copy them out first if any were recorded) **while the new code is still checked out**, then `git switch --detach b3b1a2c && sudo systemctl start rto-web`. Uploads the helper made stay and the old code reads them (rehearsed). Run history and tokens are lost. Fix forward on a branch; never force-push `main`.
 4. *Restore the backup from step 1* (`docs/backup_recovery.md`) only if the data itself is wrong; it discards everything entered since the backup, including purchases, so prefer 1 to 3.
 
 ## Staging demonstration (2026-11-10, Eunice, staging copy only)

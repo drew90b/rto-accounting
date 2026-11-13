@@ -12,13 +12,15 @@ financial source data and nothing here verifies, reconciles or closes a month.
   review_source_records append-only attestations that a record exists outside the app (coverage dates, where kept)
   review_issue_files    append-only supporting files on an issue (admins and the issue's owner)
   review_step_marks     append-only close-step confirmations, reviews and not-applicable decisions (latest per kind wins)
+  review_entry_decisions append-only reviewer decisions to keep or exclude, in Monthly Review totals, a Frazer entry that a later
+                        export no longer lists (latest per entry wins; the source upload and entry are never touched)
 
 Listeners at the bottom refuse any DELETE, any UPDATE of an insert-only table, and any UPDATE of an issue's fixed columns.
 """
 from datetime import datetime
 
 from sqlalchemy import (
-    JSON, Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect,
+    JSON, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect,
 )
 from sqlalchemy.orm import relationship
 
@@ -143,13 +145,40 @@ class ReviewIssueFile(Base):
     user = relationship("User", foreign_keys=[user_id])
 
 
+class ReviewEntryDecision(Base):
+    """A reviewer's decision about one Frazer transaction entry that an earlier upload holds and a later export covering its date does
+    not list: keep it in the Monthly Review totals or exclude it from them. It changes only what the totals count. The entry and its
+    upload are never edited, deleted or merged. Latest decision per Sequential ID wins, and it applies only while the entry's last
+    holding upload is still `last_held_upload_id` (if a later export lists the entry again the decision lapses and is shown as lapsed)."""
+    __tablename__ = "review_entry_decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    identity = Column(String(40), nullable=False, index=True)               # Frazer Sequential ID
+    choice = Column(String(10), nullable=False)                              # keep | exclude
+    reason = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    # what the reviewer was shown, kept as it was
+    last_held_upload_id = Column(Integer, ForeignKey("frazer_uploads.id"), nullable=False)
+    held_in_json = Column(JSON, nullable=False, default=list)                # [[upload_id, pk], ...]
+    not_listed_in_json = Column(JSON, nullable=False, default=list)          # [[upload_id, pk], ...]
+    entry_date = Column(Date, nullable=False)
+    amount = Column(String(20), nullable=False)
+    description = Column(String(120), nullable=False, default="")
+    entry_class = Column(String(30), nullable=False, default="")
+    basis = Column(Text, nullable=False, default="")                         # why the app could not establish comparability itself
+
+    user = relationship("User", foreign_keys=[user_id])
+    __table_args__ = (CheckConstraint("choice in ('keep', 'exclude')", name="ck_review_entry_decision_choice"),)
+
+
 class ImmutableReviewRecordError(RuntimeError):
     pass
 
 
 _FIXED_ISSUE_COLUMNS = {"month", "kind", "auto_key", "category", "checklist_ref", "restricted", "title", "description",
                         "links_json", "created_by_user_id", "created_at"}
-_INSERT_ONLY = (ReviewIssueEvent, ReviewNote, ReviewSourceRecord, ReviewStepMark, ReviewIssueFile)
+_INSERT_ONLY = (ReviewIssueEvent, ReviewNote, ReviewSourceRecord, ReviewStepMark, ReviewIssueFile, ReviewEntryDecision)
 
 
 def _refuse_delete(mapper, connection, target):

@@ -12,7 +12,7 @@ from app.models.invoice import Invoice, InvoiceItem
 from app.models.purchase import Purchase
 from app.models.user import User
 from app.models.purchase_event import PurchaseEvent
-from app.models.monthly_review import ReviewIssue, ReviewIssueEvent, ReviewNote, ReviewSourceRecord, ReviewStepMark, ReviewIssueFile
+from app.models.monthly_review import ReviewIssue, ReviewIssueEvent, ReviewNote, ReviewSourceRecord, ReviewStepMark, ReviewIssueFile, ReviewEntryDecision
 from app.models.frazer_intake import FrazerUpload, FrazerSourceRow, FrazerUploadException, FrazerUploadNote
 from app.models.opening_snapshot import (
     OpeningSnapshot, OpeningFigure, OpeningFigureEntry, OpeningFigureEvidence,

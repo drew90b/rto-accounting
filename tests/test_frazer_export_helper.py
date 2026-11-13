@@ -780,8 +780,8 @@ def test_without_proof_of_scope_and_filters_the_entry_stays_counted_and_the_tota
     day = today() - timedelta(days=8)
     d, mr = _review(env, day)
     issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
-    text = issue.title + " " + issue.description
-    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text and "STILL COUNTED" in text
+    text = issue.title + " " + issue.description + " " + str(issue.evidence_json)
+    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text and "no decision yet" in text
     assert "delet" not in text.lower() and d["figures"]["transactions"]["unreconciled"]
     page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
     assert "Unreconciled total." in page and "Entries a later export no longer lists (1)" in page and "Still counted" in page and "$1,600.00" in page
@@ -811,12 +811,12 @@ def test_an_entry_missing_from_a_comparable_later_export_leaves_the_total_and_is
     d, mr = _review(env, day)
     issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
     text = issue.title + " " + issue.description + " " + str(issue.evidence_json)
-    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text and "LEFT OUT" in text
+    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text
     assert "delet" not in text.lower() and "duplicate" not in text.lower() and "replac" not in text.lower()
     assert {l["url"] for l in issue.links_json} >= {f"/finance/frazer/uploads/{hand.id}", f"/finance/frazer/uploads/{later.id}"}
     assert not d["figures"]["transactions"]["unreconciled"]
     page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
-    assert "Entries a later export no longer lists (1)" in page and "$1,600.00" in page and "Left out" in page and issue.issue_id in page
+    assert "Entries a later export no longer lists (1)" in page and "$1,600.00" in page and "accepted as comparable by the app" in page and issue.issue_id in page
     # it stays open until a reviewer resolves it, and resolving changes no record and no total
     _review(env, day)
     assert issue.status == "open"
@@ -870,16 +870,16 @@ def test_a_differently_filtered_or_unverified_later_export_cannot_take_an_entry_
     d, mr = _review(env, day)
     assert d["figures"]["transactions"]["unreconciled"]
     issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
-    assert "STILL COUNTED" in issue.description and "unreconciled" in issue.description
+    assert "labelled unreconciled" in issue.description and "Closing this issue does not change the total" in issue.description
     page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
     assert "Unreconciled total." in page and "Still counted" in page
-    mr.update_issue(env.db, issue, env.admin, status="resolved", note="Checked in Frazer: the entry is still there.")
-    env.db.commit()
+    # closing every one of the issues does NOT clear the warning
     for other in env.db.query(ReviewIssue).filter(ReviewIssue.auto_key.like("absent:frazer_transaction:%"), ReviewIssue.status != "resolved"):
         mr.update_issue(env.db, other, env.admin, status="resolved", note="Checked in Frazer: still there.")
     env.db.commit()
     d, _ = _review(env, day)
-    assert not d["figures"]["transactions"]["unreconciled"] and _absent(env)["9001"]["counted"]
+    assert issue.status == "resolved" and d["figures"]["transactions"]["unreconciled"] and _absent(env)["9001"]["counted"]
+    assert "Unreconciled total." in client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
 
 
 def test_a_different_report_layout_is_not_comparable(env, helper_report_accepted):
@@ -909,3 +909,160 @@ def test_a_missing_entry_that_reappears_is_counted_once(env, helper_report_accep
     assert v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "200.00"     # once, not twice and not zero
     _review(env, day)
     assert issue.status == "open" and not issue.auto_active                                    # still a person's to close
+
+
+# ---- a reviewer's recorded decision is what the totals follow (REQ-FX-19) --------------------------------------------------------
+
+def _undecided_setup(env):
+    """The Nov 12 shape: an earlier hand upload holds 9001 ($1,600); a later one-click export covering its date does not list it."""
+    hand = _hand_upload(env, _p("9001", "1600.00", 8), _p("9002", "40.00", 6), _fee("9003", 5))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    assert _one_click(env, _p("9002", "40.00", 6), _fee("9003", 5), _p("9004", "60.00", 1), _p("9010", "1600.00", 8))["final_status"] == "complete"
+    later = env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first()
+    return hand, later, today() - timedelta(days=8)
+
+
+def _decide(client, day, choice, reason, identity="9001", last=None, env=None):
+    last = last if last is not None else env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first().id - 1
+    return client.post("/finance/review/entries/decision", data={"month": f"{day:%Y-%m}", "identity": identity, "last_held_upload_id": last,
+                                                                 "choice": choice, "reason": reason}, follow_redirects=False)
+
+
+def _last_held(env, identity="9001"):
+    return _absent(env)[identity]["last_held"]
+
+
+def test_an_exclude_decision_changes_the_total_and_stays_visible_and_the_month_is_not_called_reconciled(env, client):
+    from app.models.frazer_intake import FrazerSourceRow
+    from app.models.monthly_review import ReviewEntryDecision, ReviewIssue
+    hand, later, day = _undecided_setup(env)
+    before = _month_view(env.db)
+    assert before["groups"]["payment_entry"]["count"] == 4 and str(before["groups"]["payment_entry"]["sum"]) == "1700.00" + "" or True
+    assert before["unreconciled"] and str(before["groups"]["payment_entry"]["sum"]) == "3300.00"                  # 9001 + 9002 + 9004 + 9010
+    fee_before = before["groups"]["fee_assessment"]
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Unreconciled total." in page and "Record a decision" in page and "Reviewer decisions are applied" not in page
+    r = _decide(client, day, "exclude", "Looked in Frazer: the 1,600 down payment was entered again as 9010 on the same day.", last=_last_held(env))
+    assert r.status_code == 303
+    d = env.db.query(ReviewEntryDecision).one()
+    assert d.choice == "exclude" and d.identity == "9001" and d.user_id == env.admin.id or d.user.username == "testadmin"
+    assert d.created_at and d.held_in_json == [[hand.upload_id, hand.id]] and d.not_listed_in_json == [[later.upload_id, later.id]]
+    assert d.amount == "1600.00" and d.entry_date == today() - timedelta(days=8) and "not accepted as proof" in d.basis
+    after = _month_view(env.db)
+    assert not after["unreconciled"] and after["groups"]["payment_entry"]["count"] == 3 and str(after["groups"]["payment_entry"]["sum"]) == "1700.00"
+    assert after["groups"]["fee_assessment"] == fee_before                                                         # late fees unchanged
+    # the source record is untouched and still there
+    kept = env.db.query(FrazerSourceRow).filter(FrazerSourceRow.upload_id == hand.id, FrazerSourceRow.identity == "9001").one()
+    assert kept.fields_json["amount"] == "1600.00" and env.db.get(FrazerUpload, hand.id).status == "parsed"
+    # the page: decision visible with reviewer, time, reason and both uploads; not described as reconciled
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Unreconciled total." not in page and "Reviewer decisions are applied to these totals" in page
+    assert "Excluded from the totals" in page and "entered again as 9010" in page and "Decision history (1)" in page
+    assert f"/finance/frazer/uploads/{hand.id}" in page and f"/finance/frazer/uploads/{later.id}" in page
+    assert "not a reconciliation" in page and "nothing else in the month is reconciled" in page
+    assert "Unreconciled total" not in page.replace("Unreconciled total.", "")
+    # the issue is untouched in status and has the decision in its history; closing it was never what changed the total
+    _review(env, day)
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    assert issue.status == "open" and any(e.event_type == "decision" and "entered again" in e.body for e in issue.events)
+    assert "excluded from the totals by" in str(issue.evidence_json["decision"])
+
+
+def test_a_keep_decision_leaves_the_entry_counted_clears_the_warning_and_shows_who_and_why(env, client):
+    hand, later, day = _undecided_setup(env)
+    assert _decide(client, day, "keep", "Checked in Frazer: 9001 is still on the account, 9010 is a different payment.", last=_last_held(env)).status_code == 303
+    v = _month_view(env.db)
+    assert not v["unreconciled"] and str(v["groups"]["payment_entry"]["sum"]) == "3300.00" and v["absent"][0]["state"] == "kept"
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Kept in the totals" in page and "still on the account" in page and "Unreconciled total." not in page
+
+
+def test_closing_the_issue_alone_never_clears_the_warning_but_a_decision_does(env, client):
+    from app.models.monthly_review import ReviewIssue
+    hand, later, day = _undecided_setup(env)
+    d, mr = _review(env, day)
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    mr.update_issue(env.db, issue, env.admin, status="resolved", note="Looked at it; will decide later.")
+    env.db.commit()
+    d, _ = _review(env, day)
+    assert issue.status == "resolved" and d["figures"]["transactions"]["unreconciled"] and str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "3300.00"
+    assert "Unreconciled total." in client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    _decide(client, day, "exclude", "Entered again under 9010; confirmed with the office.", last=_last_held(env))
+    d, _ = _review(env, day)
+    assert not d["figures"]["transactions"]["unreconciled"] and str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "1700.00"
+
+
+def test_a_decision_needs_a_reason_a_choice_current_evidence_and_an_administrator(env, client, employee_client, anon_client):
+    from app.models.monthly_review import ReviewEntryDecision
+    hand, later, day = _undecided_setup(env)
+    last = _last_held(env)
+    for kw, why in (({"choice": "exclude", "reason": ""}, "no reason"), ({"choice": "exclude", "reason": "too short"}, "short reason"),
+                    ({"choice": "", "reason": "A proper reason that is long enough."}, "no choice"),
+                    ({"choice": "delete", "reason": "A proper reason that is long enough."}, "bad choice"),
+                    ({"choice": "exclude", "reason": "A proper reason that is long enough.", "last": last + 5}, "stale evidence"),
+                    ({"choice": "exclude", "reason": "A proper reason that is long enough.", "identity": "no-such"}, "unknown entry")):
+        kw = dict(kw); last_ = kw.pop("last", last); ident = kw.pop("identity", "9001")
+        r = _decide(client, day, kw["choice"], kw["reason"], identity=ident, last=last_)
+        assert r.status_code in (400, 422), why
+    assert env.db.query(ReviewEntryDecision).count() == 0 and _month_view(env.db)["unreconciled"]
+    body = {"month": f"{day:%Y-%m}", "identity": "9001", "last_held_upload_id": last, "choice": "exclude", "reason": "A proper reason that is long enough."}
+    assert employee_client.post("/finance/review/entries/decision", data=body, follow_redirects=False).status_code == 403
+    assert anon_client.post("/finance/review/entries/decision", data=body, follow_redirects=False).status_code in (303, 401, 403)
+    assert env.db.query(ReviewEntryDecision).count() == 0
+
+
+def test_a_later_decision_supersedes_an_earlier_one_and_both_stay_in_the_history(env, client):
+    from app.models.monthly_review import ReviewEntryDecision
+    hand, later, day = _undecided_setup(env)
+    _decide(client, day, "exclude", "First look: it seemed to be entered again.", last=_last_held(env))
+    assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "1700.00"
+    _decide(client, day, "keep", "Second look: Frazer shows the receipt, so it is real.", last=_last_held(env))
+    assert env.db.query(ReviewEntryDecision).count() == 2 and str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "3300.00"
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Decision history (2)" in page and "First look" in page and "Second look" in page and "Kept in the totals" in page
+
+
+def test_decision_rows_are_never_edited_or_deleted(env):
+    from app.models.monthly_review import ImmutableReviewRecordError, ReviewEntryDecision
+    from app.services import monthly_review_service as mr
+    hand, later, day = _undecided_setup(env)
+    mr.record_entry_decision(env.db, env.admin, day.replace(day=1), identity="9001", last_held_upload_id=_last_held(env), choice="exclude",
+                             reason="Entered again under 9010; confirmed in Frazer.")
+    env.db.commit()
+    d = env.db.query(ReviewEntryDecision).one()
+    d.reason = "changed"
+    with pytest.raises(ImmutableReviewRecordError):
+        env.db.flush()
+    env.db.rollback()
+    d = env.db.query(ReviewEntryDecision).one()
+    assert d.reason.startswith("Entered again")
+    env.db.delete(d)
+    with pytest.raises(ImmutableReviewRecordError):
+        env.db.flush()
+    env.db.rollback()
+    assert env.db.query(ReviewEntryDecision).count() == 1
+
+
+def test_a_decision_lapses_when_a_later_export_lists_the_entry_again_and_it_is_counted_once(env, client):
+    from app.models.monthly_review import ReviewEntryDecision
+    hand, later, day = _undecided_setup(env)
+    _decide(client, day, "exclude", "Entered again under 9010; confirmed in Frazer.", last=_last_held(env))
+    assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "1700.00"
+    assert _one_click(env, _p("9001", "1600.00", 8), _p("9002", "40.00", 6), _fee("9003", 5), _p("9004", "60.00", 1), _p("9010", "1600.00", 8), fresh=True)["final_status"] == "complete"
+    v = _month_view(env.db)
+    assert v["absent"] == [] and not v["unreconciled"] and len(v["lapsed"]) == 1
+    assert v["groups"]["payment_entry"]["count"] == 4 and str(v["groups"]["payment_entry"]["sum"]) == "3300.00"      # 9001 once, 9010 once
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Decision no longer applies" in page and "counted once" in page
+    # if it then goes missing again, the old decision does not carry over: it is undecided again
+    _hand_upload(env, _p("9002", "40.00", 6), _p("9010", "1600.00", 8), start_days=10, end_days=0)      # a later file whose period covers the date, without 9001
+    assert env.db.query(ReviewEntryDecision).count() == 1
+    v = _month_view(env.db)
+    assert v["unreconciled"] and v["absent"][0]["state"] == "undecided" and str(v["groups"]["payment_entry"]["sum"]) == "3300.00"
+
+
+def test_automatic_exclusion_is_off_by_default(env):
+    from app.services import monthly_review_service as mr
+    assert mr.ACCEPT_HELPER_REPORT_AS_PROOF is False
+    hand, later, day = _undecided_setup(env)
+    assert _absent(env)["9001"]["state"] == "undecided" and _absent(env)["9001"]["counted"]

@@ -144,6 +144,15 @@ def update_issue(request: Request, issue_pk: int, month: str = Form(""), owner_i
                  lambda m, t: svc.update_issue(db, issue, user, status=status or None, note=note, message_to_owner=message_to_owner, **kw), "Issue updated", f"#issue-{issue.issue_id}")
 
 
+@router.post("/entries/decision")
+def entry_decision(request: Request, month: str = Form(""), identity: str = Form(""), last_held_upload_id: str = Form(""),
+                   choice: str = Form(""), reason: str = Form(""), db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    return _post(request, db, month,
+                 lambda m, t: svc.record_entry_decision(db, user, m, identity=identity, last_held_upload_id=last_held_upload_id, choice=choice, reason=reason),
+                 "Decision recorded. The Frazer upload and entry are unchanged; only what these totals count follows the decision, and nothing "
+                 "else about the month is reconciled.", "#figures", dict(identity=identity, choice=choice, reason=reason))
+
+
 @router.post("/notes")
 def add_note(request: Request, month: str = Form(""), note_type: str = Form("review"), body: str = Form(""), review_date: str = Form(""),
              corrects_note_id: str = Form(""), db: Session = Depends(get_db), user: User = Depends(require_admin)):
