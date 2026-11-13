@@ -1,6 +1,6 @@
 # "Update RTO Records": operator, installation and recovery guide
 
-**Status (2026-11-12):** release candidate on the local branch `release/frazer-helper-rc1` (current `main` plus this work); **not merged, not deployed**, no production upload. The first production runs were rehearsed on a disposable copy of production ("First production run" below); the steps to release are in "Release runbook". Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The packaged installer, driver and window were run on the Eunice computer against a protected staging copy on 2026-11-10 (results in "Staging demonstration" below). Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
+**Status (2026-11-13):** release candidate on the local branch `release/frazer-helper-rc1` (current `main` plus this work); **not merged, not deployed**, no production upload. The first production runs were rehearsed on a disposable copy of production ("First production run" below); the steps to release are in "Release runbook". Server side and the helper's logic are tested (`tests/test_frazer_export_helper.py`, synthetic files). The packaged installer, driver and window were run on the Eunice computer against a protected staging copy on 2026-11-10 (results in "Staging demonstration" below). Spec: [`specs/frazer-export-helper-spec.md`](specs/frazer-export-helper-spec.md). Needs migration `fh01` (three small tables, no customer data).
 
 ## What it is
 
@@ -154,21 +154,59 @@ Production holds three hand uploads from Nov 8 (vehicles 108 rows, balances 64, 
 
 **One narrow limit seen in rehearsal.** In "I will run the exports myself" mode a file written up to about two seconds before the update started is treated as fresh. A person cannot hit that by hand, and the one-click mode measures from the moment it starts driving Frazer.
 
+## Known issue before release: a payment deleted and entered again in Frazer is counted twice (seen 2026-11-12, staging)
+
+Checked 2026-11-13 on the staging copy, read-only, after the two complete Eunice updates of Nov 12 (periods Nov 3 to Nov 12, 35 rows, and Nov 5 to Nov 12, 26 rows):
+
+| | Payment entries | Late Fee entries |
+|---|---|---|
+| The two Nov 12 exports, distinct Sequential IDs (61 rows, 35 distinct; the 26 shared entries are identical) | 22, $8,947.70 | 13, $619.00 |
+| Monthly Review, November (5 transaction uploads, 247 rows read, 38 entries in the month, none revised or unreadable) | 25, $11,252.70 | 13, $619.00 |
+| Difference | 3, $2,305.00 | 0 |
+
+Overlap itself is handled: no entry is counted twice because it arrived in several files. The difference is three payment entries held from earlier uploads and not in the Nov 12 exports:
+
+- **Two, dated Nov 2 ($705.00 together):** before the Nov 3 start of those exports. Correctly counted.
+- **One, dated Nov 3, a $1,600.00 Down Payment:** it was in three earlier uploads, including the Nov 8 hand upload, and is **no longer in Frazer's export for a period that covers its date.** The Nov 12 export instead holds a Down Payment for the same stock number, date, amount and remaining balance under a new Sequential ID, entered in Frazer on Nov 12. The upload result said so ("1 entry that an earlier upload has inside this period is not in this file"), but Monthly Review still counts both: November payment entries are **$1,600.00 higher than what Frazer now holds** (24 entries, $9,652.70 for Nov 1 to Nov 12).
+
+**Production will show the same thing on its first run**, because its Nov 8 upload contains that earlier entry. Nothing is posted and no record is changed by this; it is a wrong figure on the Monthly Review page until handled. Whether an entry that has disappeared from a later export of its own date should leave the totals (listed for a person, like a revised entry) is a rule for the owner to decide; it is not built.
+
 ## Release runbook (only after explicit approval; nothing here has been run on production)
 
 Run on ubuntu-dev in `/home/drew/projects/rto` unless it says Eunice. Production is `rto-web` (systemd) on `100.123.116.111:8000`, schema `vr01`.
 
-**1. Backup.** `sudo systemctl start rto-backup`, then check `systemctl status rto-backup --no-pager` shows success and note the newest folder in `/home/drew/rto-backups/auto/` (it must be from this minute; it restores itself into a throwaway cluster and fails loudly if that does not match). Also note the running commit: `git rev-parse --short HEAD` (expected `b3b1a2c`).
+**1. Stop the app, then back up.** Nothing below runs while `rto-web` is serving: the checkout is not switched and the database is not migrated under a running app, and nothing can be entered between the backup and the change.
+```
+sudo systemctl stop rto-web && systemctl is-active rto-web      # must print: inactive
+git status --short && git rev-parse --short HEAD                # clean apart from untracked notes; expected b3b1a2c
+sudo systemctl start rto-backup && systemctl status rto-backup --no-pager | head -5
+ls -t /home/drew/rto-backups/auto/ | head -1                    # a folder from this minute
+```
+The backup restores itself into a throwaway cluster and fails loudly if that does not match. Do not go on unless it succeeded.
 
-**2. Code and migration.**
+**2. Code and migration (app still stopped).**
 ```
 git switch main && git merge --ff-only release/frazer-helper-rc1
 source .venv/bin/activate && alembic upgrade head        # vr01 -> fh01: three new tables, nothing else changes
 alembic current                                           # fh01 (head)
 python -m app.scripts.users create-attribution --username eunice-frazer-helper --display-name "Eunice Frazer Helper"
-sudo systemctl restart rto-web && systemctl is-active rto-web
+sudo systemctl start rto-web && systemctl is-active rto-web     # active; then open /login
 ```
-**3. In the app, as an administrator** (*Finance > Frazer Intake > Helper page*): approve the column layout of each of the three Nov 8 uploads; create a token labelled for Eunice, attributed to *Eunice Frazer Helper*; copy it (shown once; keep it out of Git, chat and this document).
+**3. In the app, as an administrator** (*Finance > Frazer Intake > Helper page*).
+
+*Approve the three column layouts.* In "Approved column layouts" choose each upload in turn and press *Approve this upload's columns*. After each, the list above the button must read exactly:
+
+| Export | Approve | Must then show |
+|---|---|---|
+| Customer balances | `FU-0001` | approved from upload #1 (**38 columns**) |
+| Payment transactions | `FU-0002` | approved from upload #2 (**24 columns**) |
+| Vehicle list | `FU-0003` | approved from upload #3 (**22 columns**) |
+
+Checked 2026-11-13 (header rows only): production's `FU-0002` has the same 24 column headings, in the same order, as the file the saved export `frazer-payment-transactions` produced on Eunice on Nov 12, and likewise 38 and 22 for the other two. Production holds no 26-column transaction upload; 26 columns is an older transaction layout (with two more columns at the end) that the current saved export does not produce. Transaction rows carry one empty cell after the last column; the parser notes it and it is not a column.
+
+If the transaction line shows any number other than 24 (for example 26), **do not go on and do not approve a wider layout to make it pass.** Instead run the saved export *File 2, frazer-payment-transactions* by hand in Frazer, upload that file in Frazer Intake as a transaction export with its period, check its preview, and approve that upload. The helper compares every heading in order, so a 26-column approval would make it refuse every file the current export writes, and a 24-column approval refuses anything else.
+
+*Create the token.* Label it for Eunice, attribute it to `eunice-frazer-helper`, and choose how long it is valid (the form offers 90 days, at most 365; the helper stops with "refused this computer's token" when it expires, and a new one goes into `config.json`). Copy it: it is shown once. Keep it out of Git, chat and this document.
 
 **4. Switch the Eunice shortcut** (Windows PowerShell on Eunice, as `steve`). The shortcut itself does not change; it reads `C:\FrazerHelper\config.json`. Only three values change, and Frazer's saved exports are not touched. Do not run a staging update on the same day before switching.
 ```powershell
@@ -187,7 +225,7 @@ The check must print the three approved layouts, `coverage_checkpoint: null` and
 **Rollback, mildest first.**
 1. *Stop the helper only:* Helper page > Revoke (or `python -m app.scripts.users disable eunice-frazer-helper`). The shortcut then reports that the app refused its token and changes nothing. Uploads already stored are ordinary intake evidence and can stay.
 2. *Point Eunice back at staging:* `Copy-Item C:\FrazerHelper\config.staging.json C:\FrazerHelper\config.json`.
-3. *Remove the code and tables:* disable the account, `alembic downgrade vr01` **while the new code is still checked out**, then `git switch --detach b3b1a2c && sudo systemctl restart rto-web`. Uploads the helper made stay and the old code reads them (rehearsed). Run history and tokens are lost. Fix forward on a branch; never force-push `main`.
+3. *Remove the code and tables:* `sudo systemctl stop rto-web`, disable the account, `alembic downgrade vr01` **while the new code is still checked out**, then `git switch --detach b3b1a2c && sudo systemctl start rto-web`. Uploads the helper made stay and the old code reads them (rehearsed). Run history and tokens are lost. Fix forward on a branch; never force-push `main`.
 4. *Restore the backup from step 1* (`docs/backup_recovery.md`) only if the data itself is wrong; it discards everything entered since the backup, including purchases, so prefer 1 to 3.
 
 ## Staging demonstration (2026-11-10, Eunice, staging copy only)
@@ -200,4 +238,5 @@ Counts and totals only; no production system was written to (production still ha
 | Update 1 (first run) | Period 2026-10-01 through 2026-11-10, dates read back in Frazer. Vehicles 108 rows, balances 64 rows, transactions 140 rows, all stored; 0 unreadable rows; all 140 stock numbers found in the vehicle list; 102 payment entries, 37 Late Fee entries, 1 ungrouped. The 22 entries of the hand-uploaded Nov 8 file were all present and identical. Reconciliation synced; no new question. |
 | Update 2 (minutes later) | Period 2026-11-03 through 2026-11-10 (7 days before the last accepted end). Vehicles and balances identical, nothing stored. Transactions stored (24 rows), every entry identical to one already held; distinct entries unchanged at 102 / 37 / 1. No new snapshot, question, decision or event. |
 | Update 3 | Same period; all three files identical; nothing stored. Run with the Frazer window minimised, which the helper restored. |
+| Nov 11 and 12 (driver fix) | Seven updates on Nov 11 stopped before touching Frazer with "Another Frazer screen is open": the remote display had an untitled 40x40 window parked at -10000,-10000. Nothing was stored and the checkpoint did not move. The driver now ignores only a window that is untitled apart from the session suffix, at most 100x100 and far off screen; any other extra window still stops it, described and pictured. With that driver two updates completed on Nov 12: period Nov 3 to Nov 12 (vehicles 108, balances 64, transactions 35 rows stored), then Nov 5 to Nov 12 (vehicles and balances identical, transactions 26 rows, all unchanged). |
 | Failed attempts | Three attempts made with Frazer minimised (before the fix) stopped in about a second with "Frazer is not open"; nothing was stored and the checkpoint did not move. |
