@@ -1020,6 +1020,7 @@ def test_a_later_decision_supersedes_an_earlier_one_and_both_stay_in_the_history
     assert env.db.query(ReviewEntryDecision).count() == 2 and str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "3300.00"
     page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
     assert "Decision history (2)" in page and "First look" in page and "Second look" in page and "Kept in the totals" in page
+    assert page.index("Second look") < page.index("First look")                                    # newest first
 
 
 def test_decision_rows_are_never_edited_or_deleted(env):
