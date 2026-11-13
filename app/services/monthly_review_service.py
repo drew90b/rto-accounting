@@ -8,13 +8,9 @@ writes only the four review_* tables (REQ-MR-14).
 Rules this module enforces:
   * Figures come from supported data only; a missing input is explained, never shown as $0.
   * Frazer transaction totals use the union of uploads by Sequential ID, so overlapping or repeated uploads count once.
-  * An entry that a LATER export covering its date no longer contains is never removed or merged. It leaves the provisional total
-    only when that later export is complete and comparable (see _not_comparable); otherwise it stays in and the total is labelled
-    unreconciled. Either way it is raised for a person and stays open until they resolve it.
-    Entries whose content differs between uploads (or that carry errors) are excluded and listed (DEC-42).
-  * A snapshot date is not transaction coverage; a declared range is "as declared, not verified".
-  * Automatic evidence is stored apart from human decisions; a cleared condition is flagged, never auto-resolved.
-  * Payroll is restricted: no amounts or names, in text we generate or text we accept.
+  * An entry that a LATER export covering its date no longer contains is never removed or merged. It would leave the provisional
+    total only if that later export were established as complete and comparable (see _not_comparable); the app does not hold that
+    evidence today, so it stays in and the total is labelled unreconciled. It is raised for a person and stays open until resolved.
 """
 import re
 from collections import defaultdict
@@ -147,17 +143,24 @@ def _helper_results(db: Session) -> dict:
     return out
 
 
+# Whether what the helper REPORTS about a file (created by the one-click saved export; the period read back from Frazer) is accepted as
+# proof of that file's scope and filters. The app cannot check either itself: it sees the file, not Frazer's screen, and the helper
+# specification records these statements "as stated, not trusted as proof" (REQ-FX-03, DEC-41). So this is False, and an entry a later
+# export no longer lists is never taken out of a total automatically. Turning it on is an owner decision (helper spec, s7).
+ACCEPT_HELPER_REPORT_AS_PROOF = False
+
+
 def _not_comparable(later: FrazerUpload, holders: list, kind: tuple, facts: dict) -> Optional[str]:
     """Why `later` cannot show that an entry held by `holders` is gone from Frazer, or None when it can.
 
-    It can only when it is established that the later export would have listed the entry had Frazer still held it:
-      complete     every row of the later file was read (no error rows);
-      same report  its column headings equal, in order, those of every upload that holds the entry;
-      same scope   it was created by the helper's one-click saved export, whose settings are checked on screen before each export,
-                   for a period that was read back from Frazer and equals the period declared for the file;
-      same filters it holds at least one other entry of the same kind (class and Frazer transaction type), so that kind is not
-                   filtered out of it.
-    A file uploaded by hand, or created by a person running the saved export, proves none of the scope: not comparable."""
+    What the app can check for itself:
+      complete     every row of the later file was read (no error rows). Not known: that the file holds everything Frazer has.
+      same report  its column headings equal, in order, those of every upload that holds the entry.
+      same kind    it lists at least one other entry of the same class and Frazer transaction type (so that kind is not filtered out).
+    What it only has the helper's word for:
+      scope        that Frazer applied the declared period (the helper reports the dates it read back from Frazer's fields);
+      filters      that the saved export's settings were the usual ones (the helper checks them on screen and reports one-click mode).
+    The first three must hold in every case. The last two are needed too, and count only if ACCEPT_HELPER_REPORT_AS_PROOF."""
     if later.id in facts["errors"]:
         return "the later export has rows that could not be read, so it is not complete"
     res = facts["helper"].get(later.id)
@@ -172,6 +175,9 @@ def _not_comparable(later: FrazerUpload, holders: list, kind: tuple, facts: dict
         return "the later export has different columns, so it is not the same report"
     if kind not in facts["kinds"].get(later.id, set()):
         return "the later export holds no other entry of this kind, so its filters may leave this kind out"
+    if not ACCEPT_HELPER_REPORT_AS_PROOF:
+        return ("what the app can check itself agrees (every row read, same columns, other entries of this kind listed), but that Frazer "
+                "applied this period and the usual filters is only the helper's own report, which is not accepted as proof")
     return None
 
 
@@ -245,8 +251,8 @@ def frazer_transactions(db: Session, period: Period) -> dict:
                 "identity": ident, "date": day, "amount": amt, "entry_class": cls or "unclassified", "description": f.get("description") or "",
                 "held_in": [(h.upload_id, h.id) for h in holders], "missing_from": [(u.upload_id, u.id) for u in missing],
                 "comparable": bool(proof), "counted": not proof,
-                "basis": (f"{proof[0].upload_id} is complete and comparable: one-click saved export, period read back from Frazer, same columns, "
-                          "and it lists other entries of this kind") if proof else "; ".join(f"{k}: {v}" for k, v in reasons.items())})
+                "basis": (f"{proof[0].upload_id} is accepted as complete and comparable: every row read, same columns, other entries of this "
+                          "kind listed, and the helper's report of the period and settings is accepted") if proof else "; ".join(f"{k}: {v}" for k, v in reasons.items())})
             if proof:
                 continue                                    # left out of the provisional total; kept, listed, and raised for a person
         out["in_period"] += 1

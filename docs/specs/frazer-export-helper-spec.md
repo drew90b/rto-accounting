@@ -1,6 +1,6 @@
 # Frazer Export Helper: Companion Specification
 
-**Status:** Draft FX-0.2, 2026-11-10 (adds automatic generation for Hosted Frazer, transaction coverage, naming and the run manifest). Companion to `cash-financial-control-spec.md` (Frazer intake, s19; REQ-FZ-*) and `vehicle-reconciliation-spec.md` (REQ-VR-*). Changes no text in either. **Writes:** its own three tables (`frazer_helper_*`) and whatever the existing intake and reconciliation services write. **Increment:** closing-time upload helper.
+**Status:** Draft FX-0.3, 2026-11-13 (FX-0.2 plus s7: an entry a later export no longer lists; REQ-FX-18, AC-FX-32..36, DEC-FX-07, and two amendments proposed to the governing specification). FX-0.2, 2026-11-10, added automatic generation for Hosted Frazer, transaction coverage, naming and the run manifest. Companion to `cash-financial-control-spec.md` (Frazer intake, s19; REQ-FZ-*) and `vehicle-reconciliation-spec.md` (REQ-VR-*). Changes no text in either. **Writes:** its own three tables (`frazer_helper_*`) and whatever the existing intake and reconciliation services write. **Increment:** closing-time upload helper.
 
 ## 1. Why
 Frazer exports are uploaded by hand through an administrator's browser, so data goes stale unnoticed. The business wants one button, pressed by an authorised employee already signed in to Frazer, that sends the three configured exports (vehicle list, customer balances, transactions). No automated Frazer login; not an unattended schedule. Since FX-0.2 the same click also makes Frazer create the three exports (REQ-FX-14).
@@ -83,3 +83,44 @@ Frazer exports are uploaded by hand through an administrator's browser, so data 
 
 ## 6. Out of scope
 Storing Frazer credentials; unattended scheduling; changing lock, sleep or remote-access settings; reading Frazer's screens beyond the Export Data window; importing into purchases, payments or the ledger; resolving or approving anything in reconciliation; unit profit.
+
+## 7. An entry a later export no longer lists (FX-0.3)
+
+**Observed 2026-11-12 (staging).** A $1,600.00 payment entry dated Nov 3 was in three uploads and is not in a later export whose period covers Nov 3. That export lists an entry with the same stock number, date and amount under another Sequential ID.
+
+**What the existing specifications say.**
+
+| Text | Says | Effect here |
+|---|---|---|
+| REQ-MR-08 (governing spec s20) | Totals are the **union** of the month's uploads by Sequential ID; only entries whose content differs, or with errors, are excluded (DEC-42) | The entry stays in the union and is counted. Taking it out of a total is **not** provided for |
+| REQ-MR-06 | Automatic issues are **limited to** six kinds (a) to (f) | An issue for this case is a seventh kind: **not** provided for |
+| REQ-FZ-09 | For snapshots, records absent from a later one are "reported, not removed" | Same principle; transactions are only "compared by identity" (REQ-FZ-08) |
+| REQ-FX-17, AC-FX-25 | The upload result reports entries an earlier upload has inside the period that the new file lacks; the earlier record is kept | Covers reporting at upload time only |
+| DEC-41; REQ-FX-03; REQ-FX-06 | Declared coverage counts "as declared, not verified"; a driver or operator saying "done" proves nothing; the cutoff is Unknown | What the helper reports about how a file was created is **not proof** |
+
+**REQ-FX-18 (built).** An entry is *not listed later* when an upload newer than the last one holding it has a declared period covering the entry's date and does not contain its Sequential ID. Such an entry: (1) is kept, with its upload, exactly as uploaded, and is never merged with another entry; (2) is listed in Monthly Review with its amount, the uploads that hold it and those that do not; (3) raises one automatic issue per entry, which stays open until a reviewer resolves it and is flagged, never closed, if a later export lists the entry again; (4) **stays in the provisional total, and the total is labelled Unreconciled until the issue is resolved**, unless the later export is established as complete and comparable; (5) is never described as deleted, and no reason is assumed.
+
+**Evidence the app has that a later export is complete and comparable.**
+
+| Needed | Checked by the app itself | Only reported by the helper | Not held at all |
+|---|---|---|---|
+| Complete | Every row read without error; the bytes received are the bytes the helper read | The file had finished being written | That the file holds every entry Frazer has for the period (no count or control total from Frazer) |
+| Same report | Column headings equal the approved layout and the earlier upload's, in order | | |
+| Same scope (period) | The declared period equals the period the app asked for; dates in the file fall inside it | The dates read back from Frazer's fields before the export | What period Frazer actually applied |
+| Same filters | The file lists other entries of the same class and transaction type | One-click mode, in which the driver checks the saved export's settings on screen | What the saved export's settings include or leave out; whether Frazer omits some entries (voided, reversed) by design |
+
+Scope and filters therefore rest on the helper's own report. Under the texts above that is not proof, so **comparability is not established for any upload today**, and rule (4) keeps the entry counted and the total Unreconciled. The code holds this as one switch (`ACCEPT_HELPER_REPORT_AS_PROOF`, off).
+
+| ID | Acceptance case | Expected |
+|---|---|---|
+| AC-FX-32 | Entry absent from a later one-click export covering its date; everything the app can check agrees | Still counted; total labelled Unreconciled; listed with amount and both uploads; one open issue; original upload and entry unchanged; no merge |
+| AC-FX-33 | A narrower later export that does not cover the entry's date | Nothing listed; entry counted as before |
+| AC-FX-34 | Later export with unreadable rows, different columns, no entry of that kind, uploaded by hand, or created in "I will run the exports myself" mode | Never excludes, also if DEC-FX-07 is answered yes |
+| AC-FX-35 | The entry is listed again by a still later export | Counted once; issue flagged "condition no longer detected", still open |
+| AC-FX-36 | DEC-FX-07 answered yes (switch on), all checks agree | Left out of the provisional total; still listed; issue open until resolved |
+
+**Proposed amendments to the governing specification (not adopted; for the owner).**
+- *REQ-MR-06:* add "(g) an entry held in an earlier upload that a later export covering its date no longer lists; one issue per entry".
+- *REQ-MR-08:* after "are excluded and listed (DEC-42)" add "An entry that a later export covering its date no longer lists is listed and raised (REQ-MR-06 g) and remains in the union; a total that includes such an entry whose issue is unresolved is labelled *Unreconciled*."
+
+**DEC-FX-07 (open).** What, if anything, lets such an entry leave a total: (a) nothing automatic: a reviewer records what Frazer shows, and a later increment lets that recorded finding decide (default; consistent with DEC-42, where a person decides); (b) accept the helper's report of the period and settings as proof for one-click exports (turns the switch on; conflicts with DEC-41 and REQ-FX-03 unless they are amended). Until answered: (a) without the later increment, so a resolved issue leaves the entry counted.

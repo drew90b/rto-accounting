@@ -756,7 +756,38 @@ def _absent(env):
     return {a["identity"]: a for a in _month_view(env.db)["absent"]}
 
 
-def test_an_entry_missing_from_a_comparable_later_export_leaves_the_total_and_is_raised_for_a_person(env, client):
+@pytest.fixture
+def helper_report_accepted(monkeypatch):
+    """The owner decision that is NOT made today: accept the helper's report of the period and settings as proof."""
+    from app.services import monthly_review_service as mr
+    monkeypatch.setattr(mr, "ACCEPT_HELPER_REPORT_AS_PROOF", True)
+
+
+def test_without_proof_of_scope_and_filters_the_entry_stays_counted_and_the_total_is_unreconciled(env, client):
+    """Today's behaviour. Everything the app can check agrees, but the period and filters are only the helper's word."""
+    from app.models.frazer_intake import FrazerSourceRow
+    from app.models.monthly_review import ReviewIssue
+    hand = _hand_upload(env, _p("9001", "1600.00", 8), _p("9002", "40.00", 6), _fee("9003", 5))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    assert _one_click(env, _p("9002", "40.00", 6), _fee("9003", 5), _p("9004", "60.00", 1), _p("9010", "1600.00", 8))["final_status"] == "complete"
+    later = env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first()
+    v = _month_view(env.db)
+    a = _absent(env)["9001"]
+    assert a["counted"] and not a["comparable"] and "not accepted as proof" in a["basis"]
+    assert a["held_in"] == [(hand.upload_id, hand.id)] and a["missing_from"] == [(later.upload_id, later.id)]
+    assert v["groups"]["payment_entry"]["count"] == 4 and str(v["groups"]["payment_entry"]["sum"]) == "3300.00"     # nothing forced out
+    assert env.db.query(FrazerSourceRow).filter(FrazerSourceRow.upload_id == hand.id, FrazerSourceRow.identity == "9001").count() == 1
+    day = today() - timedelta(days=8)
+    d, mr = _review(env, day)
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    text = issue.title + " " + issue.description
+    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text and "STILL COUNTED" in text
+    assert "delet" not in text.lower() and d["figures"]["transactions"]["unreconciled"]
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Unreconciled total." in page and "Entries a later export no longer lists (1)" in page and "Still counted" in page and "$1,600.00" in page
+
+
+def test_an_entry_missing_from_a_comparable_later_export_leaves_the_total_and_is_raised_for_a_person(env, client, helper_report_accepted):
     from app.models.frazer_intake import FrazerSourceRow
     from app.models.monthly_review import ReviewIssue
     hand = _hand_upload(env, _p("9001", "1600.00", 8), _p("9002", "40.00", 6), _fee("9003", 5))
@@ -796,7 +827,7 @@ def test_an_entry_missing_from_a_comparable_later_export_leaves_the_total_and_is
     assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "1700.00" and "9001" in _absent(env)
 
 
-def test_a_narrower_later_export_leaves_earlier_entries_alone(env):
+def test_a_narrower_later_export_leaves_earlier_entries_alone(env, helper_report_accepted):
     _hand_upload(env, _p("9001", "100.00", 9), _p("9002", "40.00", 2))
     env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
     assert _one_click(env, _p("9001", "100.00", 9), _p("9002", "40.00", 2))["final_status"] == "complete"
@@ -806,7 +837,7 @@ def test_a_narrower_later_export_leaves_earlier_entries_alone(env):
     assert v["absent"] == [] and v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "165.00"
 
 
-def test_an_incomplete_later_export_cannot_take_an_entry_out_of_the_total(env):
+def test_an_incomplete_later_export_cannot_take_an_entry_out_of_the_total(env, helper_report_accepted):
     _hand_upload(env, _p("9001", "100.00", 8), _p("9002", "40.00", 6))
     env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
     rec = _one_click(env, _p("9002", "40.00", 6), _p("", "70.00", 4))                          # a row with no Sequential ID cannot be read
@@ -816,7 +847,7 @@ def test_an_incomplete_later_export_cannot_take_an_entry_out_of_the_total(env):
     assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "140.00"            # 9001 is still counted
 
 
-def test_a_differently_filtered_or_unverified_later_export_cannot_take_an_entry_out_and_the_total_is_unreconciled(env, client):
+def test_a_differently_filtered_or_unverified_later_export_cannot_take_an_entry_out_and_the_total_is_unreconciled(env, client, helper_report_accepted):
     from app.models.monthly_review import ReviewIssue
     _hand_upload(env, _p("9001", "100.00", 6), _fee("9003", 5))
     env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
@@ -851,7 +882,7 @@ def test_a_differently_filtered_or_unverified_later_export_cannot_take_an_entry_
     assert not d["figures"]["transactions"]["unreconciled"] and _absent(env)["9001"]["counted"]
 
 
-def test_a_different_report_layout_is_not_comparable(env):
+def test_a_different_report_layout_is_not_comparable(env, helper_report_accepted):
     wide = fx.build(fx.PAYMENT_HEADER, [_p("9001", "100.00", 8)])                               # the earlier file came from a wider report (26 columns)
     intake.store_upload(env.db, env.admin, file=_Up("hand-wide.csv", wide), coverage_start=(today() - timedelta(days=10)).isoformat(),
                         coverage_end=(today() - timedelta(days=3)).isoformat())
@@ -862,7 +893,7 @@ def test_a_different_report_layout_is_not_comparable(env):
     assert a["counted"] and "not the same report" in a["basis"]
 
 
-def test_a_missing_entry_that_reappears_is_counted_once(env):
+def test_a_missing_entry_that_reappears_is_counted_once(env, helper_report_accepted):
     from app.models.monthly_review import ReviewIssue
     _hand_upload(env, _p("9001", "100.00", 5), _p("9002", "40.00", 4))
     env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
