@@ -74,7 +74,7 @@ How overlap is handled downstream (existing Monthly Review logic, unchanged): en
 **Limits, stated plainly:**
 - The dates are checked *before* the export by reading them back from Frazer's own date fields. The dates found inside the file are only a consistency check: a wrong, narrower period would look the same if no transactions fell on the missing days.
 - An entry edited or backdated more than 62 days back is not re-read automatically.
-- A deleted entry is noticed only when a later export covers its date.
+- An entry that is no longer in Frazer is noticed only when a later export covers its date (see "An entry a later export no longer lists").
 - A transaction file identical to one already stored adds no upload; its newer period is recorded on the update, and the next stored file's period covers it.
 
 ## One-time setup
@@ -154,22 +154,23 @@ Production holds three hand uploads from Nov 8 (vehicles 108 rows, balances 64, 
 
 **One narrow limit seen in rehearsal.** In "I will run the exports myself" mode a file written up to about two seconds before the update started is treated as fresh. A person cannot hit that by hand, and the one-click mode measures from the moment it starts driving Frazer.
 
-## Known issue before release: a payment deleted and entered again in Frazer is counted twice (seen 2026-11-12, staging)
+## An entry a later export no longer lists (rule built 2026-11-13)
 
-Checked 2026-11-13 on the staging copy, read-only, after the two complete Eunice updates of Nov 12 (periods Nov 3 to Nov 12, 35 rows, and Nov 5 to Nov 12, 26 rows):
+**What was seen.** On the staging copy after the two Eunice updates of Nov 12, Monthly Review showed 25 payment entries, $11,252.70, for November while the Nov 12 exports held 24, $9,652.70, for Nov 1 to Nov 12. Overlap was not the cause (entries arriving in several files were counted once). One $1,600.00 Down Payment dated Nov 3 was held in three earlier uploads, including the Nov 8 hand upload, and was not in the Nov 12 export although that export's period covers Nov 3. That export lists a Down Payment for the same stock number, date and amount under a different Sequential ID, entered on Nov 12. Why is not known from the files.
 
-| | Payment entries | Late Fee entries |
-|---|---|---|
-| The two Nov 12 exports, distinct Sequential IDs (61 rows, 35 distinct; the 26 shared entries are identical) | 22, $8,947.70 | 13, $619.00 |
-| Monthly Review, November (5 transaction uploads, 247 rows read, 38 entries in the month, none revised or unreadable) | 25, $11,252.70 | 13, $619.00 |
-| Difference | 3, $2,305.00 | 0 |
+**The rule (Monthly Review only; no upload, entry or other record is changed).** An entry is *not listed later* when an upload newer than the last one that holds it has a declared period covering the entry's date and does not contain its Sequential ID.
 
-Overlap itself is handled: no entry is counted twice because it arrived in several files. The difference is three payment entries held from earlier uploads and not in the Nov 12 exports:
+- It leaves the provisional total **only** when that later export is complete and comparable, all of:
+  - *complete:* every row of the later file was read (no error rows);
+  - *same report:* its column headings equal, in order, those of every upload that holds the entry;
+  - *same scope:* the helper created it with the one-click saved export (whose settings are checked on screen before each export), and the period read back from Frazer equals the period declared for the file;
+  - *same filters:* it lists at least one other entry of the same kind (class and Frazer transaction type), so that kind is not filtered out of it.
+- Otherwise (a file uploaded by hand, one a person created with "I will run the exports myself", a file with unreadable rows, different columns, or no other entry of that kind) the entry **stays counted** and the page labels the total **Unreconciled** until its issue is resolved.
+- Either way the entry is listed under *Collections and spending* with its amount, the uploads that hold it and the uploads that do not, and an issue is raised under *Needs attention* with links to both. The issue stays open until a reviewer resolves it with a note; resolving records what was found and changes no total.
+- The original upload and entry are kept exactly as uploaded. Nothing is merged with any other entry, and the app does not say why the entry is no longer listed.
+- An export that does not cover the entry's date says nothing about it. If a later export lists the entry again, it is counted once and its issue is marked "condition no longer detected" for a person to close.
 
-- **Two, dated Nov 2 ($705.00 together):** before the Nov 3 start of those exports. Correctly counted.
-- **One, dated Nov 3, a $1,600.00 Down Payment:** it was in three earlier uploads, including the Nov 8 hand upload, and is **no longer in Frazer's export for a period that covers its date.** The Nov 12 export instead holds a Down Payment for the same stock number, date, amount and remaining balance under a new Sequential ID, entered in Frazer on Nov 12. The upload result said so ("1 entry that an earlier upload has inside this period is not in this file"), but Monthly Review still counts both: November payment entries are **$1,600.00 higher than what Frazer now holds** (24 entries, $9,652.70 for Nov 1 to Nov 12).
-
-**Production will show the same thing on its first run**, because its Nov 8 upload contains that earlier entry. Nothing is posted and no record is changed by this; it is a wrong figure on the Monthly Review page until handled. Whether an entry that has disappeared from a later export of its own date should leave the totals (listed for a person, like a revised entry) is a rule for the owner to decide; it is not built.
+**Limits.** A reviewer cannot move an entry in or out of the total by hand; the total follows the rule. "Same filters" is inferred from the later file listing other entries of the same kind, so the only entry of its kind in a period is never left out automatically. The period read back and the one-click mode are what the helper reported.
 
 ## Release runbook (only after explicit approval; nothing here has been run on production)
 
@@ -218,7 +219,10 @@ $j.server='http://100.123.116.111:8000'; $j.first_coverage_start='2026-11-01'; $
 ```
 The check must print the three approved layouts, `coverage_checkpoint: null` and no `STOPPED`. This snippet writes the file the same way the installer does but has not itself been run on Eunice.
 
-**5. First update.** With Frazer signed in on its main screen, double-click **Update RTO Records**. Expect: period 2026-11-01 through today, dates read back in Frazer; COMPLETE. Then in Frazer Intake: three new uploads attributed to Eunice Frazer Helper; the transaction upload shows the 22 Nov 8 entries as unchanged; on the Helper page the run is complete. If it ends PARTLY DONE, fix what it names and click again the same day.
+**5. First update.** With Frazer signed in on its main screen, double-click **Update RTO Records**. Expect: period 2026-11-01 through today, dates read back in Frazer; COMPLETE. Then check:
+- *Frazer Intake:* three new uploads attributed to Eunice Frazer Helper; on the Helper page the run is complete.
+- *Monthly Review, November:* as rehearsed with the Nov 12 exports, 24 payment entries $9,652.70 and 13 Late Fee entries $619.00 through Nov 12 (later days add to this), and one entry listed as no longer in the later export: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, left out of the total, with an open issue under *Needs attention*. No "Unreconciled total" banner.
+- If it ends PARTLY DONE, fix what it names and click again the same day.
 
 **6. Afterwards.** Tag and write the release notes as `docs/releases.md` describes (a migration makes it a MINOR version); push only then. Delete `config.staging.json` on Eunice. The staging services can be stopped once nobody needs them.
 

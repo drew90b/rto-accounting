@@ -728,3 +728,153 @@ def test_the_first_run_overlapping_an_earlier_hand_upload_counts_each_entry_once
     assert v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "200.00"    # ... counted once
     assert v["groups"]["fee_assessment"]["count"] == 2
     assert svc.coverage_checkpoint(env.db)["start"] == start
+
+
+# ---- an entry a later export no longer lists: kept, raised for a person, and left out only on comparable evidence ----------
+
+def _hand_upload(env, *rows, start_days=10, end_days=3):
+    up = intake.store_upload(env.db, env.admin, file=_Up(f"hand-{len(rows)}-{start_days}.csv", _pay_rows(*rows)),
+                             coverage_start=(today() - timedelta(days=start_days)).isoformat(), coverage_end=(today() - timedelta(days=end_days)).isoformat())
+    env.db.commit()
+    return up
+
+
+def _one_click(env, *rows, **kw):
+    """An update in one-click mode (the stand-in driver reports the period read back from Frazer)."""
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(*rows))
+    return env.go(mode="auto", driver=FakeDriver(env), **kw)
+
+
+def _review(env, day):
+    from app.services import monthly_review_service as mr
+    d = mr.build_review(env.db, day.replace(day=1), today())
+    env.db.commit()
+    return d, mr
+
+
+def _absent(env):
+    return {a["identity"]: a for a in _month_view(env.db)["absent"]}
+
+
+def test_an_entry_missing_from_a_comparable_later_export_leaves_the_total_and_is_raised_for_a_person(env, client):
+    from app.models.frazer_intake import FrazerSourceRow
+    from app.models.monthly_review import ReviewIssue
+    hand = _hand_upload(env, _p("9001", "1600.00", 8), _p("9002", "40.00", 6), _fee("9003", 5))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    # the later export covers the same days; 9001 is not in it, and an entry with the same amount and date has a new number
+    rec = _one_click(env, _p("9002", "40.00", 6), _fee("9003", 5), _p("9004", "60.00", 1), _p("9010", "1600.00", 8))
+    assert rec["final_status"] == "complete"
+    later = env.db.query(FrazerUpload).filter(FrazerUpload.export_type == "payments").order_by(FrazerUpload.id.desc()).first()
+    v = _month_view(env.db)
+    a = _absent(env)["9001"]
+    assert a["comparable"] and not a["counted"] and str(a["amount"]) == "1600.00"
+    assert a["held_in"] == [(hand.upload_id, hand.id)] and a["missing_from"] == [(later.upload_id, later.id)]      # both source uploads
+    assert v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "1700.00"     # 9002 + 9004 + 9010
+    assert v["groups"]["fee_assessment"]["count"] == 1 and not v["revised"]
+    # the original upload and entry are untouched, and nothing was merged: 9010 is its own entry
+    kept = env.db.query(FrazerSourceRow).filter(FrazerSourceRow.upload_id == hand.id, FrazerSourceRow.identity == "9001").one()
+    assert kept.fields_json["amount"] == "1600.00" and env.db.get(FrazerUpload, hand.id).status == "parsed"
+    assert env.db.query(FrazerSourceRow).filter(FrazerSourceRow.identity == "9010").count() == 1
+    # the review queue: one open issue naming the item, its amount and both uploads; it never says "deleted"
+    day = today() - timedelta(days=8)
+    d, mr = _review(env, day)
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    text = issue.title + " " + issue.description + " " + str(issue.evidence_json)
+    assert issue.status == "open" and "$1,600.00" in text and hand.upload_id in text and later.upload_id in text and "LEFT OUT" in text
+    assert "delet" not in text.lower() and "duplicate" not in text.lower() and "replac" not in text.lower()
+    assert {l["url"] for l in issue.links_json} >= {f"/finance/frazer/uploads/{hand.id}", f"/finance/frazer/uploads/{later.id}"}
+    assert not d["figures"]["transactions"]["unreconciled"]
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Entries a later export no longer lists (1)" in page and "$1,600.00" in page and "Left out" in page and issue.issue_id in page
+    # it stays open until a reviewer resolves it, and resolving changes no record and no total
+    _review(env, day)
+    assert issue.status == "open"
+    mr.update_issue(env.db, issue, env.admin, status="resolved", note="Looked it up in Frazer; noted what was found.")
+    env.db.commit()
+    d, _ = _review(env, day)
+    assert issue.status == "resolved" and issue.auto_active
+    assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "1700.00" and "9001" in _absent(env)
+
+
+def test_a_narrower_later_export_leaves_earlier_entries_alone(env):
+    _hand_upload(env, _p("9001", "100.00", 9), _p("9002", "40.00", 2))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    assert _one_click(env, _p("9001", "100.00", 9), _p("9002", "40.00", 2))["final_status"] == "complete"
+    second = _one_click(env, _p("9002", "40.00", 2), _p("9005", "25.00", 0), fresh=True)     # starts 7 days back: 9 days ago is outside it
+    assert second["final_status"] == "complete" and second["transaction_period"]["start"] == (today() - timedelta(days=7)).isoformat()
+    v = _month_view(env.db)
+    assert v["absent"] == [] and v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "165.00"
+
+
+def test_an_incomplete_later_export_cannot_take_an_entry_out_of_the_total(env):
+    _hand_upload(env, _p("9001", "100.00", 8), _p("9002", "40.00", 6))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    rec = _one_click(env, _p("9002", "40.00", 6), _p("", "70.00", 4))                          # a row with no Sequential ID cannot be read
+    assert rec["files"]["payments"]["upload"]["outcome"] == "stored_with_errors" and rec["final_status"] == "partial"
+    a = _absent(env)["9001"]
+    assert a["counted"] and not a["comparable"] and "not complete" in a["basis"]
+    assert str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "140.00"            # 9001 is still counted
+
+
+def test_a_differently_filtered_or_unverified_later_export_cannot_take_an_entry_out_and_the_total_is_unreconciled(env, client):
+    from app.models.monthly_review import ReviewIssue
+    _hand_upload(env, _p("9001", "100.00", 6), _fee("9003", 5))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    # 1. a one-click export that lists late fees only: it may simply not include payments
+    assert _one_click(env, _fee("9003", 5), _fee("9006", 1))["final_status"] == "complete"
+    a = _absent(env)["9001"]
+    assert a["counted"] and "no other entry of this kind" in a["basis"]
+    # 2. a later file uploaded by hand, even with payments in it and a period that covers the date
+    _hand_upload(env, _p("9007", "55.00", 2), start_days=9, end_days=0)
+    a = _absent(env)["9001"]
+    assert a["counted"] and len(a["missing_from"]) == 2 and "uploaded by hand" in a["basis"]
+    # 3. the same from a person running the saved export for the helper (settings not checked on screen)
+    env.files["payments"] = ("frazer-payments.csv.CSV", lambda: _pay_rows(_p("9007", "55.00", 2), _p("9008", "5.00", 0)))
+    assert env.go(fresh=True)["final_status"] == "complete"
+    a = _absent(env)
+    assert a["9001"]["counted"] and "settings were not checked" in a["9001"]["basis"]
+    v = _month_view(env.db)
+    assert str(v["groups"]["payment_entry"]["sum"]) == "160.00"                              # 9001 + 9007 + 9008: nothing was left out
+    day = today() - timedelta(days=6)
+    d, mr = _review(env, day)
+    assert d["figures"]["transactions"]["unreconciled"]
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    assert "STILL COUNTED" in issue.description and "unreconciled" in issue.description
+    page = client.get(f"/finance/review/?month={day:%Y-%m}&all=1").text
+    assert "Unreconciled total." in page and "Still counted" in page
+    mr.update_issue(env.db, issue, env.admin, status="resolved", note="Checked in Frazer: the entry is still there.")
+    env.db.commit()
+    for other in env.db.query(ReviewIssue).filter(ReviewIssue.auto_key.like("absent:frazer_transaction:%"), ReviewIssue.status != "resolved"):
+        mr.update_issue(env.db, other, env.admin, status="resolved", note="Checked in Frazer: still there.")
+    env.db.commit()
+    d, _ = _review(env, day)
+    assert not d["figures"]["transactions"]["unreconciled"] and _absent(env)["9001"]["counted"]
+
+
+def test_a_different_report_layout_is_not_comparable(env):
+    wide = fx.build(fx.PAYMENT_HEADER, [_p("9001", "100.00", 8)])                               # the earlier file came from a wider report (26 columns)
+    intake.store_upload(env.db, env.admin, file=_Up("hand-wide.csv", wide), coverage_start=(today() - timedelta(days=10)).isoformat(),
+                        coverage_end=(today() - timedelta(days=3)).isoformat())
+    env.db.commit()
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    assert _one_click(env, _p("9002", "40.00", 6))["final_status"] == "complete"
+    a = _absent(env)["9001"]
+    assert a["counted"] and "not the same report" in a["basis"]
+
+
+def test_a_missing_entry_that_reappears_is_counted_once(env):
+    from app.models.monthly_review import ReviewIssue
+    _hand_upload(env, _p("9001", "100.00", 5), _p("9002", "40.00", 4))
+    env.cfg["first_coverage_start"] = (today() - timedelta(days=10)).isoformat()
+    assert _one_click(env, _p("9002", "40.00", 4), _p("9004", "60.00", 1))["final_status"] == "complete"
+    assert not _absent(env)["9001"]["counted"] and str(_month_view(env.db)["groups"]["payment_entry"]["sum"]) == "100.00"
+    day = today() - timedelta(days=5)
+    _review(env, day)
+    issue = env.db.query(ReviewIssue).filter(ReviewIssue.auto_key == "absent:frazer_transaction:9001").one()
+    # the next export lists it again
+    assert _one_click(env, _p("9001", "100.00", 5), _p("9002", "40.00", 4), _p("9004", "60.00", 1), fresh=True)["final_status"] == "complete"
+    v = _month_view(env.db)
+    assert v["absent"] == [] and not v["revised"]
+    assert v["groups"]["payment_entry"]["count"] == 3 and str(v["groups"]["payment_entry"]["sum"]) == "200.00"     # once, not twice and not zero
+    _review(env, day)
+    assert issue.status == "open" and not issue.auto_active                                    # still a person's to close

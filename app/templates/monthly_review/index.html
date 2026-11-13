@@ -154,6 +154,7 @@
   {% if f.tx_missing %}<p><strong>Not available.</strong> {{ f.tx_missing }}</p>
   {% else %}{% set t = f.transactions %}
   {% if t.partial %}<div class="alert" style="background:#fef9c3;border:1px solid #fde047;color:#854d0e;padding:6px 10px;">Partial coverage: these totals cover only {{ t.present or 'the dates uploaded' }}, not the whole period.</div>{% endif %}
+  {% if t.unreconciled %}<div class="alert alert-error" style="padding:6px 10px;"><strong>Unreconciled total.</strong> At least one entry below is still counted although a later export covering its date does not list it, and it could not be established that the two exports are comparable. Resolve its issue before relying on these totals.</div>{% endif %}
   <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
     <thead><tr><th>Group</th><th>Entries</th><th>Total</th><th>Label</th></tr></thead>
     <tbody>{% for r in t.rows %}{% if r.present or loop.index <= 2 %}<tr><td data-label="Group">{{ r.label }}</td><td data-label="Entries">{{ r.count }}</td><td data-label="Total">{{ r.sum if r.present else '—' }}</td><td data-label="Label" class="form-hint">{{ r.basis }}</td></tr>{% endif %}{% endfor %}</tbody>
@@ -163,6 +164,16 @@
   {% if t.revised or t.errored or t.undated %}<p class="form-hint"><strong>Left out of the totals:</strong>
     {% if t.revised %}{{ t.revised | length }} entr{{ 'y' if t.revised | length == 1 else 'ies' }} with different content in different uploads (IDs {{ t.revised[:8] | join(', ') }}); {% endif %}
     {% if t.errored %}{{ t.errored | length }} with errors (IDs {{ t.errored[:8] | join(', ') }}); {% endif %}{% if t.undated %}{{ t.undated }} without a readable date.{% endif %}</p>{% endif %}
+  {% if t.absent %}<h4 style="font-size:13px;margin:10px 0 4px;">Entries a later export no longer lists ({{ t.absent | length }})</h4>
+  <p class="form-hint">Each is held in an earlier upload and is missing from a later export whose period covers its date. The earlier upload and entry are kept as they are; nothing is merged and no reason is assumed. An entry leaves the provisional total only when the later export is complete and comparable. Each stays open under Needs attention (section 3) until a reviewer resolves it.</p>
+  <div class="table-container mr-scroll" role="region" tabindex="0" aria-label="Table; scrolls sideways if it does not fit"><table class="mr-stack">
+    <thead><tr><th>Sequential ID</th><th>Dated</th><th>Description</th><th>Amount</th><th>Held in</th><th>Not listed in</th><th>Provisional total</th><th>Issue</th></tr></thead>
+    <tbody>{% for a in t.absent %}<tr><td data-label="Sequential ID">{{ a.identity }}</td><td data-label="Dated">{{ a.date.strftime('%b %-d, %Y') }}</td><td data-label="Description">{{ a.description or a.entry_class }}</td><td data-label="Amount">{{ a.amount }}</td>
+      <td data-label="Held in">{% for n, pk in a.held_in %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}</td>
+      <td data-label="Not listed in">{% for n, pk in a.missing_from %}<a href="/finance/frazer/uploads/{{ pk }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}</td>
+      <td data-label="Provisional total">{% if a.counted %}<strong>Still counted</strong> (unreconciled){% else %}<strong>Left out</strong>{% endif %}<div class="form-hint">{{ a.basis }}</div></td>
+      <td data-label="Issue">{% if a.issue %}<a href="#issue-{{ a.issue.issue_id }}">{{ a.issue.issue_id }}</a> · {{ STATUS_LABEL[a.issue.status] }}{% else %}not raised yet{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>{% endif %}
   <details><summary>By Frazer description and method code</summary><ul style="margin:4px 0 0 18px;font-size:13px;">{% for x in t.pairs %}<li>{{ x.key }}: {{ x.count }} · {{ x.sum }}</li>{% endfor %}</ul></details>
   {% endif %}
 

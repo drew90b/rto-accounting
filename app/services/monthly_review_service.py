@@ -8,6 +8,9 @@ writes only the four review_* tables (REQ-MR-14).
 Rules this module enforces:
   * Figures come from supported data only; a missing input is explained, never shown as $0.
   * Frazer transaction totals use the union of uploads by Sequential ID, so overlapping or repeated uploads count once.
+  * An entry that a LATER export covering its date no longer contains is never removed or merged. It leaves the provisional total
+    only when that later export is complete and comparable (see _not_comparable); otherwise it stays in and the total is labelled
+    unreconciled. Either way it is raised for a person and stays open until they resolve it.
     Entries whose content differs between uploads (or that carry errors) are excluded and listed (DEC-42).
   * A snapshot date is not transaction coverage; a declared range is "as declared, not verified".
   * Automatic evidence is stored apart from human decisions; a cleared condition is flagged, never auto-resolved.
@@ -23,6 +26,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.frazer_helper import FrazerHelperRun
 from app.models.frazer_intake import FrazerSourceRow, FrazerUpload, FrazerUploadException
 from app.models.monthly_review import (
     ReviewIssue, ReviewIssueEvent, ReviewIssueFile, ReviewNote, ReviewSourceRecord, ReviewStepMark,
@@ -129,12 +133,54 @@ class Entry:
     error: bool = False
 
 
+def _norm_headers(u: FrazerUpload) -> list:
+    return [fp._norm(h) for h in (u.headers_json or [])]
+
+
+def _helper_results(db: Session) -> dict:
+    """upload pk -> what the helper run recorded when it stored that transaction file (only files it stored as read without errors)."""
+    out = {}
+    for r in db.query(FrazerHelperRun).order_by(FrazerHelperRun.id).all():
+        res = (r.results_json or {}).get(fp.PAYMENTS) or {}
+        if res.get("outcome") == "stored" and res.get("upload_pk"):
+            out[res["upload_pk"]] = res
+    return out
+
+
+def _not_comparable(later: FrazerUpload, holders: list, kind: tuple, facts: dict) -> Optional[str]:
+    """Why `later` cannot show that an entry held by `holders` is gone from Frazer, or None when it can.
+
+    It can only when it is established that the later export would have listed the entry had Frazer still held it:
+      complete     every row of the later file was read (no error rows);
+      same report  its column headings equal, in order, those of every upload that holds the entry;
+      same scope   it was created by the helper's one-click saved export, whose settings are checked on screen before each export,
+                   for a period that was read back from Frazer and equals the period declared for the file;
+      same filters it holds at least one other entry of the same kind (class and Frazer transaction type), so that kind is not
+                   filtered out of it.
+    A file uploaded by hand, or created by a person running the saved export, proves none of the scope: not comparable."""
+    if later.id in facts["errors"]:
+        return "the later export has rows that could not be read, so it is not complete"
+    res = facts["helper"].get(later.id)
+    if res is None:
+        return "the later export was uploaded by hand, so the report, period and filters it was created with are not established"
+    if res.get("generation") != "auto":
+        return "the later export was created by a person running the saved export, so its settings were not checked"
+    s, e = later.declared_coverage_start, later.declared_coverage_end
+    if not (s and e) or res.get("period_readback") != f"{s:%m/%d/%y} to {e:%m/%d/%y}":
+        return "the period read back from Frazer is not recorded or is not the period declared for the later export"
+    if any(_norm_headers(h) != _norm_headers(later) for h in holders):
+        return "the later export has different columns, so it is not the same report"
+    if kind not in facts["kinds"].get(later.id, set()):
+        return "the later export holds no other entry of this kind, so its filters may leave this kind out"
+    return None
+
+
 def frazer_transactions(db: Session, period: Period) -> dict:
     """Union of the transaction uploads by Sequential ID, restricted to the reporting period."""
     ups = _payments_uploads(db)
     out = {"uploads": ups, "relevant": [], "has_uploads": bool(ups), "rows_seen": 0, "distinct": 0, "groups": {}, "pairs": {},
            "revised": [], "errored": [], "undated": 0, "outside": 0, "in_period": 0, "intervals": [], "present_start": None,
-           "present_end": None}
+           "present_end": None, "absent": []}
     if not ups:
         return out
     ids = [u.id for u in ups]
@@ -149,8 +195,13 @@ def frazer_transactions(db: Session, period: Period) -> dict:
         FrazerUploadException.upload_id.in_(ids), FrazerUploadException.severity == "error",
         FrazerUploadException.identity.isnot(None)).distinct()}
     entries: dict = {}
+    by_id = {u.id: u for u in ups}
+    facts = {"errors": {i for (i,) in db.query(FrazerUploadException.upload_id).filter(
+                 FrazerUploadException.upload_id.in_(ids), FrazerUploadException.severity == "error").distinct()},
+             "helper": _helper_results(db), "kinds": defaultdict(set)}
     rows = db.query(FrazerSourceRow).filter(FrazerSourceRow.upload_id.in_(ids), FrazerSourceRow.record_type == "payment_entry")
     for r in rows:
+        facts["kinds"][r.upload_id].add((r.entry_class or "unclassified", (r.fields_json or {}).get("transaction_type") or ""))
         out["rows_seen"] += 1
         if not r.identity:
             out["undated"] += 1
@@ -180,6 +231,24 @@ def frazer_transactions(db: Session, period: Period) -> dict:
             continue
         f, cls = in_p[0]
         amt = _num(f.get("amount")) or Decimal(0)
+        # Later exports whose declared period covers this entry's date and which do not list it. An upload that lists it again,
+        # later still, ends the matter: only uploads after the LAST one holding it count, so a reappearing entry is counted once.
+        day, last = _d(f["transaction_date"]), max(e.uploads)
+        missing = [u for u in ups if u.id > last and _declared_interval(u)[2] in ("declared", "filename")
+                   and _declared_interval(u)[0] <= day <= _declared_interval(u)[1]]
+        if missing:
+            holders = [by_id[i] for i in sorted(e.uploads)]
+            kind = (cls or "unclassified", f.get("transaction_type") or "")
+            reasons = {u.upload_id: _not_comparable(u, holders, kind, facts) for u in missing}
+            proof = [u for u in missing if reasons[u.upload_id] is None]
+            out["absent"].append({
+                "identity": ident, "date": day, "amount": amt, "entry_class": cls or "unclassified", "description": f.get("description") or "",
+                "held_in": [(h.upload_id, h.id) for h in holders], "missing_from": [(u.upload_id, u.id) for u in missing],
+                "comparable": bool(proof), "counted": not proof,
+                "basis": (f"{proof[0].upload_id} is complete and comparable: one-click saved export, period read back from Frazer, same columns, "
+                          "and it lists other entries of this kind") if proof else "; ".join(f"{k}: {v}" for k, v in reasons.items())})
+            if proof:
+                continue                                    # left out of the provisional total; kept, listed, and raised for a person
         out["in_period"] += 1
         dates.append(_d(f["transaction_date"]))
         cls = cls or "unclassified"
@@ -371,6 +440,7 @@ def figures(db: Session, period: Period, tx: dict, records: list) -> dict:
             "pairs": [{"key": k, "count": v["count"], "sum": _money(v["sum"])} for k, v in sorted(tx["pairs"].items())],
             "rows_seen": tx["rows_seen"], "distinct": tx["distinct"], "in_period": tx["in_period"], "outside": tx["outside"],
             "revised": tx["revised"], "errored": tx["errored"], "undated": tx["undated"], "uploads": len(tx["relevant"]),
+            "absent": [{**a, "amount": _money(a["amount"]), "issue": None} for a in tx["absent"]], "unreconciled": False,
             "present": rp.fmt_range(tx["present_start"], tx["present_end"]) if tx["present_start"] else None,
         }
     for etype, label in ((fp.CUSTOMERS, "Customer balances"),):
@@ -653,6 +723,18 @@ def _candidates(db: Session, period: Period, today: date, tx: dict, records: lis
                 f"{fee['count']} Late Fee entr{'y' if fee['count'] == 1 else 'ies'} dated in this period are grouped as fee assessments (not money received) "
                 "on Frazer's own description. Confirm with Steve/CPA before any fee or collection figure is relied on (DEC-36).",
                 "CL-2", None, {"entries": fee["count"], "total": str(fee["sum"])}, [("Frazer Intake", FRAZER_HOME)])
+    for a in tx["absent"]:
+        held, gone = ", ".join(n for n, _ in a["held_in"]), ", ".join(n for n, _ in a["missing_from"])
+        treat = ("It is LEFT OUT of the provisional total" if a["comparable"] else "It is STILL COUNTED, and the total is labelled unreconciled")
+        add(f"absent:frazer_transaction:{a['identity']}", "reconciliation",
+            f"Frazer entry {a['identity']} ({_money(a['amount'])}, {a['description'] or a['entry_class']}, dated {a['date'].isoformat()}) is not in a later export that covers its date",
+            f"Upload {held} holds this entry. The later export {gone} covers {a['date'].isoformat()} and does not list it. {treat}: "
+            f"{a['basis']}. The original upload and entry are kept unchanged; nothing is merged with any other entry and no reason is "
+            "assumed. Find out in Frazer what happened to it, then resolve this issue with a note saying what was found.", "CL-2", None,
+            {"sequential_id": a["identity"], "transaction_date": a["date"].isoformat(), "amount": _money(a["amount"]),
+             "description": a["description"], "held_in": held, "not_listed_in": gone,
+             "in_provisional_total": "no" if a["comparable"] else "yes (unreconciled)", "basis": a["basis"]},
+            [(n, f"{FRAZER_HOME}uploads/{pk}") for n, pk in a["held_in"] + a["missing_from"]])
     if tx["revised"]:
         add("conflict:frazer_transactions", "mapping", "Some Frazer entries differ between uploads",
             "The same Sequential ID appears with different content in different uploads. Both versions are kept; these entries are "
@@ -867,11 +949,19 @@ def build_review(db: Session, month: date, today: date, *, sync: bool = True) ->
     miss = sum(1 for r in expected if r["status"] == "missing")
     part = sum(1 for r in expected if r["status"] == "partial")
     fig_tx = figures(db, period, tx, records)
+    if fig_tx["transactions"]:
+        by_key = {i.auto_key: i for i in issues if i.kind == "auto"}
+        for a in fig_tx["transactions"]["absent"]:
+            a["issue"] = by_key.get(f"absent:frazer_transaction:{a['identity']}")
+        # unreconciled: an entry that could not be shown to be gone is still in the total, and nobody has resolved its issue yet
+        fig_tx["transactions"]["unreconciled"] = any(a["counted"] and not (a["issue"] and a["issue"].status == "resolved")
+                                                     for a in fig_tx["transactions"]["absent"])
     summaries = {
         "records": f"{len(complete)} of {len(expected)} in place · {miss} missing · {part} partial",
         "attention": f"{len(live)} open · {len(overdue)} overdue · {sum(1 for i in live if not i.owner_user_id)} without an owner"
                      + (f" · {len(answered)} reply to review" if answered else ""),
-        "figures": ((f"Frazer: {tx['in_period']} entries" + (" (partial coverage)" if records[0]['status'] != 'received' else "")) if tx["relevant"]
+        "figures": ((f"Frazer: {tx['in_period']} entries" + (" (partial coverage)" if records[0]['status'] != 'received' else "")
+                     + (f" · {len(tx['absent'])} not in a later export" if tx["absent"] else "")) if tx["relevant"]
                     else "No Frazer export covers this period") + f" · {fig_tx['spending']['count']} purchase(s) entered",
         "recon": f"Nothing reconciled · {close['ready']['met']} of {close['ready']['total']} readiness milestones · "
                  f"{len(close['ready']['blocked_capabilities'])} unbuilt features block the rest",

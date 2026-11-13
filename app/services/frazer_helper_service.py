@@ -397,7 +397,7 @@ def _compare(db: Session, up: FrazerUpload, coverage_start: str, coverage_end: s
         if gone:
             notes.append(f"{len(gone)} entr{'y' if len(gone) == 1 else 'ies'} that an earlier upload has inside this period "
                          f"{'is' if len(gone) == 1 else 'are'} not in this file (Sequential ID {', '.join(sorted(gone)[:8])}"
-                         f"{' ...' if len(gone) > 8 else ''}). Possibly removed or re-dated in Frazer; the earlier record is kept.")
+                         f"{' ...' if len(gone) > 8 else ''}). The earlier record is kept unchanged and Monthly Review raises each one for a person to look into.")
     if notes:
         out["note"] = " ".join(notes)
     return out
