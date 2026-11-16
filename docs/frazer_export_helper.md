@@ -183,6 +183,14 @@ The partial run, checkpoint, attribution, second update (period Nov 5 on, totals
 
 **Limits.** The decision is the reviewer's judgement, not evidence from Frazer: the app records who made it and why. It applies to the entry it was made on and nothing else. Migration `fh02` adds the table; `alembic downgrade` of it drops the decisions, after which Monthly Review (without this code) counts the entries again.
 
+**Who verifies and who records the $1,600.00 exception (after the first production run).** Richie Doucet verifies; Drew records the decision in Monthly Review. Nobody records it before Richie's finding is in hand.
+1. Richie looks up the Down Payment in Frazer (Nov 3, $1,600.00, Seq ID 1179, same stock number) together with the supporting receipt or transaction record, and decides whether the entry dated Nov 12 **replaced** the Nov 3 payment (the same payment) or whether there were **two separate payments**.
+2. Richie sends Drew his finding and the reference he used (receipt number, transaction record or Frazer screen and date).
+3. Drew, signed in as an administrator, records the decision on the entry's card under *Collections and spending*, citing Richie's evidence in the reason (his name, the finding and the reference): **Exclude** if it was the same payment; **Keep** if they were separate payments.
+4. If Richie cannot confirm either way, Drew records nothing. The entry stays counted and the total stays labelled **Unreconciled**. Do not record "keep" to clear the label, and do not close the issue expecting it to clear.
+
+This changes no permissions: only an administrator can record a decision (the helper's token and employees cannot), the reason is the usual 15-character minimum, and decisions stay append-only, so a later finding supersedes an earlier decision with both kept in the history.
+
 ## Release runbook (only after explicit approval; nothing here has been run on production)
 
 Run on ubuntu-dev in `/home/drew/projects/rto` unless it says Eunice. Production is `rto-web` (systemd) on `100.123.116.111:8000`, schema `vr01`.
@@ -232,7 +240,7 @@ The check must print the three approved layouts, `coverage_checkpoint: null` and
 
 **5. First update.** With Frazer signed in on its main screen, double-click **Update RTO Records**. Expect: period 2026-11-01 through today, dates read back in Frazer; COMPLETE. Then check:
 - *Frazer Intake:* three new uploads attributed to Eunice Frazer Helper; on the Helper page the run is complete.
-- *Monthly Review, November:* as rehearsed with the Nov 12 exports, **25 payment entries $11,252.70 and 13 Late Fee entries $619.00** through Nov 12 (later days add to this), under an **"Unreconciled total"** banner, and one entry listed as no longer in the later export: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, still counted, with an open issue under *Needs attention*. Frazer's own export for the same days holds 24 payment entries, $9,652.70. Look the entry up in Frazer, then record a decision on the page (keep or exclude, with a reason); after an exclude decision the page shows 24 and $9,652.70 with the decision, reviewer and reason visible, and the notice that the month is not reconciled. Do not close the issue first expecting the label to clear: it will not.
+- *Monthly Review, November:* as rehearsed with the Nov 12 exports, **25 payment entries $11,252.70 and 13 Late Fee entries $619.00** through Nov 12 (later days add to this), under an **"Unreconciled total"** banner, and one entry listed as no longer in the later export: the $1,600.00 Down Payment dated Nov 3, held in `FU-0002`, still counted, with an open issue under *Needs attention*. Frazer's own export for the same days holds 24 payment entries, $9,652.70. Richie Doucet looks the entry up in Frazer and sends Drew his finding and reference; Drew then records the decision on the page as set out under "Who verifies and who records the $1,600.00 exception" (Exclude if the same payment, Keep if two separate payments, citing Richie's evidence; if Richie cannot confirm either way, record nothing and leave it Unreconciled). After an exclude decision the page shows 24 and $9,652.70 with the decision, reviewer and reason visible, and the notice that the month is not reconciled. Do not close the issue first expecting the label to clear: it will not.
 - If it ends PARTLY DONE, fix what it names and click again the same day.
 
 **6. Afterwards.** Tag and write the release notes as `docs/releases.md` describes (a migration makes it a MINOR version); push only then. Delete `config.staging.json` on Eunice. The staging services can be stopped once nobody needs them.
